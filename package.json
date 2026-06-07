@@ -1,11 +1,11 @@
 {
   "name": "data-robot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Robô de trading real do ecossistema GoldenLens",
   "main": "public/index.html",
   "scripts": {
     "dev": "sirv public --port 3200 --host 0.0.0.0 --dev",
-    "start": "sirv public --port 3200 --host 0.0.0.0"
+    "start": "sirv public --port 3200 --host 0.0.0.0 --etag --maxage 0"
   },
   "dependencies": {
     "sirv-cli": "^2.0.2"
