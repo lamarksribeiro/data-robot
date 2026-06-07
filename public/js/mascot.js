@@ -199,17 +199,17 @@ document.addEventListener('DOMContentLoaded', () => {
   mascotContainer.innerHTML = `
     <svg id="mascot" width="260" height="180" viewBox="0 0 260 180" style="overflow: visible;">
       <defs>
-        <!-- Gradiente Metálico Cobre-Laranja para o Corpo -->
+        <!-- Gradiente Metálico Prateado/Cinza Espacial para o Corpo -->
         <linearGradient id="cobreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#f97316" /> <!-- Laranja brilhante -->
-          <stop offset="60%" stop-color="#ea580c" />
-          <stop offset="100%" stop-color="#9a3412" /> <!-- Marrom/Cobre Escuro -->
+          <stop offset="0%" stop-color="#94a3b8" /> <!-- Prata brilhante -->
+          <stop offset="60%" stop-color="#475569" /> <!-- Cinza Metálico -->
+          <stop offset="100%" stop-color="#1e293b" /> <!-- Cinza Escuro Grafite -->
         </linearGradient>
 
         <!-- Gradiente Metalizado Escuro (Detalhes/Costas) -->
         <linearGradient id="darkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#374151" />
-          <stop offset="100%" stop-color="#111827" />
+          <stop offset="0%" stop-color="#334155" />
+          <stop offset="100%" stop-color="#0f172a" />
         </linearGradient>
 
         <!-- Gradiente Creme do Peito -->
@@ -224,16 +224,16 @@ document.addEventListener('DOMContentLoaded', () => {
           <stop offset="100%" stop-color="#047857" />
         </linearGradient>
 
-        <!-- Gradiente Neon Laranja para Cauda (SELL) -->
-        <linearGradient id="neonOrange" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#f97316" />
-          <stop offset="100%" stop-color="#ea580c" />
+        <!-- Gradiente Neon Vermelho para Cauda e Visor (SELL) -->
+        <linearGradient id="neonRed" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#f43f5e" />
+          <stop offset="100%" stop-color="#be123c" />
         </linearGradient>
 
-        <!-- Gradiente Ciano Elétrico para o Visor -->
+        <!-- Gradiente Amarelo Neon para o Visor -->
         <linearGradient id="visorGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#06b6d4" />
-          <stop offset="100%" stop-color="#3b82f6" />
+          <stop offset="0%" stop-color="#facc15" />
+          <stop offset="100%" stop-color="#eab308" />
         </linearGradient>
 
         <!-- Filtro Glow para Painéis Neon -->
@@ -251,16 +251,16 @@ document.addEventListener('DOMContentLoaded', () => {
         <!-- Pernas e Patas Estáticas -->
         <g id="legs">
           <!-- Patas Traseiras (Dobrada na base) -->
-          <ellipse cx="144" cy="132" rx="14" ry="10" fill="url(#cobreGrad)" stroke="#7c2d12" stroke-width="1.2" style="transform: rotate(-10deg); transform-origin: 144px 132px;" />
-          <ellipse cx="148" cy="142" rx="8" ry="2.5" fill="url(#cobreGrad)" stroke="#7c2d12" stroke-width="1.2" />
+          <ellipse cx="144" cy="132" rx="14" ry="10" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="1.2" style="transform: rotate(-10deg); transform-origin: 144px 132px;" />
+          <ellipse cx="148" cy="142" rx="8" ry="2.5" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="1.2" />
           
           <!-- Pata Dianteira Esquerda (Atrás) -->
-          <path d="M 106,120 L 102,142" fill="none" stroke="#7c2d12" stroke-width="5" stroke-linecap="round" opacity="0.6" />
-          <ellipse cx="102" cy="142" rx="4" ry="2" fill="#7c2d12" opacity="0.6" />
+          <path d="M 106,120 L 102,142" fill="none" stroke="#1e293b" stroke-width="5" stroke-linecap="round" opacity="0.6" />
+          <ellipse cx="102" cy="142" rx="4" ry="2" fill="#1e293b" opacity="0.6" />
 
           <!-- Pata Dianteira Direita (Frente) -->
           <path d="M 116,118 L 112,142" fill="none" stroke="url(#cobreGrad)" stroke-width="5.5" stroke-linecap="round" />
-          <ellipse cx="112" cy="142" rx="4.5" ry="2.2" fill="url(#cobreGrad)" stroke="#7c2d12" stroke-width="0.8" />
+          <ellipse cx="112" cy="142" rx="4.5" ry="2.2" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="0.8" />
         </g>
 
         <!-- Grupo Superior (Sofre Respiração e Rotação) -->
@@ -268,16 +268,16 @@ document.addEventListener('DOMContentLoaded', () => {
           
           <!-- Cauda de Raposa horizontal e peluda, com ponta branca (Sem parecer esquilo) -->
           <g id="fox-tail" style="transform-origin: 154px 128px;">
-            <!-- Base e meio da cauda (Laranja) -->
-            <path d="M 152,126 Q 190,118 212,130 L 206,142 Q 180,144 154,136 Z" fill="url(#cobreGrad)" stroke="#7c2d12" stroke-width="1.5" stroke-linejoin="round" />
+            <!-- Base e meio da cauda (Prata) -->
+            <path d="M 152,126 Q 190,118 212,130 L 206,142 Q 180,144 154,136 Z" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="1.5" stroke-linejoin="round" />
             <!-- Faceta Superior da Cauda (Elemento Neon/Creme Dinâmico) -->
-            <path id="tail-facet-top" d="M 190,118 Q 201,124 212,130 L 206,142 Q 195,133 190,118" fill="url(#cremeGrad)" opacity="0.15" stroke="#7c2d12" stroke-width="0.8" />
+            <path id="tail-facet-top" d="M 190,118 Q 201,124 212,130 L 206,142 Q 195,133 190,118" fill="url(#cremeGrad)" opacity="0.15" stroke="#1e293b" stroke-width="0.8" />
             <!-- Ponta da cauda (Creme/Branca) -->
             <path id="tail-facet-bottom" d="M 212,130 Q 228,124 240,135 Q 223,146 206,142 Z" fill="url(#cremeGrad)" stroke="#cbd5e1" stroke-width="1.5" stroke-linejoin="round" />
           </g>
 
           <!-- Corpo Principal Simples Low-Poly -->
-          <polygon id="fox-body" points="104,115 130,96 164,110 156,142 114,142 94,120" fill="url(#cobreGrad)" stroke="#7c2d12" stroke-width="1.5" stroke-linejoin="round" />
+          <polygon id="fox-body" points="104,115 130,96 164,110 156,142 114,142 94,120" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="1.5" stroke-linejoin="round" />
           
           <!-- Facetas Geométricas do corpo para estilo premium -->
           <polygon points="104,115 130,96 148,106 122,124" fill="#ffffff" opacity="0.08" />
@@ -289,7 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <!-- Cabeça da Raposa de Perfil (Voltada para a esquerda) -->
           <g id="fox-head" style="transform-origin: 124px 85px;">
             <!-- Face Superior, Focinho e Bochechas -->
-            <polygon points="126,86 116,56 86,60 62,80 50,88 72,96 102,96 126,90" fill="url(#cobreGrad)" stroke="#7c2d12" stroke-width="1.5" stroke-linejoin="round" />
+            <polygon points="126,86 116,56 86,60 62,80 50,88 72,96 102,96 126,90" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="1.5" stroke-linejoin="round" />
             
             <!-- Facetas Geométricas da cabeça -->
             <polygon points="116,56 86,60 62,80 88,76" fill="#ffffff" opacity="0.08" />
@@ -302,17 +302,17 @@ document.addEventListener('DOMContentLoaded', () => {
             <circle cx="50" cy="88" r="2.8" fill="#111827" />
 
             <!-- Orelha Esquerda (Traseira) -->
-            <polygon id="ear-left" points="94,58 76,22 88,18 100,50" fill="#7c2d12" opacity="0.7" />
+            <polygon id="ear-left" points="94,58 76,22 88,18 100,50" fill="#1e293b" opacity="0.7" />
 
             <!-- Orelha Direita (Dianteira) -->
             <g id="ear-right-group">
-              <polygon id="ear-right" points="112,56 94,14 108,8 120,46" fill="url(#cobreGrad)" stroke="#7c2d12" stroke-width="1.5" stroke-linejoin="round" />
+              <polygon id="ear-right" points="112,56 94,14 108,8 120,46" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="1.5" stroke-linejoin="round" />
               <polygon points="100,20 106,15 110,32" id="ear-led" fill="url(#visorGrad)" opacity="0.75" />
             </g>
 
             <!-- Olhos Normais de Cartoon (Padrão Gecko/Runner) -->
-            <ellipse cx="65" cy="74" rx="4.5" ry="7.5" fill="#ffffff" stroke="#7c2d12" stroke-width="1.2" />
-            <ellipse cx="73.5" cy="73" rx="4.5" ry="7.5" fill="#ffffff" stroke="#7c2d12" stroke-width="1.2" />
+            <ellipse cx="65" cy="74" rx="4.5" ry="7.5" fill="#ffffff" stroke="#1e293b" stroke-width="1.2" />
+            <ellipse cx="73.5" cy="73" rx="4.5" ry="7.5" fill="#ffffff" stroke="#1e293b" stroke-width="1.2" />
 
             <!-- Pupilas que reagem ao mouse -->
             <g id="fox-pupil" style="transition: transform 0.12s ease-out;">
@@ -323,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </g>
 
             <!-- Boca Fofa -->
-            <path d="M 50,90 Q 55,92 60,90" fill="none" stroke="#7c2d12" stroke-width="1.2" stroke-linecap="round" />
+            <path d="M 50,90 Q 55,92 60,90" fill="none" stroke="#1e293b" stroke-width="1.2" stroke-linecap="round" />
           </g>
 
         </g>
@@ -388,7 +388,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (foxPupil) {
         foxPupil.style.transform = `translate(${Math.cos(angle) * offset}px, ${Math.sin(angle) * offset}px)`;
         if (Math.random() < 0.25) {
-          tailFacetTop.setAttribute('fill', Math.random() < 0.5 ? 'url(#neonGreen)' : 'url(#neonOrange)');
+          tailFacetTop.setAttribute('fill', Math.random() < 0.5 ? 'url(#neonGreen)' : 'url(#neonRed)');
         }
       }
     }, 1200 + Math.random() * 1200);
@@ -558,9 +558,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const foxEl = document.getElementById('fox');
     if (!foxEl) return;
     
-    // LEDs em laranja/vermelho
-    earLed.setAttribute('fill', 'url(#neonOrange)');
-    tailFacetTop.setAttribute('fill', 'url(#neonOrange)');
+    // LEDs em vermelho neon
+    earLed.setAttribute('fill', 'url(#neonRed)');
+    tailFacetTop.setAttribute('fill', 'url(#neonRed)');
     
     foxEl.classList.add('fox-deflecting');
     
@@ -601,9 +601,9 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (type === 'sell') {
       bubble.innerHTML = `<span style="color:#f43f5e;">❯</span> ORDER_FILL: <span style="color:#f43f5e; font-weight:800;">SELL_SHORT_OK</span>`;
     } else if (type === 'boost') {
-      bubble.innerHTML = `<span style="color:#f97316;">❯</span> ENGINE_BOOST: <span style="color:#06b6d4; font-weight:800;">DATA_FOX_MAX</span>`;
+      bubble.innerHTML = `<span style="color:#facc15;">❯</span> ENGINE_BOOST: <span style="color:#facc15; font-weight:800;">DATA_FOX_MAX</span>`;
     } else {
-      bubble.innerHTML = `<span style="color:#f97316;">❯</span> FOX_LOG: <span style="color:#cbd5e1;">${text}</span>`;
+      bubble.innerHTML = `<span style="color:#facc15;">❯</span> FOX_LOG: <span style="color:#cbd5e1;">${text}</span>`;
     }
     
     bubble.style.position = 'absolute';
@@ -612,13 +612,13 @@ document.addEventListener('DOMContentLoaded', () => {
     bubble.style.transform = 'translate(-50%, -15px) scale(0.85)';
     bubble.style.opacity = '0';
     bubble.style.background = 'rgba(11, 15, 25, 0.96)';
-    bubble.style.border = '1px solid rgba(249, 115, 22, 0.4)';
+    bubble.style.border = '1px solid rgba(250, 204, 21, 0.4)';
     bubble.style.color = '#cbd5e1';
     bubble.style.fontSize = '10.5px';
     bubble.style.fontFamily = 'monospace';
     bubble.style.padding = '6px 12px';
     bubble.style.borderRadius = '6px';
-    bubble.style.boxShadow = '0 0 20px rgba(249, 115, 22, 0.15), 0 8px 16px rgba(0, 0, 0, 0.6)';
+    bubble.style.boxShadow = '0 0 20px rgba(250, 204, 21, 0.15), 0 8px 16px rgba(0, 0, 0, 0.6)';
     bubble.style.pointerEvents = 'none';
     bubble.style.whiteSpace = 'nowrap';
     bubble.style.zIndex = '20';
@@ -720,7 +720,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Pisca os LEDs intensamente
     let count = 0;
     const interval = setInterval(() => {
-      const activeColor = count % 2 === 0 ? '#10b981' : '#f97316';
+      const activeColor = count % 2 === 0 ? '#10b981' : '#f43f5e';
       earLed.setAttribute('fill', activeColor);
       tailFacetTop.setAttribute('fill', activeColor);
       count++;
@@ -737,7 +737,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const scaleY = rect.height / 180;
     const centerGlobalX = rect.left - wrapper.getBoundingClientRect().left + 130 * scaleX;
     const centerGlobalY = rect.top - wrapper.getBoundingClientRect().top + 120 * scaleY;
-    createSparkExplosion(centerGlobalX, centerGlobalY, '#06b6d4');
+    createSparkExplosion(centerGlobalX, centerGlobalY, '#facc15');
     
     setTimeout(() => {
       foxUpperEl.classList.remove('fox-boosting');
