@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login · Data Robot</title>
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,22 16,70 84,70' fill='%2310b981'/%3E%3C/svg%3E">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/styles.css">
+  
+  <!-- Script do Mascote -->
+  <script src="/js/mascot.js" defer></script>
+</head>
+<body>
+  <div class="login-wrapper">
+    <!-- O mascote container é injetado dinamicamente aqui -->
+    
+    <div class="login">
+      <div class="login__header">
+        <h1 class="login__title">Data Robot</h1>
+        <p class="login__subtitle">Trading Algorítmico & Execução</p>
+      </div>
+
+      <form class="form" id="login-form" autocomplete="on" novalidate onsubmit="event.preventDefault();">
+        <!-- Input de Usuário -->
+        <div class="field">
+          <label class="field__label" for="username">Usuário</label>
+          <input class="field__input" type="text" id="username" name="username" placeholder="Digite seu usuário" autocomplete="username" required>
+        </div>
+
+        <!-- Input de Senha -->
+        <div class="field">
+          <label class="field__label" for="password">Senha</label>
+          <input class="field__input" type="password" id="password" name="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+        </div>
+
+        <!-- Botão Entrar -->
+        <button class="btn btn--primary" type="submit" id="btn-login">
+          Entrar
+        </button>
+      </form>
+
+      <div class="login__footer">
+        <p>© 2026 GoldenLens Ecosystem</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
