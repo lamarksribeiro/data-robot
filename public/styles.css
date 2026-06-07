@@ -2,19 +2,19 @@
   --bg-0: #050811;
   --bg-1: rgba(13, 20, 38, 0.45);
   --bg-2: rgba(23, 33, 56, 0.6);
-  --bg-hover: rgba(250, 204, 21, 0.15);
-  --border: rgba(250, 204, 21, 0.2);
-  --border-strong: rgba(250, 204, 21, 0.45);
+  --bg-hover: rgba(16, 185, 129, 0.15);
+  --border: rgba(16, 185, 129, 0.2);
+  --border-strong: rgba(16, 185, 129, 0.45);
 
   --text-0: #ffffff;
   --text-1: #f8fafc;
   --text-2: #cbd5e1;
   --text-3: #64748b;
 
-  --accent: #facc15; /* Amarelo Cyber (Robot) */
-  --accent-strong: #eab308;
-  --accent-soft: rgba(250, 204, 21, 0.08);
-  --accent-glow: rgba(250, 204, 21, 0.35);
+  --accent: #10b981; /* Verde de Lucro (Cyber Monkey) */
+  --accent-strong: #059669; /* Verde Esmeralda */
+  --accent-soft: rgba(16, 185, 129, 0.08);
+  --accent-glow: rgba(16, 185, 129, 0.35);
 
   --ok: #10b981;
   --warn: #f59e0b;
@@ -46,8 +46,8 @@ body {
   font-size: 14px;
   line-height: 1.5;
   color: var(--text-1);
-  background: radial-gradient(circle at 50% 12%, rgba(250, 204, 21, 0.06) 0%, transparent 50%),
-              radial-gradient(circle at 12% 82%, rgba(234, 179, 8, 0.03) 0%, transparent 40%),
+  background: radial-gradient(circle at 50% 12%, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
+              radial-gradient(circle at 12% 82%, rgba(5, 150, 105, 0.03) 0%, transparent 40%),
               #050811;
   background-attachment: fixed;
   display: flex;
@@ -60,10 +60,10 @@ body {
   position: relative;
   width: min(420px, calc(100vw - 32px));
   background: rgba(8, 12, 24, 0.82);
-  border: 1px solid rgba(250, 204, 21, 0.28);
+  border: 1px solid rgba(16, 185, 129, 0.28);
   border-radius: var(--radius-lg);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8),
-              0 0 40px rgba(250, 204, 21, 0.08);
+              0 0 40px rgba(16, 185, 129, 0.08);
   padding: 40px 36px;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -80,7 +80,7 @@ body {
   font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #facc15, #eab308);
+  background: linear-gradient(135deg, #10b981, #059669);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -120,7 +120,7 @@ body {
 
 .field:focus-within .field__label {
   color: var(--accent);
-  text-shadow: 0 0 10px rgba(250, 204, 21, 0.5);
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
 }
 
 .input-container {
@@ -140,7 +140,7 @@ body {
 
 .field__input {
   background: rgba(8, 12, 24, 0.72);
-  border: 1px solid rgba(250, 204, 21, 0.22);
+  border: 1px solid rgba(16, 185, 129, 0.22);
   color: var(--text-0);
   border-radius: var(--radius-sm);
   padding: 13px 16px;
@@ -158,13 +158,13 @@ body {
 }
 
 .field__input:hover {
-  border-color: rgba(250, 204, 21, 0.45);
+  border-color: rgba(16, 185, 129, 0.45);
   background: rgba(8, 12, 24, 0.8);
 }
 
 .field__input:focus {
-  border-color: #fde047;
-  box-shadow: 0 0 16px rgba(250, 204, 21, 0.28),
+  border-color: #34d399;
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.28),
               inset 0 1px 2px rgba(0, 0, 0, 0.6);
   background: rgba(5, 8, 17, 0.95);
 }
@@ -215,9 +215,9 @@ body {
 }
 
 .btn--primary:hover {
-  background: linear-gradient(135deg, #fde047, #eab308);
-  border-color: #eab308;
-  box-shadow: 0 4px 16px rgba(250, 204, 21, 0.35);
+  background: linear-gradient(135deg, #34d399, #059669);
+  border-color: #059669;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
   color: #050811;
   transform: translateY(-1.5px);
 }
@@ -229,7 +229,7 @@ body {
 /* Console HUD Box */
 .console-box {
   background: #03050b;
-  border: 1px solid rgba(250, 204, 21, 0.2);
+  border: 1px solid rgba(16, 185, 129, 0.2);
   border-radius: var(--radius-sm);
   padding: 12px;
   font-family: var(--font-mono);
@@ -245,7 +245,7 @@ body {
   text-overflow: ellipsis;
 }
 
-.c-accent { color: #06b6d4; }
+.c-accent { color: #10b981; }
 .c-ok { color: #10b981; }
 .c-warn { color: #f59e0b; }
 

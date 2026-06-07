@@ -1,6 +1,7 @@
 /**
- * Mascote Interativo de Login - Data Fox (Versão Cibernética Geométrica Premium)
+ * Mascote Interativo de Login - Cyber Monkey (Versão Cibernética Geométrica Premium)
  * Encapsula de forma limpa e isolada todos os estilos, HTML e comportamentos do mascote.
+ * Focado no conceito de escalabilidade e trading de alta performance.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -10,12 +11,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // 1. Injetar Estilos CSS do Mascote e Candlesticks
   const style = document.createElement('style');
   style.textContent = `
-    /* Estilos do Mascote Interativo (Raposa de Trading) */
+    /* Estilos do Mascote Interativo (Macaco Escalador) */
     .login-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
-      margin-top: 110px; /* Dá espaço generoso para a raposa acima */
+      margin-top: 110px; /* Dá espaço generoso para o macaco acima */
       margin-bottom: 20px;
       width: 100%;
       position: relative;
@@ -25,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
       width: 260px;
       height: 180px;
       position: absolute;
-      top: -142px; /* Encaixa as patas perfeitamente no topo do card */
+      top: -142px; /* Encaixa as mãos perfeitamente no topo do card */
       left: 50%;
       transform: translateX(-50%);
       pointer-events: none;
@@ -38,100 +39,103 @@ document.addEventListener('DOMContentLoaded', () => {
       cursor: pointer;
     }
 
-    /* Respiração da Raposa (balanço sutil de tronco e cabeça) */
-    @keyframes foxBreathing {
+    /* Respiração do Macaco (balanço sutil pendurado pelas mãos) */
+    @keyframes monkeyBreathing {
       0%, 100% { transform: translateY(0px) scaleY(1); }
-      50% { transform: translateY(-2.5px) scaleY(0.98); }
+      50% { transform: translateY(-3px) scaleY(0.97) rotate(0.5deg); }
     }
     
-    #fox-upper {
-      animation: foxBreathing 4.5s ease-in-out infinite;
-      transform-origin: 130px 145px; /* Conexão com as patas */
+    #monkey-upper {
+      animation: monkeyBreathing 4.8s ease-in-out infinite;
+      transform-origin: 130px 142px; /* Ponto de apoio nas mãos */
     }
 
-    /* Cauda balançando suavemente */
-    @keyframes tailWiggleFox {
+    /* Cauda balançando suavemente em estado inativo */
+    @keyframes tailWiggleMonkey {
       0%, 100% { transform: rotate(0deg) translateY(0); }
-      50% { transform: rotate(-3deg) translateY(-1.5px); }
+      50% { transform: rotate(-5deg) translateY(-2px); }
     }
-    #fox-tail {
-      animation: tailWiggleFox 5s ease-in-out infinite;
-      transform-origin: 168px 125px;
+    #monkey-tail {
+      animation: tailWiggleMonkey 4.5s ease-in-out infinite;
+      transform-origin: 138px 125px;
       transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* Orelhas mexendo de leve estilo antena radar */
-    @keyframes earMoveRight {
+    /* Orelhas mexendo sutilmente como radar */
+    @keyframes earMoveRightMonkey {
       0%, 90%, 100% { transform: rotate(0deg); }
-      93%, 97% { transform: rotate(-2deg); }
+      93%, 97% { transform: rotate(-3deg); }
     }
-    @keyframes earMoveLeft {
+    @keyframes earMoveLeftMonkey {
       0%, 88%, 100% { transform: rotate(0deg); }
       91%, 95% { transform: rotate(3deg); }
     }
-    #ear-right {
-      animation: earMoveRight 6s ease-in-out infinite;
-      transform-origin: 115px 56px;
+    #ear-right-group {
+      animation: earMoveRightMonkey 6.5s ease-in-out infinite;
+      transform-origin: 168px 68px;
       transition: transform 0.3s ease;
     }
-    #ear-left {
-      animation: earMoveLeft 6s ease-in-out infinite;
-      transform-origin: 98px 58px;
+    #ear-left-group {
+      animation: earMoveLeftMonkey 6.5s ease-in-out infinite;
+      transform-origin: 92px 68px;
       transition: transform 0.3s ease;
     }
 
-    /* Mordida Rápida de Caça (Fox Bite) */
-    @keyframes foxBite {
-      0% { transform: translate(0px, 0px) rotate(0deg); }
-      15% { transform: translate(-8px, -4px) rotate(-4deg); }
-      30% { transform: translate(-28px, 12px) rotate(8deg); }
-      45% { transform: translate(-30px, 14px) rotate(8deg) scaleY(1.02); }
-      75% { transform: translate(4px, -2px) rotate(-2deg); }
-      100% { transform: translate(0px, 0px) rotate(0deg); }
-    }
-    .fox-biting {
-      animation: foxBite 0.52s cubic-bezier(0.25, 1, 0.5, 1) !important;
-      animation-fill-mode: forwards;
-    }
-
-    /* Defesa / Chicotada com a Cauda (Fox Deflect) */
-    @keyframes tailDeflect {
+    /* Captura rápida com a Cauda (BUY) */
+    @keyframes tailCatchMonkey {
       0% { transform: rotate(0deg); }
-      20% { transform: rotate(12deg) scale(0.95); }
-      45% { transform: rotate(-28deg) translate(-15px, -8px) scale(1.05); }
-      75% { transform: rotate(4deg) translate(2px, 1px); }
+      25% { transform: rotate(35deg) scale(1.1); }
+      50% { transform: rotate(-55deg) translate(25px, -20px) scale(1.2); }
+      75% { transform: rotate(10deg); }
       100% { transform: rotate(0deg); }
     }
-    .fox-deflecting #fox-tail {
+    .monkey-catching #monkey-tail {
       animation: none !important;
-      animation: tailDeflect 0.55s cubic-bezier(0.16, 1, 0.3, 1) !important;
+      animation: tailCatchMonkey 0.58s cubic-bezier(0.16, 1, 0.3, 1) !important;
       animation-fill-mode: forwards;
     }
 
-    /* Animação de Comemoração / BOOST */
-    @keyframes foxBoostAnimation {
-      0% { transform: scale(1) rotate(0deg); }
-      25% { transform: scale(0.92) translateY(5px) rotate(-6deg); }
-      55% { transform: scale(1.1) translateY(-14px) rotate(10deg); }
-      80% { transform: scale(0.97) translateY(1px) rotate(-2deg); }
-      100% { transform: scale(1) rotate(0deg); }
+    /* Defesa / Chicotada com a cauda (SELL) */
+    @keyframes tailDeflectMonkey {
+      0% { transform: rotate(0deg); }
+      30% { transform: rotate(-25deg) scale(0.9); }
+      50% { transform: rotate(45deg) translate(-10px, 15px) scale(1.1); }
+      75% { transform: rotate(-10deg); }
+      100% { transform: rotate(0deg); }
     }
-    .fox-boosting {
-      animation: foxBoostAnimation 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+    .monkey-deflecting #monkey-tail {
+      animation: none !important;
+      animation: tailDeflectMonkey 0.55s cubic-bezier(0.16, 1, 0.3, 1) !important;
       animation-fill-mode: forwards;
     }
 
-    /* Animação quando foca no campo de senha (Cobre o rosto com a cauda de forma fofa) */
-    .fox-covering #fox-tail {
-      animation: none !important;
-      transform: translate(-115px, -18px) rotate(-62deg) scale(1.15) !important;
+    /* Animação de Escalada Acrobática / BOOST */
+    @keyframes monkeyClimbAnimation {
+      0% { transform: scale(1) translateY(0) rotate(0deg); }
+      20% { transform: scale(0.95) translateY(10px) rotate(-5deg); }
+      50% { transform: scale(1.08) translateY(-90px) rotate(360deg); }
+      80% { transform: scale(0.97) translateY(5px) rotate(-2deg); }
+      100% { transform: scale(1) translateY(0) rotate(0deg); }
     }
-    
-    .fox-covering #ear-right {
-      transform: rotate(-10deg) translateY(2px) !important;
+    .monkey-climbing {
+      animation: monkeyClimbAnimation 0.72s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+      animation-fill-mode: forwards;
     }
-    .fox-covering #ear-left {
-      transform: rotate(8deg) translateY(2px) !important;
+
+    /* Animação de Segurança: Cobre os olhos com as mãos cibernéticas (🙈 Não Vejo) */
+    .monkey-covering #monkey-arm-left {
+      transform: translate(25px, -65px) rotate(45deg) !important;
+    }
+    .monkey-covering #monkey-arm-right {
+      transform: translate(-25px, -65px) rotate(-45deg) !important;
+    }
+    .monkey-covering #monkey-pupil {
+      transform: scaleY(0.05) !important;
+      opacity: 0.3;
+    }
+    .monkey-covering #monkey-visor-back {
+      fill: #064e3b !important; /* Visor escurece (verde florestal escuro) */
+      filter: none !important;
     }
 
     /* Estilo das Partículas de Trading (Velas de Candlestick) */
@@ -193,137 +197,144 @@ document.addEventListener('DOMContentLoaded', () => {
     wrapper.appendChild(loginCard);
   }
 
-  // 3. Criar e injetar o SVG da Raposa de Trading Cibernética (Data Fox - Versão Detalhada com Olhos Normais)
+  // 3. Criar e injetar o SVG do Macaco Cibernético (Cyber Monkey)
   const mascotContainer = document.createElement('div');
   mascotContainer.className = 'mascot-container';
   mascotContainer.innerHTML = `
     <svg id="mascot" width="260" height="180" viewBox="0 0 260 180" style="overflow: visible;">
       <defs>
-        <!-- Gradiente Metálico Prateado/Cinza Espacial para o Corpo -->
-        <linearGradient id="cobreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#94a3b8" /> <!-- Prata brilhante -->
-          <stop offset="60%" stop-color="#475569" /> <!-- Cinza Metálico -->
-          <stop offset="100%" stop-color="#1e293b" /> <!-- Cinza Escuro Grafite -->
+        <!-- Gradiente Metálico Cromado para as partes estruturais do Macaco -->
+        <linearGradient id="metalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#cbd5e1" /> <!-- Alumínio Brilhante -->
+          <stop offset="50%" stop-color="#64748b" /> <!-- Aço Escovado -->
+          <stop offset="100%" stop-color="#334155" /> <!-- Titânio Escuro -->
         </linearGradient>
 
-        <!-- Gradiente Metalizado Escuro (Detalhes/Costas) -->
+        <!-- Gradiente Escuro para as Juntas e Detalhes Internos -->
         <linearGradient id="darkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#334155" />
+          <stop offset="0%" stop-color="#475569" />
           <stop offset="100%" stop-color="#0f172a" />
         </linearGradient>
 
-        <!-- Gradiente Creme do Peito -->
+        <!-- Gradiente Creme para Focinho e Placa Peitoral -->
         <linearGradient id="cremeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
           <stop offset="0%" stop-color="#f8fafc" />
           <stop offset="100%" stop-color="#cbd5e1" />
         </linearGradient>
 
-        <!-- Gradiente Neon Verde para Cauda e Visor (BUY) -->
+        <!-- Gradiente Neon Verde de Lucro (Cores Ativas) -->
+        <linearGradient id="neonProfit" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#34d399" /> <!-- Verde Menta -->
+          <stop offset="100%" stop-color="#059669" /> <!-- Verde Esmeralda -->
+        </linearGradient>
+
+        <!-- Gradiente Verde Padrão do Visor -->
+        <linearGradient id="visorGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#34d399" />
+          <stop offset="100%" stop-color="#10b981" />
+        </linearGradient>
+
+        <!-- Gradiente Neon Verde para Colisão BUY -->
         <linearGradient id="neonGreen" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#10b981" />
           <stop offset="100%" stop-color="#047857" />
         </linearGradient>
 
-        <!-- Gradiente Neon Vermelho para Cauda e Visor (SELL) -->
+        <!-- Gradiente Neon Vermelho para Colisão SELL -->
         <linearGradient id="neonRed" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stop-color="#f43f5e" />
           <stop offset="100%" stop-color="#be123c" />
         </linearGradient>
 
-        <!-- Gradiente Amarelo Neon para o Visor -->
-        <linearGradient id="visorGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stop-color="#facc15" />
-          <stop offset="100%" stop-color="#eab308" />
-        </linearGradient>
-
-        <!-- Filtro Glow para Painéis Neon -->
+        <!-- Filtro Glow para Efeito Neon -->
         <filter id="neonGlow" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur stdDeviation="2.2" result="blur" />
+          <feGaussianBlur stdDeviation="2.5" result="blur" />
           <feComposite in="SourceGraphic" in2="blur" operator="over" />
         </filter>
       </defs>
 
-      <!-- Grupo da Raposa -->
-      <g id="fox" style="transform-origin: 130px 145px;">
-        <!-- Sombra de contato -->
-        <ellipse cx="130" cy="142" rx="48" ry="3.5" fill="#000000" opacity="0.45" />
+      <!-- Grupo Principal do Macaco -->
+      <g id="monkey" style="transform-origin: 130px 142px;">
+        <!-- Sombra de Contato sutil no topo do card -->
+        <ellipse cx="130" cy="142" rx="42" ry="3" fill="#000000" opacity="0.5" />
 
-        <!-- Pernas e Patas Estáticas -->
-        <g id="legs">
-          <!-- Patas Traseiras (Dobrada na base) -->
-          <ellipse cx="144" cy="132" rx="14" ry="10" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="1.2" style="transform: rotate(-10deg); transform-origin: 144px 132px;" />
-          <ellipse cx="148" cy="142" rx="8" ry="2.5" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="1.2" />
+        <!-- Grupo Superior (Sofre Respiração e Ações) -->
+        <g id="monkey-upper">
           
-          <!-- Pata Dianteira Esquerda (Atrás) -->
-          <path d="M 106,120 L 102,142" fill="none" stroke="#1e293b" stroke-width="5" stroke-linecap="round" opacity="0.6" />
-          <ellipse cx="102" cy="142" rx="4" ry="2" fill="#1e293b" opacity="0.6" />
-
-          <!-- Pata Dianteira Direita (Frente) -->
-          <path d="M 116,118 L 112,142" fill="none" stroke="url(#cobreGrad)" stroke-width="5.5" stroke-linecap="round" />
-          <ellipse cx="112" cy="142" rx="4.5" ry="2.2" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="0.8" />
-        </g>
-
-        <!-- Grupo Superior (Sofre Respiração e Rotação) -->
-        <g id="fox-upper">
-          
-          <!-- Cauda de Raposa horizontal e peluda, com ponta branca (Sem parecer esquilo) -->
-          <g id="fox-tail" style="transform-origin: 154px 128px;">
-            <!-- Base e meio da cauda (Prata) -->
-            <path d="M 152,126 Q 190,118 212,130 L 206,142 Q 180,144 154,136 Z" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="1.5" stroke-linejoin="round" />
-            <!-- Faceta Superior da Cauda (Elemento Neon/Creme Dinâmico) -->
-            <path id="tail-facet-top" d="M 190,118 Q 201,124 212,130 L 206,142 Q 195,133 190,118" fill="url(#cremeGrad)" opacity="0.15" stroke="#1e293b" stroke-width="0.8" />
-            <!-- Ponta da cauda (Creme/Branca) -->
-            <path id="tail-facet-bottom" d="M 212,130 Q 228,124 240,135 Q 223,146 206,142 Z" fill="url(#cremeGrad)" stroke="#cbd5e1" stroke-width="1.5" stroke-linejoin="round" />
+          <!-- Cauda Preênsil Longa (Lado Direito) -->
+          <g id="monkey-tail">
+            <!-- Trajetória curva estilizada da cauda -->
+            <path d="M 138,124 Q 165,135 185,115 T 210,85 T 225,100" fill="none" stroke="url(#metalGrad)" stroke-width="6.2" stroke-linecap="round" />
+            <!-- LED indicador de carga na ponta da cauda -->
+            <circle id="tail-led" cx="225" cy="100" r="5.5" fill="url(#visorGrad)" stroke="#047857" stroke-width="1" filter="url(#neonGlow)" />
           </g>
 
-          <!-- Corpo Principal Simples Low-Poly -->
-          <polygon id="fox-body" points="104,115 130,96 164,110 156,142 114,142 94,120" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="1.5" stroke-linejoin="round" />
-          
-          <!-- Facetas Geométricas do corpo para estilo premium -->
-          <polygon points="104,115 130,96 148,106 122,124" fill="#ffffff" opacity="0.08" />
-          <polygon points="122,124 148,106 164,110 156,142 134,142" fill="#000000" opacity="0.12" />
+          <!-- Pernas Mecânicas Dobradas -->
+          <g id="monkey-legs">
+            <!-- Perna Esquerda -->
+            <path d="M 118,126 L 108,142 Q 102,148 112,148" fill="none" stroke="url(#metalGrad)" stroke-width="5.5" stroke-linecap="round" />
+            <!-- Perna Direita -->
+            <path d="M 142,126 L 152,142 Q 158,148 148,148" fill="none" stroke="url(#metalGrad)" stroke-width="5.5" stroke-linecap="round" />
+          </g>
 
-          <!-- Peito Creme Fofo -->
-          <polygon points="104,115 130,96 126,138 114,142" fill="url(#cremeGrad)" stroke="#cbd5e1" stroke-width="1.2" stroke-linejoin="round" />
+          <!-- Corpo/Tronco Geométrico -->
+          <polygon id="monkey-body" points="112,94 148,94 140,128 120,128" fill="url(#metalGrad)" stroke="#1e293b" stroke-width="1.5" stroke-linejoin="round" />
+          <!-- Placa Peitoral de Feedback Neon -->
+          <polygon points="118,98 142,98 136,122 124,122" fill="url(#cremeGrad)" opacity="0.18" stroke="#cbd5e1" stroke-width="0.8" />
 
-          <!-- Cabeça da Raposa de Perfil (Voltada para a esquerda) -->
-          <g id="fox-head" style="transform-origin: 124px 85px;">
-            <!-- Face Superior, Focinho e Bochechas -->
-            <polygon points="126,86 116,56 86,60 62,80 50,88 72,96 102,96 126,90" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="1.5" stroke-linejoin="round" />
+          <!-- Cabeça do Macaco -->
+          <g id="monkey-head" style="transform-origin: 130px 72px;">
             
-            <!-- Facetas Geométricas da cabeça -->
-            <polygon points="116,56 86,60 62,80 88,76" fill="#ffffff" opacity="0.08" />
-            
-            <!-- Bochecha Creme -->
-            <polygon points="62,80 50,88 72,96 86,96" fill="url(#cremeGrad)" stroke="#cbd5e1" stroke-width="1" stroke-linejoin="round" />
-            <polygon points="72,96 86,96 102,96 88,86" fill="#000000" opacity="0.1" />
-
-            <!-- Nariz Preto Fofo -->
-            <circle cx="50" cy="88" r="2.8" fill="#111827" />
-
-            <!-- Orelha Esquerda (Traseira) -->
-            <polygon id="ear-left" points="94,58 76,22 88,18 100,50" fill="#1e293b" opacity="0.7" />
-
-            <!-- Orelha Direita (Dianteira) -->
+            <!-- Orelhas Redondas Mecânicas Grandes -->
+            <g id="ear-left-group">
+              <circle cx="92" cy="68" r="16" fill="url(#metalGrad)" stroke="#1e293b" stroke-width="1.5" />
+              <circle cx="92" cy="68" r="10" fill="url(#darkGrad)" />
+              <circle cx="92" cy="68" r="4.5" fill="url(#visorGrad)" filter="url(#neonGlow)" id="ear-led-left" />
+            </g>
             <g id="ear-right-group">
-              <polygon id="ear-right" points="112,56 94,14 108,8 120,46" fill="url(#cobreGrad)" stroke="#1e293b" stroke-width="1.5" stroke-linejoin="round" />
-              <polygon points="100,20 106,15 110,32" id="ear-led" fill="url(#visorGrad)" opacity="0.75" />
+              <circle cx="168" cy="68" r="16" fill="url(#metalGrad)" stroke="#1e293b" stroke-width="1.5" />
+              <circle cx="168" cy="68" r="10" fill="url(#darkGrad)" />
+              <circle cx="168" cy="68" r="4.5" fill="url(#visorGrad)" filter="url(#neonGlow)" id="ear-led-right" />
             </g>
 
-            <!-- Olhos Normais de Cartoon (Padrão Gecko/Runner) -->
-            <ellipse cx="65" cy="74" rx="4.5" ry="7.5" fill="#ffffff" stroke="#1e293b" stroke-width="1.2" />
-            <ellipse cx="73.5" cy="73" rx="4.5" ry="7.5" fill="#ffffff" stroke="#1e293b" stroke-width="1.2" />
+            <!-- Face Principal -->
+            <ellipse cx="130" cy="72" rx="28" ry="24" fill="url(#metalGrad)" stroke="#1e293b" stroke-width="1.5" />
+            
+            <!-- Focinho Macio Creme (Muzzle) -->
+            <path d="M 112,78 Q 130,68 148,78 Q 152,90 130,94 Q 108,90 112,78 Z" fill="url(#cremeGrad)" stroke="#cbd5e1" stroke-width="1" />
+            <!-- Detalhes do Nariz e Boca -->
+            <ellipse cx="130" cy="79" rx="3.5" ry="2.2" fill="#1e293b" />
+            <path d="M 124,84 Q 130,88 136,84" fill="none" stroke="#1e293b" stroke-width="1.2" stroke-linecap="round" />
 
-            <!-- Pupilas que reagem ao mouse -->
-            <g id="fox-pupil" style="transition: transform 0.12s ease-out;">
-              <ellipse cx="65.5" cy="74.5" rx="1.8" ry="3.0" fill="#000000" />
-              <circle cx="64.9" cy="73.3" r="0.6" fill="#ffffff" />
-              <ellipse cx="74.0" cy="73.5" rx="1.8" ry="3.0" fill="#000000" />
-              <circle cx="73.4" cy="72.3" r="0.6" fill="#ffffff" />
+            <!-- Visor Ocular Digital (Olhos de Trading) -->
+            <path id="monkey-visor-back" d="M 108,62 L 152,62 Q 156,76 150,78 L 110,78 Q 104,76 108,62 Z" fill="url(#visorGrad)" stroke="#047857" stroke-width="1.2" filter="url(#neonGlow)" />
+            
+            <!-- Globos Oculares Normais -->
+            <ellipse cx="120" cy="70" rx="4.5" ry="6.2" fill="#ffffff" />
+            <ellipse cx="140" cy="70" rx="4.5" ry="6.2" fill="#ffffff" />
+
+            <!-- Pupilas Oculares que reagem ao mouse -->
+            <g id="monkey-pupil" style="transition: transform 0.12s ease-out;">
+              <circle cx="120" cy="70" r="2.2" fill="#000000" />
+              <circle cx="119.2" cy="69" r="0.7" fill="#ffffff" />
+              <circle cx="140" cy="70" r="2.2" fill="#000000" />
+              <circle cx="139.2" cy="69" r="0.7" fill="#ffffff" />
             </g>
+          </g>
 
-            <!-- Boca Fofa -->
-            <path d="M 50,90 Q 55,92 60,90" fill="none" stroke="#1e293b" stroke-width="1.2" stroke-linecap="round" />
+          <!-- Braços Escaladores Longos (Apoiados no card) -->
+          <!-- Braço Esquerdo -->
+          <g id="monkey-arm-left" style="transform-origin: 112px 98px; transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);">
+            <line x1="112" y1="98" x2="88" y2="116" stroke="url(#metalGrad)" stroke-width="6.5" stroke-linecap="round" />
+            <line x1="88" y1="116" x2="92" y2="142" stroke="url(#metalGrad)" stroke-width="5.5" stroke-linecap="round" />
+            <ellipse cx="92" cy="142" rx="7.5" ry="4.5" fill="#1e293b" stroke="url(#visorGrad)" stroke-width="1" />
+          </g>
+          
+          <!-- Braço Direito -->
+          <g id="monkey-arm-right" style="transform-origin: 148px 98px; transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);">
+            <line x1="148" y1="98" x2="172" y2="116" stroke="url(#metalGrad)" stroke-width="6.5" stroke-linecap="round" />
+            <line x1="172" y1="116" x2="168" y2="142" stroke="url(#metalGrad)" stroke-width="5.5" stroke-linecap="round" />
+            <ellipse cx="168" cy="142" rx="7.5" ry="4.5" fill="#1e293b" stroke="url(#visorGrad)" stroke-width="1" />
           </g>
 
         </g>
@@ -334,38 +345,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 4. Lógica Ocular, Reações a Campos de Login e Caça a Candles
   const mascot = document.getElementById('mascot');
-  const foxPupil = document.getElementById('fox-pupil');
-  const foxUpper = document.getElementById('fox-upper');
+  const monkeyPupil = document.getElementById('monkey-pupil');
+  const monkeyUpper = document.getElementById('monkey-upper');
   
-  const earLed = document.getElementById('ear-led');
-  const tailFacetTop = document.getElementById('tail-facet-top');
-  const tailFacetBottom = document.getElementById('tail-facet-bottom');
+  const earLedLeft = document.getElementById('ear-led-left');
+  const earLedRight = document.getElementById('ear-led-right');
+  const tailLed = document.getElementById('tail-led');
+  const visorBack = document.getElementById('monkey-visor-back');
   
   let isHunting = false;
   let isCovering = false;
   let lastMouseMoveTime = Date.now();
   let idleEyeTimer = null;
 
-  // Atualização das pupilas com base no mouse (coordenada central aproximada X=69, Y=74 na cabeça)
+  // Atualização das pupilas com base no mouse (coordenada central aproximada X=130, Y=70 na cabeça)
   function updatePupil(targetX, targetY) {
-    if (!foxPupil || !mascot || isHunting || isCovering) return;
+    if (!monkeyPupil || !mascot || isHunting || isCovering) return;
     
     const rect = mascot.getBoundingClientRect();
     const scaleX = rect.width / 260;
     const scaleY = rect.height / 180;
     
-    const eyeCenterX = rect.left + 69 * scaleX;
-    const eyeCenterY = rect.top + 74 * scaleY;
+    const eyeCenterX = rect.left + 130 * scaleX;
+    const eyeCenterY = rect.top + 70 * scaleY;
     
     const dx = targetX - eyeCenterX;
     const dy = targetY - eyeCenterY;
     const distance = Math.hypot(dx, dy);
     
-    const maxOffset = 2.2;
+    const maxOffset = 2.4;
     const intensity = Math.min(distance / 200, 1);
     const angle = Math.atan2(dy, dx);
     
-    foxPupil.style.transform = `translate(${Math.cos(angle) * maxOffset * intensity}px, ${Math.sin(angle) * maxOffset * intensity}px)`;
+    monkeyPupil.style.transform = `translate(${Math.cos(angle) * maxOffset * intensity}px, ${Math.sin(angle) * maxOffset * intensity}px)`;
   }
 
   document.addEventListener('mousemove', (event) => {
@@ -383,50 +395,54 @@ document.addEventListener('DOMContentLoaded', () => {
     idleEyeTimer = setInterval(() => {
       if (Date.now() - lastMouseMoveTime < 3000 || isHunting || isCovering) return;
       const angle = Math.random() * Math.PI * 2;
-      const offset = Math.random() * 2.2;
+      const offset = Math.random() * 2.4;
       
-      if (foxPupil) {
-        foxPupil.style.transform = `translate(${Math.cos(angle) * offset}px, ${Math.sin(angle) * offset}px)`;
+      if (monkeyPupil) {
+        monkeyPupil.style.transform = `translate(${Math.cos(angle) * offset}px, ${Math.sin(angle) * offset}px)`;
         if (Math.random() < 0.25) {
-          tailFacetTop.setAttribute('fill', Math.random() < 0.5 ? 'url(#neonGreen)' : 'url(#neonRed)');
+          const randColor = Math.random() < 0.5 ? 'url(#neonGreen)' : 'url(#neonRed)';
+          tailLed.setAttribute('fill', randColor);
         }
       }
-    }, 1200 + Math.random() * 1200);
+    }, 1300 + Math.random() * 1200);
   }
   
   setInterval(() => {
     if (Date.now() - lastMouseMoveTime >= 3000) startIdleEyes();
   }, 1000);
 
-  // 5. Interações fofas com os Campos do Formulário de Login (Password Coverage)
+  // 5. Interações com os Campos do Formulário de Login (Password/Mão nos olhos 🙈)
   const passwordInput = document.querySelector('input[type="password"]');
   const otherInputs = document.querySelectorAll('input:not([type="password"])');
-  const foxElement = document.getElementById('fox');
+  const monkeyElement = document.getElementById('monkey');
 
-  if (passwordInput && foxElement) {
-    // Quando foca no campo de senha, a raposa cobre a cabeça com a cauda
+  if (passwordInput && monkeyElement) {
+    // Quando foca no campo de senha, o macaco cobre os olhos com as mãos cibernéticas (🙈)
     passwordInput.addEventListener('focus', () => {
       isCovering = true;
-      foxElement.classList.add('fox-covering');
-      // Fecha as pupilas/olhos
-      if (foxPupil) foxPupil.style.transform = 'translate(-3px, 2px) scaleY(0.1)';
-      showSpeechBubble('SHH! PASSWORD_KEY');
+      monkeyElement.classList.add('monkey-covering');
+      showSpeechBubble('SHH! SECUR_KEY');
     });
 
     passwordInput.addEventListener('blur', () => {
       isCovering = false;
-      foxElement.classList.remove('fox-covering');
-      if (foxPupil) foxPupil.style.transform = 'translate(0px, 0px)';
+      monkeyElement.classList.remove('monkey-covering');
+      if (monkeyPupil) {
+        monkeyPupil.style.transform = 'translate(0px, 0px)';
+        monkeyPupil.style.opacity = '1';
+      }
+      visorBack.setAttribute('fill', 'url(#visorGrad)');
+      visorBack.setAttribute('filter', 'url(#neonGlow)');
     });
   }
 
-  if (otherInputs && foxElement) {
-    // Quando foca em outros inputs, a raposa olha curiosa
+  if (otherInputs && monkeyElement) {
+    // Quando foca em outros inputs, o macaco olha curioso
     otherInputs.forEach(input => {
       input.addEventListener('focus', () => {
         if (isCovering) return;
-        // Move o olho para frente
-        if (foxPupil) foxPupil.style.transform = 'translate(-1.8px, 0.5px)';
+        // Se inclina um pouco e move a pupila para baixo curiosamente
+        if (monkeyPupil) monkeyPupil.style.transform = 'translateY(1.8px)';
         showSpeechBubble('SCANNING_USER');
       });
     });
@@ -436,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const activeCandles = new Set();
   
   function createCandle() {
-    if (activeCandles.size >= 4 || isCovering) return; // Não gera candles se estiver escondendo a senha
+    if (activeCandles.size >= 4 || isCovering) return; // Não gera se estiver escondendo os olhos
     
     const isGreen = Math.random() < 0.55;
     const candle = document.createElement('div');
@@ -455,7 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const wrapperWidth = wrapper.offsetWidth;
     const x = wrapperWidth + 20;
-    const y = 20 + Math.random() * 50; // Passa no nível da cabeça/visor
+    const y = 20 + Math.random() * 50; // Passa no nível da cauda/cabeça
     
     candle.style.left = `${x}px`;
     candle.style.top = `${y}px`;
@@ -485,16 +501,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // Se a vela estiver na zona de ação da Raposa (X central é 50%)
+      // Se a vela estiver na zona de ação do Macaco
       if (!candle.targetApproached && !isHunting && !isCovering) {
         const triggerX = wrapperWidth / 2 - 50;
         
-        if (candle.x <= triggerX + 40 && candle.x >= triggerX - 40) {
+        if (candle.x <= triggerX + 60 && candle.x >= triggerX - 20) {
           candle.targetApproached = true;
           if (candle.isGreen) {
-            triggerBuyCapture(candle); // Mordida rápida de plasma
+            triggerBuyCapture(candle); // Captura rápida com a cauda preênsil
           } else {
-            triggerSellDeflect(candle); // Chicotada com a cauda
+            triggerSellDeflect(candle); // Chicotada de plasma de defesa
           }
         } else {
           candle.x -= candle.speed;
@@ -510,22 +526,23 @@ document.addEventListener('DOMContentLoaded', () => {
     requestAnimationFrame(updateCandles);
   }
 
-  // Captura de Candlestick Verde (BUY) - Mordida
+  // Captura de Candlestick Verde (BUY) - Cauda Agarra
   function triggerBuyCapture(candleData) {
     if (isHunting) return;
     isHunting = true;
     
     const candleEl = candleData.element;
-    const upperEl = document.getElementById('fox-upper');
-    if (!upperEl) return;
+    const monkeyEl = document.getElementById('monkey');
+    if (!monkeyEl) return;
     
-    // LEDs em verde
-    earLed.setAttribute('fill', 'url(#neonGreen)');
-    tailFacetTop.setAttribute('fill', 'url(#neonGreen)');
+    // LEDs em verde neon
+    earLedLeft.setAttribute('fill', 'url(#neonGreen)');
+    earLedRight.setAttribute('fill', 'url(#neonGreen)');
+    tailLed.setAttribute('fill', 'url(#neonGreen)');
     
-    upperEl.classList.add('fox-biting');
+    monkeyEl.classList.add('monkey-catching');
     
-    // Colisão no pico da mordida (200ms)
+    // Colisão no pico do movimento (240ms)
     setTimeout(() => {
       candleEl.style.transform = 'scale(0)';
       candleEl.style.opacity = '0';
@@ -538,33 +555,35 @@ document.addEventListener('DOMContentLoaded', () => {
         candleEl.remove();
         activeCandles.delete(candleData);
       }, 100);
-    }, 200);
+    }, 240);
     
     // Reset
     setTimeout(() => {
-      upperEl.classList.remove('fox-biting');
+      monkeyEl.classList.remove('monkey-catching');
       isHunting = false;
-      earLed.setAttribute('fill', 'url(#visorGrad)');
-      tailFacetTop.setAttribute('fill', 'url(#neonGreen)');
-    }, 550);
+      earLedLeft.setAttribute('fill', 'url(#visorGrad)');
+      earLedRight.setAttribute('fill', 'url(#visorGrad)');
+      tailLed.setAttribute('fill', 'url(#visorGrad)');
+    }, 580);
   }
 
-  // Defesa de Candlestick Vermelho (SELL) - Cauda
+  // Defesa de Candlestick Vermelho (SELL) - Cauda Repele
   function triggerSellDeflect(candleData) {
     if (isHunting) return;
     isHunting = true;
     
     const candleEl = candleData.element;
-    const foxEl = document.getElementById('fox');
-    if (!foxEl) return;
+    const monkeyEl = document.getElementById('monkey');
+    if (!monkeyEl) return;
     
     // LEDs em vermelho neon
-    earLed.setAttribute('fill', 'url(#neonRed)');
-    tailFacetTop.setAttribute('fill', 'url(#neonRed)');
+    earLedLeft.setAttribute('fill', 'url(#neonRed)');
+    earLedRight.setAttribute('fill', 'url(#neonRed)');
+    tailLed.setAttribute('fill', 'url(#neonRed)');
     
-    foxEl.classList.add('fox-deflecting');
+    monkeyEl.classList.add('monkey-deflecting');
     
-    // Colisão na chicotada (240ms)
+    // Colisão (220ms)
     setTimeout(() => {
       createSparkExplosion(candleData.x + 8, candleData.y + 12, '#f43f5e');
       createFloatingTag(candleData.x, candleData.y - 15, 'SELL ORDER', '#f43f5e');
@@ -577,15 +596,16 @@ document.addEventListener('DOMContentLoaded', () => {
         candleEl.remove();
         activeCandles.delete(candleData);
       }, 150);
-    }, 240);
+    }, 220);
     
     // Reset
     setTimeout(() => {
-      foxEl.classList.remove('fox-deflecting');
+      monkeyEl.classList.remove('monkey-deflecting');
       isHunting = false;
-      earLed.setAttribute('fill', 'url(#visorGrad)');
-      tailFacetTop.setAttribute('fill', 'url(#neonGreen)');
-    }, 580);
+      earLedLeft.setAttribute('fill', 'url(#visorGrad)');
+      earLedRight.setAttribute('fill', 'url(#visorGrad)');
+      tailLed.setAttribute('fill', 'url(#visorGrad)');
+    }, 550);
   }
 
   // Notificação HUD de Terminal
@@ -601,9 +621,9 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (type === 'sell') {
       bubble.innerHTML = `<span style="color:#f43f5e;">❯</span> ORDER_FILL: <span style="color:#f43f5e; font-weight:800;">SELL_SHORT_OK</span>`;
     } else if (type === 'boost') {
-      bubble.innerHTML = `<span style="color:#facc15;">❯</span> ENGINE_BOOST: <span style="color:#facc15; font-weight:800;">DATA_FOX_MAX</span>`;
+      bubble.innerHTML = `<span style="color:#10b981;">❯</span> SCALING_MAX: <span style="color:#10b981; font-weight:800;">CLIMB_BOOST</span>`;
     } else {
-      bubble.innerHTML = `<span style="color:#facc15;">❯</span> FOX_LOG: <span style="color:#cbd5e1;">${text}</span>`;
+      bubble.innerHTML = `<span style="color:#10b981;">❯</span> MONKEY_LOG: <span style="color:#cbd5e1;">${text}</span>`;
     }
     
     bubble.style.position = 'absolute';
@@ -612,13 +632,13 @@ document.addEventListener('DOMContentLoaded', () => {
     bubble.style.transform = 'translate(-50%, -15px) scale(0.85)';
     bubble.style.opacity = '0';
     bubble.style.background = 'rgba(11, 15, 25, 0.96)';
-    bubble.style.border = '1px solid rgba(250, 204, 21, 0.4)';
+    bubble.style.border = '1px solid rgba(16, 185, 129, 0.4)';
     bubble.style.color = '#cbd5e1';
     bubble.style.fontSize = '10.5px';
     bubble.style.fontFamily = 'monospace';
     bubble.style.padding = '6px 12px';
     bubble.style.borderRadius = '6px';
-    bubble.style.boxShadow = '0 0 20px rgba(250, 204, 21, 0.15), 0 8px 16px rgba(0, 0, 0, 0.6)';
+    bubble.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.15), 0 8px 16px rgba(0, 0, 0, 0.6)';
     bubble.style.pointerEvents = 'none';
     bubble.style.whiteSpace = 'nowrap';
     bubble.style.zIndex = '20';
@@ -706,43 +726,45 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => tag.remove(), 950);
   }
 
-  // BOOST
+  // BOOST / Acrobacia de Escalada
   function triggerBoost() {
     if (isHunting || isCovering) return;
     isHunting = true;
     
-    const foxUpperEl = document.getElementById('fox-upper');
-    if (!foxUpperEl) return;
+    const monkeyUpperEl = document.getElementById('monkey-upper');
+    if (!monkeyUpperEl) return;
     
-    foxUpperEl.classList.add('fox-boosting');
+    monkeyUpperEl.classList.add('monkey-climbing');
     showSpeechBubble('', 'boost');
     
     // Pisca os LEDs intensamente
     let count = 0;
     const interval = setInterval(() => {
-      const activeColor = count % 2 === 0 ? '#10b981' : '#f43f5e';
-      earLed.setAttribute('fill', activeColor);
-      tailFacetTop.setAttribute('fill', activeColor);
+      const activeColor = count % 2 === 0 ? '#34d399' : '#059669';
+      earLedLeft.setAttribute('fill', activeColor);
+      earLedRight.setAttribute('fill', activeColor);
+      tailLed.setAttribute('fill', activeColor);
       count++;
       if (count >= 10) {
         clearInterval(interval);
-        earLed.setAttribute('fill', 'url(#visorGrad)');
-        tailFacetTop.setAttribute('fill', 'url(#neonGreen)');
+        earLedLeft.setAttribute('fill', 'url(#visorGrad)');
+        earLedRight.setAttribute('fill', 'url(#visorGrad)');
+        tailLed.setAttribute('fill', 'url(#visorGrad)');
       }
     }, 70);
     
-    // Faíscas
+    // Faíscas de lucro neon
     const rect = mascot.getBoundingClientRect();
     const scaleX = rect.width / 260;
     const scaleY = rect.height / 180;
     const centerGlobalX = rect.left - wrapper.getBoundingClientRect().left + 130 * scaleX;
-    const centerGlobalY = rect.top - wrapper.getBoundingClientRect().top + 120 * scaleY;
-    createSparkExplosion(centerGlobalX, centerGlobalY, '#facc15');
+    const centerGlobalY = rect.top - wrapper.getBoundingClientRect().top + 72 * scaleY;
+    createSparkExplosion(centerGlobalX, centerGlobalY, '#10b981');
     
     setTimeout(() => {
-      foxUpperEl.classList.remove('fox-boosting');
+      monkeyUpperEl.classList.remove('monkey-climbing');
       isHunting = false;
-    }, 650);
+    }, 720);
   }
 
   mascotContainer.addEventListener('click', triggerBoost);

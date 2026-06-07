@@ -1,62 +1,63 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
   <defs>
-    <!-- Gradiente Metálico Prateado/Cinza Espacial para o Corpo -->
-    <linearGradient id="cobreGradIcon" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#94a3b8" /> <!-- Prata brilhante -->
-      <stop offset="60%" stop-color="#475569" /> <!-- Cinza Metálico -->
-      <stop offset="100%" stop-color="#1e293b" /> <!-- Cinza Escuro Grafite -->
+    <!-- Gradiente Metálico Cromado para o Ícone -->
+    <linearGradient id="metalGradIcon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#cbd5e1" />
+      <stop offset="50%" stop-color="#64748b" />
+      <stop offset="100%" stop-color="#334155" />
     </linearGradient>
 
-    <!-- Gradiente Creme do Peito/Cheek -->
+    <!-- Gradiente Escuro para Juntas e Detalhes -->
+    <linearGradient id="darkGradIcon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#475569" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </linearGradient>
+
+    <!-- Gradiente Creme do Focinho -->
     <linearGradient id="cremeGradIcon" x1="0%" y1="0%" x2="0%" y2="100%">
       <stop offset="0%" stop-color="#f8fafc" />
       <stop offset="100%" stop-color="#cbd5e1" />
     </linearGradient>
 
-    <!-- Gradiente Amarelo Neon para Detalhe da Orelha -->
+    <!-- Gradiente Verde Padrão do Visor -->
     <linearGradient id="visorGradIcon" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#facc15" />
-      <stop offset="100%" stop-color="#eab308" />
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#10b981" />
     </linearGradient>
   </defs>
 
-  <!-- Grupo do Ícone da Raposa (Favicon-robot) -->
+  <!-- Grupo do Ícone do Macaco Ampliado (Favicon-robot) -->
   <g id="favicon-robot">
-    <!-- Pescoço e Peito Creme -->
-    <polygon points="60,78 72,56 80,76 70,95" fill="url(#cobreGradIcon)" stroke="#1e293b" stroke-width="0.8" />
-    <polygon points="34,78 60,78 70,95 50,95" fill="url(#cremeGradIcon)" stroke="#cbd5e1" stroke-width="0.8" />
+    <!-- Orelhas Redondas Mecânicas Grandes -->
+    <!-- Orelha Esquerda (Preenche até a borda esquerda x=0) -->
+    <circle cx="17" cy="48" r="16" fill="url(#metalGradIcon)" stroke="#1e293b" stroke-width="1.5" />
+    <circle cx="17" cy="48" r="11" fill="url(#darkGradIcon)" />
+    <circle cx="17" cy="48" r="5" fill="url(#visorGradIcon)" />
 
-    <!-- Cabeça Principal (Focinho e Face) -->
-    <polygon points="80,72 72,44 48,46 26,62 15,70 34,78 60,78 80,75" fill="url(#cobreGradIcon)" stroke="#1e293b" stroke-width="1.2" stroke-linejoin="round" />
-    
-    <!-- Facetas Geométricas de Destaque -->
-    <polygon points="72,44 48,46 26,62 48,58" fill="#ffffff" opacity="0.08" />
+    <!-- Orelha Direita (Preenche até a borda direita x=100) -->
+    <circle cx="83" cy="48" r="16" fill="url(#metalGradIcon)" stroke="#1e293b" stroke-width="1.5" />
+    <circle cx="83" cy="48" r="11" fill="url(#darkGradIcon)" />
+    <circle cx="83" cy="48" r="5" fill="url(#visorGradIcon)" />
 
-    <!-- Bochecha Creme -->
-    <polygon points="26,62 15,70 34,78 44,78" fill="url(#cremeGradIcon)" stroke="#cbd5e1" stroke-width="0.8" stroke-linejoin="round" />
-    <polygon points="34,78 44,78 60,78 50,70" fill="#000000" opacity="0.1" />
+    <!-- Cabeça Principal (Muito maior, ocupando o centro) -->
+    <ellipse cx="50" cy="51" rx="36" ry="31" fill="url(#metalGradIcon)" stroke="#1e293b" stroke-width="1.8" />
 
-    <!-- Nariz Preto -->
-    <circle cx="15" cy="70" r="2.2" fill="#111827" />
+    <!-- Focinho Ampliado (Muzzle) -->
+    <path d="M 26,58 Q 50,45 74,58 Q 80,74 50,78 Q 20,74 26,58 Z" fill="url(#cremeGradIcon)" stroke="#cbd5e1" stroke-width="1" />
+    <ellipse cx="50" cy="61" rx="4.5" ry="2.8" fill="#1e293b" />
+    <path d="M 42,67 Q 50,71 58,67" fill="none" stroke="#1e293b" stroke-width="1.2" stroke-linecap="round" />
 
-    <!-- Orelha Esquerda (Traseira) -->
-    <polygon points="58,45 44,20 54,16 64,38" fill="#1e293b" opacity="0.7" />
+    <!-- Visor Ocular Digital Grande -->
+    <path d="M 23,38 L 77,38 Q 82,53 75,56 L 25,56 Q 18,53 23,38 Z" fill="url(#visorGradIcon)" stroke="#047857" stroke-width="1.2" />
 
-    <!-- Orelha Direita (Dianteira) -->
-    <polygon points="68,43 56,12 66,8 74,32" fill="url(#cobreGradIcon)" stroke="#1e293b" stroke-width="1.2" stroke-linejoin="round" />
-    <polygon points="62,20 68,16 68,30" fill="url(#visorGradIcon)" opacity="0.75" />
-
-    <!-- Olhos de Cartoon Expressivos -->
-    <ellipse cx="36" cy="58" rx="4" ry="7" fill="#ffffff" stroke="#1e293b" stroke-width="0.9" />
-    <ellipse cx="43.5" cy="57" rx="4" ry="7" fill="#ffffff" stroke="#1e293b" stroke-width="0.9" />
+    <!-- Olhos Globos Oculares -->
+    <ellipse cx="37" cy="47" rx="5.8" ry="7.5" fill="#ffffff" />
+    <ellipse cx="63" cy="47" rx="5.8" ry="7.5" fill="#ffffff" />
 
     <!-- Pupilas -->
-    <ellipse cx="36.5" cy="58.5" rx="1.6" ry="2.8" fill="#000000" />
-    <circle cx="35.9" cy="57.3" r="0.5" fill="#ffffff" />
-    <ellipse cx="44.0" cy="57.5" rx="1.6" ry="2.8" fill="#000000" />
-    <circle cx="43.4" cy="56.3" r="0.5" fill="#ffffff" />
-
-    <!-- Boca -->
-    <path d="M 15,72 Q 20,74 25,72" fill="none" stroke="#1e293b" stroke-width="1.0" stroke-linecap="round" />
+    <circle cx="37" cy="47" r="2.8" fill="#000000" />
+    <circle cx="35.8" cy="45.8" r="0.6" fill="#ffffff" />
+    <circle cx="63" cy="47" r="2.8" fill="#000000" />
+    <circle cx="61.8" cy="45.8" r="0.6" fill="#ffffff" />
   </g>
 </svg>
