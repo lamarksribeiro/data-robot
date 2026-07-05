@@ -10,8 +10,10 @@
     "derive-key:write": "node scripts/derive-api-key.js --write-env --safe --derive-only",
     "test:connection": "node scripts/test-connection.js",
     "test:order": "node scripts/place-test-order.js",
-    "ui:dev": "sirv public --port 3200 --host 0.0.0.0 --dev",
-    "ui:start": "sirv public --port 3200 --host 0.0.0.0 --etag --maxage 0"
+    "start": "sirv public --port 3200 --host 0.0.0.0 --etag --maxage 0",
+    "dev": "sirv public --port 3200 --host 0.0.0.0 --dev",
+    "ui:dev": "npm run dev",
+    "ui:start": "npm start"
   },
   "dependencies": {
     "@polymarket/clob-client-v2": "^1.0.6",
