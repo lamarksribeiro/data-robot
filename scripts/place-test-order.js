@@ -12,8 +12,7 @@ import 'dotenv/config';
 import { OrderType, Side } from '@polymarket/clob-client-v2';
 import { buildClobClient } from '../src/clob/buildClient.js';
 import { createSigner } from '../src/clob/wallet.js';
-
-const GAMMA = 'https://gamma-api.polymarket.com';
+import { findActiveBtc5mEvent } from '../src/markets/btc5m.js';
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -30,34 +29,6 @@ function parseArgs(argv) {
     size: parseInt(valueOf('--size') ?? '5', 10),
     json: args.includes('--json'),
     postOnly: !args.includes('--no-post-only'),
-  };
-}
-
-async function findActiveBtc5mEvent() {
-  const url = `${GAMMA}/events?active=true&closed=false&limit=20&order=endDate&ascending=true`;
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new Error(`Gamma HTTP ${res.status}`);
-  const events = await res.json();
-  const now = Date.now();
-  const btc = (Array.isArray(events) ? events : [])
-    .filter((e) => /bitcoin up or down/i.test(e.title || '') && /5m|5 min/i.test(e.title || ''))
-    .filter((e) => new Date(e.endDate).getTime() > now + 30_000)
-    .sort((a, b) => new Date(a.endDate) - new Date(b.endDate));
-
-  const event = btc[0];
-  if (!event) return null;
-
-  const market = event.markets?.[0];
-  const tokens = typeof market?.clobTokenIds === 'string'
-    ? JSON.parse(market.clobTokenIds)
-    : market?.clobTokenIds;
-
-  return {
-    title: event.title,
-    conditionId: market?.conditionId,
-    upTokenId: tokens?.[0],
-    downTokenId: tokens?.[1],
-    endDate: event.endDate,
   };
 }
 
