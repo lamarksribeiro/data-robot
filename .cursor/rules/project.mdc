@@ -1,0 +1,27 @@
+---
+description: data-robot — trading real Polymarket, credenciais CLOB, UI :3200
+alwaysApply: true
+---
+
+# data-robot
+
+**Único app de produção com dinheiro real.** Node 22 ESM. UI estática `sirv` na porta **3200**. SDK: `@polymarket/clob-client-v2`. Produção: robot.fracta.online.
+
+## Segurança
+
+- **Não** rodar `npm run test:order` sem pedido explícito (ordem real).
+- `derive-key:write` e scripts de derive **alteram `.env`** — nunca logar ou expor chaves/API secret/passphrase.
+- Não commitar `.env`.
+
+## Credenciais (erro comum)
+
+Ordens na API mas **invisíveis na UI** = API key L2 não alinhada ao `POLYMARKET_FUNDER_ADDRESS` / `SIGNATURE_TYPE`.
+
+- Ler `docs/polymarket-ordens-abertas-ui-vs-api.md` e `docs/polymarket-configuracao-env.md` antes de mexer em auth.
+- `npm run check:api-key` valida alinhamento.
+- Preferir credenciais **derivadas** (`npm run derive-key:write`), não keys copiadas do browser sem mapear (`src/clob/browserKeyMap.js`).
+
+## Não duplicar
+
+- Cliente CLOB: estender `@polymarket/clob-client-v2` ou `src/clob/buildClient.js` — não forkar assinatura HTTP do SDK.
+- Lógica de estratégia/backtest pertence ao `data-backtest`, não aqui.
