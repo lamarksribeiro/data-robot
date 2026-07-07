@@ -16,6 +16,10 @@ export default {
 
   gammaBase: 'https://gamma-api.polymarket.com',
   dataApiBase: 'https://data-api.polymarket.com',
+  polymarketCryptoPrice: 'https://polymarket.com/api/crypto/crypto-price',
+
+  rtdsWsUrl: process.env.RTDS_WS_URL || 'wss://ws-live-data.polymarket.com',
+  clobWsUrl: process.env.CLOB_WS_URL || 'wss://ws-subscriptions-clob.polymarket.com/ws/market',
 
   deriveNonceMax: parseInt(process.env.POLYMARKET_DERIVE_NONCE_MAX || '50', 10),
 };

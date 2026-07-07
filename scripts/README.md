@@ -47,3 +47,22 @@ npm run test:order -- --wait 15
 npm run test:order -- --wait 15 --cancel
 npm run test:order -- --price 0.01 --size 5 --no-post-only
 ```
+
+## TFC — validação em conta real
+
+Ver [../docs/tfc-validacao-real.md](../docs/tfc-validacao-real.md).
+
+| Script | npm | Descrição |
+|--------|-----|-----------|
+| `tfc/watch-terminal.js` | `tfc:watch` | Observa feeds + gates TFC (sem ordens) |
+| `tfc/measure-order-latency.js` | `tfc:latency` | Latência create/get/cancel (`--label`, `--repeat`) |
+| `tfc/compare-latency.js` | `tfc:latency:compare` | Compara `runs/latency-*.json` local vs servidor |
+
+```bash
+npm run tfc:watch -- --terminal-only
+npm run tfc:latency -- --label=local --repeat=3
+npm run tfc:latency -- --label=giovanna --repeat=5   # no servidor Giovanna
+npm run tfc:latency:compare
+npm run tfc:micro-entry
+npm run tfc:micro-entry -- --live --cancel
+```

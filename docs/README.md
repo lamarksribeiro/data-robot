@@ -9,6 +9,13 @@
 | [Ordens abertas: UI vs API e API keys](./polymarket-ordens-abertas-ui-vs-api.md) | Achado principal (jul/2026): por que ordens via robô não apareciam no site, como corrigir e como operar corretamente no futuro |
 | [Configuração correta do `.env`](./polymarket-configuracao-env.md) | Checklist de variáveis, derivação de credenciais L2, identidade (signer/funder/signatureType) e validação |
 
+## Estratégia TFC (conta real)
+
+| Documento | Conteúdo |
+|-----------|----------|
+| [Validação TFC em conta real (LEGO)](./tfc-validacao-real.md) | Fases F0–F5, scripts `tfc:watch`, `tfc:latency`, `tfc:micro-entry`, cruzamento API + UI |
+| [Latência local vs servidor Giovanna](./operacao/latencia-local-vs-servidor.md) | F2a/F2b: medir no PC (VPN) e no Coolify Giovanna; comparar com `tfc:latency:compare` |
+
 ## Projetos relacionados
 
 - `data-robot/` — robô e scripts CLI (este repositório)
