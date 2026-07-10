@@ -48,6 +48,18 @@ npm run test:order -- --wait 15 --cancel
 npm run test:order -- --price 0.01 --size 5 --no-post-only
 ```
 
+## fees/maker-vs-taker.js
+
+Compara taxa **maker** (limit postOnly) vs **taker** (cruza o book) em BTC 5m.
+
+Ver [../docs/operacao/teste-maker-vs-taker-fee.md](../docs/operacao/teste-maker-vs-taker-fee.md).
+
+```bash
+npm run test:fee -- --mode=both
+npm run test:fee -- --mode=taker --live --size=5
+npm run test:fee -- --mode=maker --live --size=5 --wait=120
+```
+
 ## TFC — validação em conta real
 
 Ver [../docs/tfc-validacao-real.md](../docs/tfc-validacao-real.md).

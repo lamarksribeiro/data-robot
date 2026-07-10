@@ -15,6 +15,7 @@
 |-----------|----------|
 | [Validação TFC em conta real (LEGO)](./tfc-validacao-real.md) | Fases F0–F5, scripts `tfc:watch`, `tfc:latency`, `tfc:micro-entry`, cruzamento API + UI |
 | [Latência local vs servidor Giovanna](./operacao/latencia-local-vs-servidor.md) | F2a/F2b: medir no PC (VPN) e no Coolify Giovanna; comparar com `tfc:latency:compare` |
+| [Maker vs taker fee (Hopper 3)](./operacao/teste-maker-vs-taker-fee.md) | Teste real com centavos: limit maker ($0) vs ordem que cruza o book (taker) |
 
 ## Projetos relacionados
 
