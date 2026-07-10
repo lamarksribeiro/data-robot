@@ -10,6 +10,7 @@
     "derive-key:write": "node scripts/derive-api-key.js --write-env --safe --derive-only",
     "test:connection": "node scripts/test-connection.js",
     "test:order": "node scripts/place-test-order.js",
+    "test:fee": "node scripts/fees/maker-vs-taker.js",
     "tfc:watch": "node scripts/tfc/watch-terminal.js",
     "tfc:latency": "node scripts/tfc/measure-order-latency.js",
     "tfc:latency:compare": "node scripts/tfc/compare-latency.js",

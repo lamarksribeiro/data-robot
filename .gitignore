@@ -4,3 +4,4 @@ node_modules
 *.log
 runs/*.jsonl
 runs/latency-*.json
+runs/fee-*.json
