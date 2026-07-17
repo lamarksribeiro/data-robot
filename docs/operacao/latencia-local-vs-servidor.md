@@ -4,6 +4,17 @@ Testes de latência CLOB feitos no PC com VPN **não representam** o ambiente de
 
 Estratégia: medir nos **dois ambientes** com o mesmo script e comparar — o delta vira baseline de melhoria e ajuda a calibrar timeouts da TFC.
 
+> **Atenção:** o script atual envia ordem real sem exigir `--live`. Execute somente com autorização explícita. Antes da próxima campanha, ele deve ser corrigido para exigir confirmação live e cancelar a ordem em `finally` mesmo quando uma etapa intermediária falhar.
+
+## Baseline de 15/07/2026
+
+| Ambiente | Repetições | Ping | Create | Get open | Cancel | Total |
+|---|---:|---:|---:|---:|---:|---:|
+| Local + VPN | 3 | 284 ms | 586 ms | 568 ms | 572 ms | 1.723 ms |
+| Giovanna | 5 | 56 ms | 122 ms | 107 ms | 110 ms | 335 ms |
+
+A mediana do Giovanna atingiu a meta inicial de total <700 ms. A confirmação imediata via `getOpenOrders()` foi inconsistente (2/5 no servidor, 0/3 local), embora todas as ordens tenham sido canceladas. O próximo passo é medir **tempo até visibilidade** com polling e user WebSocket, além de p95/p99; uma única leitura imediata não deve ser tratada como falha definitiva.
+
 ## Por que os dois?
 
 | Ambiente | O que mede | Limitação |
@@ -39,7 +50,7 @@ npm run tfc:latency -- --label=giovanna --repeat=5 --note="Coolify Giovanna prod
 ```bash
 ssh Giovanna
 docker ps | grep data-robot
-docker exec -it <container> sh -c 'cd /app && npm run tfc:latency -- --label=giovanna --repeat=5'
+docker exec -it <container> sh -c 'cd /usr/src/app && npm run tfc:latency -- --label=giovanna --repeat=5'
 ```
 
 Baixe o JSON para comparar localmente:
@@ -75,11 +86,12 @@ giovanna vs local:
 | `cancel` | Saída / hedge / late flip |
 | `total` | Orçamento de tempo na janela 5–30s |
 
-**Metas iniciais (servidor):**
+**Metas provisórias (servidor):**
 
-- `clobPing` < 80 ms
-- `create` < 400 ms
-- `total` (create+get+cancel) < 700 ms
+- `clobPing` p95 < 80 ms
+- `create` p95 < 400 ms
+- `total` p95 (create+confirmação+cancel) < 700 ms
+- 100% das ordens com estado final reconciliado e nenhuma ordem órfã
 
 Metas no local com VPN podem ser 2–3× maiores — não usar para calibrar a estratégia.
 
@@ -93,7 +105,7 @@ poll_posição    ≈ getOpen_mediana
 cancel_urgente  ≈ cancel_mediana + 100ms
 ```
 
-Quando F4 (hedge/late flip) existir, repetir `--repeat=10` no servidor em horário de mercado ativo.
+Antes do canário, repetir pelo menos `--repeat=30` no servidor em horário de mercado ativo e calcular p50/p95/p99. O script atual reporta mediana e precisa ser ampliado antes de essa medição valer como gate de produção.
 
 ## Checklist
 

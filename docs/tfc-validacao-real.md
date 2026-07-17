@@ -1,163 +1,257 @@
-# Validação TFC em conta real (formato LEGO)
+# Validação TFC V7 em conta real
 
-Plano incremental para validar a estratégia **Terminal Favorite Carry** no `data-robot`, gastando centavos e cruzando API + interface web.
+Runbook incremental para validar a **Terminal Favorite Carry V7 Danger Floor** no `data-robot` com exposição controlada. O roadmap, a arquitetura e os gates de promoção estão no [plano de desenvolvimento](./plano-desenvolvimento.md).
+
+> `--live` movimenta dinheiro real. Nunca execute uma fase live sem concluir e registrar a fase anterior.
+
+> **Exceção perigosa no código atual:** `npm run tfc:latency` envia uma ordem real mesmo sem flag `--live`. Até P0 corrigir essa interface, trate o comando como live e só o execute com autorização e monitoramento explícitos.
 
 ## Princípios
 
-1. **Uma peça por vez** — cada fase valida um subsistema antes de compor o próximo.
-2. **Observe antes de operar** — F1 não envia ordens; F2 usa ordem a 1¢ postOnly que não executa.
-3. **Mesma API key do navegador** — ordens só aparecem na UI com key derivada (`npm run derive-key:write`).
-4. **Logs reproduzíveis** — scripts gravam JSONL em `runs/` para comparar com backtest.
-5. **Custo máximo por teste** — micro-entrada ~$0.05; latência ~$0.05 reservado mas cancelado sem fill.
+1. Validar um subsistema por vez e guardar evidência reproduzível.
+2. Dry-run e shadow antes de toda nova ação live.
+3. Falhar fechado quando conta, mercado, feed, relógio ou risco estiverem inválidos.
+4. Usar a mesma API key derivada do navegador quando a conferência visual for necessária.
+5. Tratar resposta de POST como aceite, não como prova de fill ou posição.
+6. Não criar ação tática abaixo de 4s; só cancelamento protetivo é permitido.
+7. Usar budget de canário separado do `entryBudget=10` do preset V7.
 
-## Fases
+## Dependência da engine genérica
 
-| Fase | Comando | O que valida | Custo |
-|------|---------|--------------|-------|
-| **F0** | `npm run check:api-key` + `npm run test:connection` | Credenciais, saldo, Gamma | $0 |
-| **F1** | `npm run tfc:watch` | RTDS BTC, CLOB bid/ask, PTB, gates TFC | $0 |
-| **F2a** | `npm run tfc:latency -- --label=local` | Latência no PC (VPN) — referência | ~$0 |
-| **F2b** | `npm run tfc:latency -- --label=giovanna` | Latência no servidor Coolify Giovanna — **oficial** | ~$0 |
-| **F2c** | `npm run tfc:latency:compare` | Delta local vs servidor | $0 |
-| **F3** | `npm run tfc:micro-entry` (dry-run) | Plano de ordem quando gates OK | $0 |
-| **F3b** | `npm run tfc:micro-entry -- --live --cancel` | Ordem real mínima + cancel | ~$0 |
-| **F3c** | `npm run tfc:micro-entry -- --live` | Fill real se mercado permitir | ~$0.05–0.10 |
-| **F4** | (próximo) late flip / hedge stop | Saída e hedge | TBD |
-| **F5** | (próximo) reverse pós flip | Lado oposto | TBD |
+Este runbook valida a TFC V7, não define a arquitetura da engine. A implementação válida deve executar a TFC pelo contrato de estratégia descrito no [plano de desenvolvimento](./plano-desenvolvimento.md): a estratégia recebe contexto normalizado e devolve intenções; somente risk, OMS e executor podem acessar a infraestrutura de ordens.
 
-## F0 — Smoke de conta
+Os scripts atuais `tfc:watch` e `tfc:micro-entry` ainda fazem orquestração específica e, no caso de `micro-entry`, chamam o CLOB diretamente. Eles servem como protótipos/diagnóstico, mas não devem virar a engine de produção por crescimento incremental.
+
+Para outra estratégia, cria-se outro módulo aderente ao mesmo contrato e um runbook próprio de sinais/paridade. Auth, feeds reutilizáveis, risk global, OMS, executor, journal, recovery, observabilidade e deploy continuam sendo os mesmos.
+
+## Estratégia-alvo
+
+O alvo é `src/tfc/preset-v7.js`, espelho de `data-backtest/labs/strategies/terminal/tfc/presets/btc-champion-v7.json`:
+
+- entrada taker quando todos os gates passam entre 30s e 5s;
+- late flip exit/reverse entre 8s e 4s;
+- reverse limitado por ask máximo de 0,95;
+- danger exit em [4s, 5s) quando `|signedDistance| < 0,3 × sigma_spot(5s)`;
+- `hedgeStopEnabled=false` e `entryMakerEnabled=false`.
+
+A V6 Hybrid é apenas referência histórica. Seu hedge stop não faz parte do plano de produção.
+
+## Estado das fases em 17/07/2026
+
+| Fase | Estado | Evidência / próximo gate |
+|---|---|---|
+| F0 Conta e auth | Parcial | Scripts existem; tornar checks obrigatórios no startup. |
+| F1 Feed + gates | Não validada | Dois logs existentes têm 0 amostras na janela 30→5s. |
+| F2 Latência | Baseline concluída | Local 1.723 ms; Giovanna 335 ms de mediana. Falta p95/p99 e confirmação robusta de visibilidade. |
+| F3 Entrada dry/micro | Protótipo | `micro-entry` ainda usa preset V6 e não mantém posição/OMS. |
+| F4 Late flip exit/reverse | Ausente | Implementar somente após OMS/risk/replay. |
+| F5 Danger exit | Ausente | Depende da paridade de volatilidade e de F4. |
+| F6 Recovery e risco | Ausente | User WS, journal, heartbeat, restart e kill switch. |
+| F7 Canário | Bloqueada | Depende de F0–F6 e critérios do roadmap. |
+
+## F0 — Conta, ambiente e preflight
+
+Comandos read-only:
 
 ```powershell
-cd d:\Projetos\projeto-goldenlens\data-robot
 npm run check:api-key
 npm run test:connection
 ```
 
-Checklist visual: saldo no site ≈ saldo na API.
+Critérios:
 
-## F1 — Observar janela terminal (sem ordens)
+- auth L2 funciona;
+- signer, funder e signature type são coerentes;
+- saldo pUSD é suficiente para o limite do canário;
+- API key derivada está alinhada quando a UI for usada;
+- relógio CLOB está acessível;
+- `GET https://polymarket.com/api/geoblock` no **host que executará a engine** retorna `blocked=false`;
+- nenhuma credencial aparece em log.
 
-Abra o evento BTC 5m no navegador e rode em paralelo:
+Se qualquer item falhar, não avance.
 
-```powershell
-npm run tfc:watch -- --terminal-only
-```
+## F1 — Feed e gates V7 sem ordens
 
-O script imprime a cada 1s (só na janela 5–30s antes do fim):
-
-- `btc` (Chainlink RTDS) vs `ptb` (price to beat)
-- bid/ask UP e DOWN
-- cada gate TFC (✓/✗)
-- `GATES:OK` quando todos passam
-
-Log completo: `runs/watch-<timestamp>.jsonl`
-
-**O que comparar com backtest:**
-
-| Variável | Backtest (tick DB) | Real (F1) |
-|----------|-------------------|-----------|
-| PTB | `openPrice` histórico | API `crypto-price` |
-| BTC spot | tick `btc` | RTDS Chainlink |
-| Ask favorito | `up_ask_1` / `down_ask_1` | CLOB WS best ask |
-| OBI | 5 níveis do book | CLOB WS depth |
-| `secsLeft` | derivado do evento | `eventEnd - now` |
-
-**Sinais de problema:**
-
-- `rtdsLagMs` > 2000 — spot atrasado vs mercado
-- `clobLagMs` > 3000 — book stale na janela terminal
-- gates OK no robô mas não no backtest do mesmo minuto → divergência de feed
-
-## F2 — Latência de ordem (local + servidor)
-
-Latência medida no PC com VPN **não** é representativa de produção. Meça nos dois ambientes e compare.
-
-Guia completo: [latencia-local-vs-servidor.md](./operacao/latencia-local-vs-servidor.md)
-
-**Local (referência):**
+O script atual precisa ser alinhado à V7 antes de virar evidência de promoção. Depois:
 
 ```powershell
-npm run tfc:latency -- --label=local --repeat=3 --note="PC + VPN"
+npm run tfc:watch -- --terminal-only --duration=330
 ```
 
-**Servidor Giovanna (oficial para calibrar TFC):**
+Registrar por snapshot:
+
+- evento, token IDs, PTB, BTC e `secsLeft`;
+- bids/asks de UP/DOWN e profundidade usada pelo OBI;
+- timestamp de origem, recebimento e lag de cada feed;
+- versão da estratégia/preset e resultado individual dos gates;
+- health de RTDS/CLOB e motivo de qualquer bloqueio.
+
+Critérios mínimos:
+
+- pelo menos 100 eventos em shadow;
+- 0 snapshot decisório com RTDS >2s ou CLOB >3s;
+- 0 divergência não explicada de evento/PTB/token;
+- intenção idêntica à do replay do backtest para o mesmo trace.
+
+Os limites de staleness são iniciais e devem ser calibrados sem relaxar o comportamento fail-closed.
+
+## F2 — Latência e consistência de ordem
+
+### Baseline observada
+
+| Ambiente | Repetições | Ping | Create | Get open | Cancel | Total |
+|---|---:|---:|---:|---:|---:|---:|
+| Local + VPN | 3 | 284 ms | 586 ms | 568 ms | 572 ms | 1.723 ms |
+| Giovanna | 5 | 56 ms | 122 ms | 107 ms | 110 ms | 335 ms |
+
+A meta inicial de total <700 ms no Giovanna foi atendida na mediana. Porém `getOpenOrders()` encontrou a ordem imediatamente em 2/5 tentativas no servidor e 0/3 localmente. Como todas foram canceladas, o teste deve medir tempo até visibilidade com polling e não apenas uma leitura imediata.
+
+Próxima medição, somente após o script exigir confirmação live e cancelar em `finally`:
 
 ```bash
-npm run tfc:latency -- --label=giovanna --repeat=5
+npm run tfc:latency -- --label=giovanna --repeat=30 --note="baseline p95/p99"
 ```
 
-**Comparar:**
+Antes de promover F2, o medidor deve reportar:
+
+- p50, p95, p99 e máximo de create/ack, visibilidade, cancel e total;
+- status final de cada ordem, taxa de erro e timeout;
+- confirmação pelo user WebSocket e por REST;
+- cancelamento garantido no `finally`, inclusive se create/get falhar.
+
+Meta provisória no servidor:
+
+- create p95 <400 ms;
+- total p95 <700 ms;
+- 100% das ordens reconciliadas e canceladas;
+- 0 ordem órfã.
+
+## F3 — Entrada dry-run e micro-live
+
+Pré-requisitos:
+
+- preset V7 efetivamente usado;
+- estratégia pura, OMS, user WS, journal e risk engine disponíveis;
+- F0–F2 aprovadas;
+- limite financeiro do canário explícito.
+
+Sequência:
 
 ```powershell
-npm run tfc:latency:compare -- --labels local,giovanna
-```
-
-Mede ping CLOB `/time`, `createAndPostOrder`, `getOpenOrders`, `cancelOrder`. Salva `runs/latency-<label>-<timestamp>.json`.
-
-Meta no **servidor**: total < 700 ms. No local com VPN, espere valores maiores — use só para debug.
-
-Confirme na UI (Portfolio → Open) que a ordem apareceu antes do cancel (teste local).
-
-## F3 — Micro-entrada
-
-**Dry-run** (padrão — nenhuma ordem):
-
-```powershell
+# 1. Apenas intenção
 npm run tfc:micro-entry -- --timeout=330
-```
 
-Quando gates OK, imprime plano (lado, preço, size, notional).
-
-**Live com cancel** (valida pipeline sem risco de fill):
-
-```powershell
+# 2. Ordem mínima e cancelamento/reconciliação
 npm run tfc:micro-entry -- --live --cancel --timeout=330
-```
 
-**Live com fill** (só quando F1–F2 estáveis):
-
-```powershell
+# 3. Fill real, somente após aprovação das etapas anteriores
 npm run tfc:micro-entry -- --live --timeout=330
 ```
 
-Acompanhe no navegador: ordem na aba Open, preço/size, execução parcial/total.
+O protótipo atual não satisfaz todos esses pré-requisitos. Em especial, uma GTC no ask pode ficar resting se não cruzar; a implementação de produção deve escolher explicitamente GTC/FAK/FOK, usar cap de preço e tratar fill parcial.
 
-## Cruzamento API + UI
+Critérios:
 
-Durante qualquer fase com ordem:
+- 10 entradas micro-live em dias distintos;
+- 100% com timeline intenção → ordem → trade/cancel → posição;
+- nenhuma duplicidade, ordem órfã ou violação de cap;
+- replay do mesmo evento gera a mesma intenção;
+- fee e slippage reconciliados.
 
-1. **API** — `getOpenOrders()` deve listar a mesma ordem que a UI.
-2. **UI** — Portfolio → Open; evento → Buy Up/Down.
-3. **Timing** — anote delay entre log do script e aparecer na UI.
+## F4 — Late flip exit e reverse
 
-Se ordem some da API mas está na UI (ou vice-versa), volte ao [guia de API key](polymarket-ordens-abertas-ui-vs-api.md).
+Implementar em blocos:
 
-## Preset usado
+1. posição simulada e sinal read-only;
+2. exit SELL entre 8s e 4s;
+3. reverse com saída da posição e entrada no lado oposto;
+4. bloqueio do reverse quando ask oposto >0,95, mantendo a regra de exit;
+5. tratamento de partial fill em cada perna;
+6. cancelamento protetivo de ordem viva no piso; nenhuma nova ação abaixo de 4s.
 
-Parâmetros em `src/tfc/preset-v6-hybrid.js` (espelho do campeão V6 Hybrid do backtest).
+Casos obrigatórios de replay/falha:
 
-Gates avaliados em F1/F3:
+- UP→DOWN e DOWN→UP;
+- whipsaw;
+- book vazio/stale;
+- cap bloqueado;
+- janela perdida por latência;
+- exit parcial, reverse parcial e resposta CLOB desconhecida;
+- restart entre as duas pernas.
 
-- Janela terminal (5–30s)
-- Distância |BTC − PTB| < 20
-- Ask favorito 0.55–0.82
-- Spread ≤ 0.03
-- oddsSum 0.98–1.06
-- Velocity guard (5s)
-- OBI ≥ 0
+Critério live: pelo menos 10 sinais shadow por mecanismo e, depois, micro-live reconciliado sem ação abaixo de 4s.
 
-Ainda **não** implementado: late flip exit, hedge stop, reverse.
+## F5 — Danger exit V7
 
-## Próximos blocos LEGO (F4+)
+No intervalo [4s, 5s), avaliar:
 
-1. **Posição aberta simulada** — após micro-fill, monitorar bid vs `stopMinBid`
-2. **Hedge stop-buy** — ordem no oposto a `hedgeStopPrice` nos últimos 8s
-3. **Late flip** — cruzamento PTB com `lateFlipExitSec`
-4. **Reverse** — entrada no oposto após flip
-5. **Relatório** — script que agrega `runs/*.jsonl` vs backtest do mesmo evento
+```text
+abs(signedDistance) < 0,3 × sigma_spot(5s)
+```
+
+Requisitos:
+
+- mesma definição de amostragem/volatilidade do `TerminalFavoriteCarry.gls`;
+- saída bloqueada se bid inválido, feed stale ou posição já estiver em transição;
+- nenhuma nova tentativa após cruzar o piso de 4s;
+- marcação `danger_exit` com sigma, distância, bid, lag e timestamps.
+
+Critério: paridade de sinal em replay, 10 ocorrências shadow e micro-live reconciliado.
+
+## F6 — Recovery, proteção e operação
+
+Validar antes do canário:
+
+- user WebSocket + fallback REST;
+- heartbeat/cancel-on-disconnect;
+- restart com ordem aberta, partial fill e posição aberta;
+- 401, 429, 503, cancel-only, WS desconectado e feed stale;
+- kill switch e shutdown gracioso;
+- limites de ordem, evento, dia, exposição e falhas consecutivas;
+- health, readiness, armed/live e halted como estados distintos.
+
+Critério: soak shadow ≥7 dias, zero divergência não resolvida e rollback/restart ensaiados.
+
+## F7 — Canário e promoção
+
+Escada:
+
+1. budget mínimo fixo;
+2. 25% do budget pretendido;
+3. 50%;
+4. $10 do preset V7.
+
+Cada degrau exige 50 eventos ou 7 dias, o que for maior, sem violação de risco, ordem órfã ou posição divergente. Aumento para $15–20 é uma decisão posterior baseada em dados live e drawdown, não uma consequência automática do backtest.
+
+## Cruzamento API, user WS e UI
+
+Em testes com ordem:
+
+1. **User WS:** fonte primária de updates de ordem/trade.
+2. **REST:** reconciliação por order ID e estado agregado.
+3. **Data API:** posição/atividade por funder quando aplicável.
+4. **UI:** conferência humana; nunca é fonte de verdade para automação.
+
+Se as fontes divergirem, a engine entra em `HALTED`, bloqueia novas entradas e reconcilia antes de continuar.
+
+## Evidência obrigatória por fase
+
+Cada relatório promovido deve conter, sem secrets:
+
+- ambiente/host, commit, Node e versão do SDK;
+- strategy/preset version e hash dos parâmetros;
+- evento/condition/token IDs;
+- timestamps, lags e métricas p50/p95/p99 quando aplicável;
+- intenções, reason codes, ordens, trades, fills parciais, fees e saldo/posição reconciliados;
+- resultado do gate, divergências e decisão humana de promover/rejeitar.
 
 ## Referências
 
-- Estratégia GLS: `data-backtest/src/backtestStudio/gls/strategies/TerminalFavoriteCarry.gls`
-- Preset: `data-backtest/labs/strategies/terminal/tfc/presets/btc-champion-v6-hybrid.json`
-- Config `.env`: [polymarket-configuracao-env.md](polymarket-configuracao-env.md)
+- [Plano de desenvolvimento](./plano-desenvolvimento.md)
+- Estratégia: `data-backtest/src/backtestStudio/gls/strategies/TerminalFavoriteCarry.gls`
+- Preset campeão: `data-backtest/labs/strategies/terminal/tfc/presets/btc-champion-v7.json`
+- [Configuração do `.env`](./polymarket-configuracao-env.md)
+- [Latência local vs servidor](./operacao/latencia-local-vs-servidor.md)
+- [Order lifecycle](https://docs.polymarket.com/concepts/order-lifecycle)
+- [User WebSocket](https://docs.polymarket.com/market-data/websocket/user-channel)
+- [Fees](https://docs.polymarket.com/trading/fees)

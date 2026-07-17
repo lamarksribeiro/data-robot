@@ -2,6 +2,8 @@
 
 Ferramentas operacionais antes do servidor do robô estar completo.
 
+Roadmap e critérios de promoção: [../docs/plano-desenvolvimento.md](../docs/plano-desenvolvimento.md). Os scripts TFC atuais são protótipos acoplados de validação e ainda não constituem uma engine autônoma com contrato de estratégia, OMS/risk/recovery.
+
 ## check-api-key-alignment.js
 
 Valida a causa raiz documentada em [../docs/polymarket-ordens-abertas-ui-vs-api.md](../docs/polymarket-ordens-abertas-ui-vs-api.md):
@@ -60,9 +62,9 @@ npm run test:fee -- --mode=taker --live --size=5
 npm run test:fee -- --mode=maker --live --size=5 --wait=120
 ```
 
-## TFC — validação em conta real
+## TFC — validação incremental V7
 
-Ver [../docs/tfc-validacao-real.md](../docs/tfc-validacao-real.md).
+Ver [../docs/tfc-validacao-real.md](../docs/tfc-validacao-real.md). Até o alinhamento explícito de `watch` e `micro-entry` ao preset V7, seus resultados não servem como evidência de promoção.
 
 | Script | npm | Descrição |
 |--------|-----|-----------|

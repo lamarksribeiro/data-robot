@@ -13,6 +13,11 @@ Fonte do modelo: `data-backtest/src/backtest/fees.js` + docs Polymarket (“make
 
 No backtest da Hopper 3, `simulateMaker: true` marca fills como `liquidity: 'maker'` e o fee engine **não cobra** esses trades.
 
+## Estado da validação local
+
+- Taker: um run real foi classificado como `TAKER`, com fee esperada de aproximadamente **$0,12810**.
+- Maker: a ordem real não fillou durante a espera. A hipótese de fee zero é sustentada pela documentação oficial, mas a validação empírica local maker × taker permanece **inconclusiva** até haver fill maker e reconciliação do rebate/fee.
+
 ## O que o script mede
 
 1. Consulta book BTC 5m + `getFeeRateBps`
