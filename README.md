@@ -1,6 +1,8 @@
 # Data Robot
 
-Robô de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
+Executor de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
+
+**Status:** protótipo operacional e ferramentas de validação. A engine autônoma, o OMS, os controles de risco e o recovery ainda estão no roadmap; `npm start` serve apenas a UI estática.
 
 Substitui o `polymarket-robot` como base do novo desenvolvimento.
 
@@ -36,7 +38,9 @@ npm run check:api-key -- --browser-storage ../polymarket-web-api/storage/polymar
 
 ## Documentação
 
-- [docs/](./docs/) — achado sobre ordens invisíveis na UI e configuração correta
+- [Plano de desenvolvimento](./docs/plano-desenvolvimento.md) — arquitetura-alvo, prioridades, gates e Definition of Done
+- [Validação TFC V7](./docs/tfc-validacao-real.md) — runbook incremental para shadow, micro-live e canário
+- [docs/](./docs/) — índice completo, configuração e achados operacionais
 - [scripts/README.md](./scripts/README.md) — detalhes dos scripts CLI
 
 ## Estrutura
@@ -45,9 +49,12 @@ npm run check:api-key -- --browser-storage ../polymarket-web-api/storage/polymar
 src/
   config.js           # variáveis de ambiente
   clob/               # cliente CLOB compartilhado
+  feeds/              # RTDS e market WebSocket
+  markets/            # descoberta BTC 5m e PTB
+  tfc/                # gates e presets experimentais
 scripts/              # CLI operacional
 docs/                 # documentação
-public/               # placeholder UI (sirv)
+public/               # UI estática (sirv; não é a engine)
 ```
 
 ## Projetos relacionados

@@ -77,14 +77,10 @@ Isso grava no `.env` a **mesma API key** que o site cria no login (nonce 0).
 ### 5. Validar
 
 ```bash
-npm run test:dual-orders -- --up-only --price 0.01 --size 5
+npm run test:order -- --price 0.01 --size 5 --wait 15 --cancel
 ```
 
-Abra [polymarket.com/portfolio?tab=open](https://polymarket.com/portfolio?tab=open) e confirme a ordem. Depois cancele:
-
-```bash
-npm run test:dual-orders -- --up-only --cancel
-```
+Abra [polymarket.com/portfolio?tab=open](https://polymarket.com/portfolio?tab=open) durante os 15s e confirme a ordem. O mesmo processo a cancela ao final; não rode um segundo comando, pois ele criaria outra ordem em vez de cancelar a primeira.
 
 ---
 
@@ -151,8 +147,11 @@ O robô usa `useServerTime: true` e sincroniza via `GET /time` — manter assim.
 [ ] POLYMARKET_API_KEY prefixo = key no browser (DevTools → poly_clob_api_key_map)
 [ ] Saldo pUSD > mínimo operacional
 [ ] derive-key --derive-only confere com .env (opcional, mensal)
+[ ] Geoblock no host de execução retorna blocked=false
 [ ] Teste smoke: 1 ordem postOnly pequena + visível em Open (dev)
 ```
+
+O preflight de geoblock deve usar `GET https://polymarket.com/api/geoblock` a partir do host que realmente enviará as ordens. O plano prevê automatizar esse bloqueio no startup da engine.
 
 ---
 

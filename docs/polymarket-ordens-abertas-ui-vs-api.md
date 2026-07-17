@@ -170,11 +170,11 @@ Checklist mínimo:
 - [ ] `POLYMARKET_FUNDER_ADDRESS` = `proxyWallet` do perfil
 - [ ] Teste: enviar ordem pequena `postOnly` → conferir aba **Open** no site (F5 se necessário)
 
-Script de referência no `polymarket-robot`:
+Script atual no `data-robot`:
 
 ```bash
-npm run test:dual-orders -- --up-only --price 0.01 --size 5
-# Sem --cancel: deixa aberta para inspecionar no site
+npm run test:order -- --price 0.01 --size 5 --wait 15 --cancel
+# Fica aberta por 15s para inspeção e é cancelada pelo mesmo processo.
 ```
 
 ### 4. Depois de enviar ordem pela API
