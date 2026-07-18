@@ -28,7 +28,7 @@ Valores locais tendem a ser **piores** que no servidor. Se a TFC passa localment
 
 ```powershell
 cd d:\Projetos\projeto-goldenlens\data-robot
-npm run tfc:latency -- --label=local --repeat=3 --note="PC + VPN"
+npm run tfc:latency -- --live --label=local --repeat=3 --note="PC + VPN"
 ```
 
 Salva `runs/latency-local-<timestamp>.json` com hostname, mediana de 3 tentativas, ping `/time`, create/get/cancel.
@@ -40,7 +40,7 @@ Quando o `data-robot` estiver no Coolify Giovanna (ou via SSH no host):
 ```bash
 cd /caminho/do/data-robot   # ou docker exec no container
 export TFC_RUN_LABEL=giovanna
-npm run tfc:latency -- --label=giovanna --repeat=5 --note="Coolify Giovanna prod"
+npm run tfc:latency -- --live --label=giovanna --repeat=5 --note="Coolify Giovanna prod"
 ```
 
 **`.env` no servidor:** copiar manualmente (nunca commitar). Mesmas credenciais derivadas da conta de trading.
@@ -50,7 +50,7 @@ npm run tfc:latency -- --label=giovanna --repeat=5 --note="Coolify Giovanna prod
 ```bash
 ssh Giovanna
 docker ps | grep data-robot
-docker exec -it <container> sh -c 'cd /usr/src/app && npm run tfc:latency -- --label=giovanna --repeat=5'
+docker exec -it <container> sh -c 'cd /usr/src/app && npm run tfc:latency -- --live --label=giovanna --repeat=5'
 ```
 
 Baixe o JSON para comparar localmente:

@@ -77,7 +77,7 @@ Isso grava no `.env` a **mesma API key** que o site cria no login (nonce 0).
 ### 5. Validar
 
 ```bash
-npm run test:order -- --price 0.01 --size 5 --wait 15 --cancel
+npm run test:order -- --live --price 0.01 --size 5 --wait 15 --cancel
 ```
 
 Abra [polymarket.com/portfolio?tab=open](https://polymarket.com/portfolio?tab=open) durante os 15s e confirme a ordem. O mesmo processo a cancela ao final; não rode um segundo comando, pois ele criaria outra ordem em vez de cancelar a primeira.

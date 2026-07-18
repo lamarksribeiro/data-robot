@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Micro-entrada TFC: quando todos os gates passam, envia ordem mínima (~$0.05).
+ * Micro-entrada TFC V7: quando todos os gates passam, envia ordem mínima (~$0.10).
  * Padrão é dry-run; use --live para enviar ordem real.
  *
  * Uso:
@@ -18,7 +18,7 @@ import { createSigner } from '../../src/clob/wallet.js';
 import { findActiveBtc5mEvent } from '../../src/markets/btc5m.js';
 import { fetchPriceToBeat } from '../../src/markets/priceToBeat.js';
 import { evaluateEntryGates } from '../../src/tfc/evaluate.js';
-import { TFC_V6_HYBRID, MICRO_TEST } from '../../src/tfc/preset-v6-hybrid.js';
+import { TFC_V7, MICRO_TEST } from '../../src/tfc/preset-v7.js';
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -32,7 +32,7 @@ function parseArgs(argv) {
 
 async function main() {
   const opts = parseArgs(process.argv);
-  const params = { ...TFC_V6_HYBRID, ...MICRO_TEST };
+  const params = { ...TFC_V7, ...MICRO_TEST };
   const state = createMarketState();
   const event = await findActiveBtc5mEvent();
   if (!event) throw new Error('Nenhum evento BTC 5m ativo.');
@@ -53,8 +53,8 @@ async function main() {
   let placed = false;
 
   if (!opts.json) {
-    console.log(`=== TFC micro-entry (${opts.live ? 'LIVE' : 'dry-run'}) ===`);
-    console.log(`Evento: ${event.title} | PTB: ${state.priceToBeat}`);
+    console.log(`=== TFC V7 micro-entry (${opts.live ? 'LIVE' : 'dry-run'}) ===`);
+    console.log(`Preset: btc-champion-v7 | Evento: ${event.title} | PTB: ${state.priceToBeat}`);
   }
 
   await new Promise((resolve) => {

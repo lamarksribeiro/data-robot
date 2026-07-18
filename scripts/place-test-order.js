@@ -2,16 +2,19 @@
 /**
  * place-test-order.js — envia ordem limite pequena em mercado BTC 5m ativo.
  *
+ * REQUER --live (dinheiro real). Sem a flag, recusa com exit 2.
+ *
  * Uso:
- *   npm run test:order -- --wait 15          # deixa aberta 15s (ver UI)
- *   npm run test:order -- --cancel           # cancela após enviar
- *   npm run test:order -- --wait 15 --cancel
+ *   npm run test:order -- --live --wait 15
+ *   npm run test:order -- --live --cancel
+ *   npm run test:order -- --live --wait 15 --cancel
  */
 
 import 'dotenv/config';
 import { OrderType, Side } from '@polymarket/clob-client-v2';
 import { buildClobClient } from '../src/clob/buildClient.js';
 import { createSigner } from '../src/clob/wallet.js';
+import { requireLiveFlag } from '../src/cli/liveGate.js';
 import { findActiveBtc5mEvent } from '../src/markets/btc5m.js';
 
 function parseArgs(argv) {
@@ -33,6 +36,10 @@ function parseArgs(argv) {
 }
 
 async function main() {
+  requireLiveFlag('test:order', {
+    hint: 'npm run test:order -- --live --wait 15 --cancel',
+  });
+
   const opts = parseArgs(process.argv);
   const wallet = createSigner(process.env.POLYMARKET_PRIVATE_KEY);
   const client = buildClobClient({ wallet, throwOnError: true });

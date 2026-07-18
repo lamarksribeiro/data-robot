@@ -43,9 +43,12 @@ function loadReports(dir) {
 function pickLatestByLabel(reports, labels) {
   const byLabel = {};
   for (const r of reports) {
-    const label = r.meta?.label ?? 'unknown';
+    const label = r.label ?? r.meta?.label ?? 'unknown';
     if (labels.length && !labels.includes(label)) continue;
-    if (!byLabel[label] || (r.meta?.ts ?? '') > (byLabel[label].meta?.ts ?? '')) {
+    const ts = r.startedAt ?? r.meta?.ts ?? '';
+    const prev = byLabel[label];
+    const prevTs = prev?.startedAt ?? prev?.meta?.ts ?? '';
+    if (!prev || ts > prevTs) {
       byLabel[label] = r;
     }
   }
@@ -53,17 +56,19 @@ function pickLatestByLabel(reports, labels) {
 }
 
 function metrics(report) {
-  const agg = report.aggregateMs ?? report.last?.timingsMs ?? {};
+  const payload = report.payload ?? report;
+  const agg = payload.aggregateMs ?? payload.last?.timingsMs ?? report.aggregateMs ?? {};
+  const last = payload.last ?? report.last;
   return {
-    label: report.meta?.label ?? '?',
+    label: report.label ?? report.meta?.label ?? '?',
     host: report.meta?.hostname ?? '?',
-    ts: report.meta?.ts ?? '?',
-    clobPing: agg.clobPingMs ?? report.last?.clobPingMs ?? null,
+    ts: report.startedAt ?? report.meta?.ts ?? '?',
+    clobPing: agg.clobPingMs ?? last?.clobPingMs ?? null,
     create: agg.create ?? agg.timingsMs?.create ?? null,
     getOpen: agg.getOpen ?? agg.timingsMs?.getOpen ?? null,
     cancel: agg.cancel ?? agg.timingsMs?.cancel ?? null,
     total: agg.total ?? agg.timingsMs?.total ?? null,
-    repeat: report.aggregateMs?.repeat ?? report.attempts?.length ?? 1,
+    repeat: agg.repeat ?? payload.attempts?.length ?? report.attempts?.length ?? 1,
   };
 }
 
@@ -130,8 +135,8 @@ function main() {
     console.log(`  create: ${fmtDelta(comparison.createDeltaMs)}`);
   } else {
     console.log('\nFaltam relatórios. Rode em cada ambiente:');
-    console.log(`  npm run tfc:latency -- --label=${opts.labels[0]} --repeat=3`);
-    console.log(`  npm run tfc:latency -- --label=${opts.labels[1]} --repeat=3`);
+    console.log(`  npm run tfc:latency -- --live --label=${opts.labels[0]} --repeat=3`);
+    console.log(`  npm run tfc:latency -- --live --label=${opts.labels[1]} --repeat=3`);
   }
 
   const missing = opts.labels.filter((l) => !latest[l]);

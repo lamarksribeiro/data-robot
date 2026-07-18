@@ -173,7 +173,7 @@ Checklist mínimo:
 Script atual no `data-robot`:
 
 ```bash
-npm run test:order -- --price 0.01 --size 5 --wait 15 --cancel
+npm run test:order -- --live --price 0.01 --size 5 --wait 15 --cancel
 # Fica aberta por 15s para inspeção e é cancelada pelo mesmo processo.
 ```
 
@@ -273,8 +273,8 @@ npm run derive-key:write
 npm run check:api-key
 
 # Teste de ordem real (cuidado: dinheiro real)
-npm run test:order -- --wait 15
-npm run test:order -- --wait 15 --cancel
+npm run test:order -- --live --wait 15
+npm run test:order -- --live --wait 15 --cancel
 ```
 
 ---

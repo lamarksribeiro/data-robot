@@ -4,7 +4,7 @@ Runbook incremental para validar a **Terminal Favorite Carry V7 Danger Floor** n
 
 > `--live` movimenta dinheiro real. Nunca execute uma fase live sem concluir e registrar a fase anterior.
 
-> **Exceção perigosa no código atual:** `npm run tfc:latency` envia uma ordem real mesmo sem flag `--live`. Até P0 corrigir essa interface, trate o comando como live e só o execute com autorização e monitoramento explícitos.
+> Scripts que enviam ordem (`tfc:latency`, `test:order`, `tfc:micro-entry --live`, `test:fee --live`) recusam sem `--live` explícito (exit 2).
 
 ## Princípios
 
@@ -41,9 +41,9 @@ A V6 Hybrid é apenas referência histórica. Seu hedge stop não faz parte do p
 | Fase | Estado | Evidência / próximo gate |
 |---|---|---|
 | F0 Conta e auth | Parcial | Scripts existem; tornar checks obrigatórios no startup. |
-| F1 Feed + gates | Não validada | Dois logs existentes têm 0 amostras na janela 30→5s. |
-| F2 Latência | Baseline concluída | Local 1.723 ms; Giovanna 335 ms de mediana. Falta p95/p99 e confirmação robusta de visibilidade. |
-| F3 Entrada dry/micro | Protótipo | `micro-entry` ainda usa preset V6 e não mantém posição/OMS. |
+| F1 Feed + gates | Parcial | Scripts alinhados ao preset V7; falta evidência com amostras na janela 30→5s. |
+| F2 Latência | Baseline concluída | Local 1.723 ms; Giovanna 335 ms de mediana. Comando exige `--live`. Falta p95/p99. |
+| F3 Entrada dry/micro | Protótipo | `micro-entry` usa V7 + MICRO_TEST; ainda sem OMS/posição. |
 | F4 Late flip exit/reverse | Ausente | Implementar somente após OMS/risk/replay. |
 | F5 Danger exit | Ausente | Depende da paridade de volatilidade e de F4. |
 | F6 Recovery e risco | Ausente | User WS, journal, heartbeat, restart e kill switch. |
@@ -72,7 +72,7 @@ Se qualquer item falhar, não avance.
 
 ## F1 — Feed e gates V7 sem ordens
 
-O script atual precisa ser alinhado à V7 antes de virar evidência de promoção. Depois:
+O script usa o preset V7. Depois:
 
 ```powershell
 npm run tfc:watch -- --terminal-only --duration=330
@@ -109,7 +109,7 @@ A meta inicial de total <700 ms no Giovanna foi atendida na mediana. Porém `get
 Próxima medição, somente após o script exigir confirmação live e cancelar em `finally`:
 
 ```bash
-npm run tfc:latency -- --label=giovanna --repeat=30 --note="baseline p95/p99"
+npm run tfc:latency -- --live --label=giovanna --repeat=30 --note="baseline p95/p99"
 ```
 
 Antes de promover F2, o medidor deve reportar:
