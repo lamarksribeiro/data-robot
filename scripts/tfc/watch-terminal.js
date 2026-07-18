@@ -17,7 +17,12 @@ import { createClobFeed } from '../../src/feeds/clobFeed.js';
 import { findActiveBtc5mEvent } from '../../src/markets/btc5m.js';
 import { fetchPriceToBeat } from '../../src/markets/priceToBeat.js';
 import { evaluateEntryGates } from '../../src/tfc/evaluate.js';
-import { TFC_V6_HYBRID } from '../../src/tfc/preset-v6-hybrid.js';
+import { TFC_V7 } from '../../src/tfc/preset-v7.js';
+import { buildRunEnvelope, sanitizeRunRecord } from '../../src/runs/schema.js';
+
+/** Preset de produção / promoção: V7 Danger Floor (V6 Hybrid é só histórico). */
+const PRESET = TFC_V7;
+const PRESET_ID = 'btc-champion-v7';
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -74,10 +79,11 @@ async function main() {
   const deadline = started + opts.durationSec * 1000;
 
   if (!opts.json) {
-    console.log('=== TFC watch (observe-only) ===');
+    console.log('=== TFC V7 watch (observe-only) ===');
+    console.log(`Preset: ${PRESET_ID}`);
     console.log(`Evento: ${event.title}`);
     console.log(`PTB:    ${state.priceToBeat ?? 'carregando...'}`);
-    console.log(`Janela terminal: ${TFC_V6_HYBRID.minSecondsLeft}s–${TFC_V6_HYBRID.maxSecondsLeft}s antes do fim`);
+    console.log(`Janela terminal: ${PRESET.minSecondsLeft}s–${PRESET.maxSecondsLeft}s antes do fim`);
     console.log(`Duração: ${opts.durationSec}s | log: ${outFile}`);
     console.log('');
   }
@@ -97,7 +103,7 @@ async function main() {
       }
 
       const sl = secsLeft(event.eventEnd, nowMs);
-      const inTerminal = sl >= TFC_V6_HYBRID.minSecondsLeft && sl < TFC_V6_HYBRID.maxSecondsLeft;
+      const inTerminal = sl >= PRESET.minSecondsLeft && sl < PRESET.maxSecondsLeft;
       if (opts.terminalOnly && !inTerminal) return;
 
       const snapshot = {
@@ -114,7 +120,7 @@ async function main() {
         },
       };
 
-      const evalResult = evaluateEntryGates(snapshot, TFC_V6_HYBRID, history);
+      const evalResult = evaluateEntryGates(snapshot, PRESET, history);
       const row = { ...snapshot, eval: evalResult };
       samples.push(row);
       fs.appendFileSync(outFile, `${JSON.stringify(row)}\n`);
@@ -141,26 +147,38 @@ async function main() {
   clob.stop();
 
   const terminalSamples = samples.filter(
-    (s) => s.secsLeft >= TFC_V6_HYBRID.minSecondsLeft && s.secsLeft < TFC_V6_HYBRID.maxSecondsLeft,
+    (s) => s.secsLeft >= PRESET.minSecondsLeft && s.secsLeft < PRESET.maxSecondsLeft,
   );
   const gatePassCount = terminalSamples.filter((s) => s.eval?.ok).length;
 
-  const summary = {
-    runId,
-    event: event.title,
-    priceToBeat: state.priceToBeat,
-    samples: samples.length,
-    terminalSamples: terminalSamples.length,
-    gatePassInTerminal: gatePassCount,
-    outFile,
-  };
+  const summary = sanitizeRunRecord(
+    buildRunEnvelope({
+      runId,
+      kind: 'watch',
+      label: 'local',
+      environment: 'local',
+      strategyId: 'tfc-v7',
+      strategyVersion: '7',
+      presetId: PRESET_ID,
+      live: false,
+      payload: {
+        event: event.title,
+        priceToBeat: state.priceToBeat,
+        samples: samples.length,
+        terminalSamples: terminalSamples.length,
+        gatePassInTerminal: gatePassCount,
+        outFile,
+      },
+    }),
+  );
 
   if (opts.json) {
     console.log(JSON.stringify(summary, null, 2));
   } else {
     console.log('');
     console.log('=== resumo ===');
-    console.log(`Amostras: ${summary.samples} (terminal: ${summary.terminalSamples})`);
+    console.log(`Preset: ${PRESET_ID}`);
+    console.log(`Amostras: ${summary.payload.samples} (terminal: ${summary.payload.terminalSamples})`);
     console.log(`Gates OK na janela terminal: ${gatePassCount}`);
     console.log(`Log JSONL: ${outFile}`);
   }

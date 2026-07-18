@@ -3,5 +3,5 @@ node_modules
 .DS_Store
 *.log
 runs/*.jsonl
-runs/latency-*.json
-runs/fee-*.json
+runs/*.json
+!runs/.gitkeep

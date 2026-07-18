@@ -33,7 +33,7 @@ Ficam fora deste ciclo:
 5. **A latência média/mediana não basta.** Promoção exige p95/p99 por operação, visibilidade da ordem, taxa de erro e comportamento sob timeout.
 6. **REST imediato não é confirmação suficiente.** O canal WebSocket autenticado de usuário deve ser a fonte primária de eventos de ordem/trade; REST será usado para reconciliação.
 7. **Maker não significa apenas fee zero.** Maker não paga fee de protocolo e pode receber rebate. A hipótese local de maker ainda precisa de um fill real para ser considerada validada.
-8. **O medidor de latência atual envia ordem real sem `--live`.** Antes de ser ferramenta de promoção, ele deve exigir confirmação explícita de live e garantir cancelamento em `finally`.
+8. **O medidor de latência exige `--live`.** Sem a flag, o comando recusa (exit 2) e cancela em `finally` quando a ordem foi criada.
 9. **A engine vem antes da estratégia.** Core, OMS, risk, persistência, recovery e observabilidade não podem importar TFC. TFC V7 será o primeiro adaptador do contrato genérico, não o centro da arquitetura.
 
 ## 3. Diagnóstico do estado atual
@@ -43,9 +43,9 @@ Ficam fora deste ciclo:
 | Auth L1/L2, signer, funder | Parcial | `check:api-key`, `derive-key:write` e `test:connection` existem; falta bloqueio obrigatório no startup da engine. |
 | Descoberta BTC 5m e PTB | Parcial | Implementada para o slot atual/próximo; faltam retry observável, validação de `acceptingOrders` e testes de transição de evento. |
 | RTDS e CLOB market feed | Parcial | Reconexão básica existe; faltam sequência/resync, watchdog e política formal de staleness. |
-| Engine / contrato de estratégia | Ausente | Os scripts TFC orquestram feed, decisão e SDK diretamente; não existe runtime ou interface genérica de estratégia. |
+| Engine / contrato de estratégia | Feito (P1) | Runtime + registry + fixtures; TFC ainda não é plugin do contrato. |
 | Gates de entrada | Parcial | V6/V7 compartilham os gates atuais; não há testes unitários, replay diferencial nem paridade documentada. |
-| Preset de produção | Desalinhado no runbook antigo | `preset-v7.js` existe, mas `watch` e `micro-entry` ainda usam V6. |
+| Preset de produção | Alinhado | `watch` / `micro-entry` usam `preset-v7.js` (`btc-champion-v7`). V6 Hybrid permanece só como histórico. |
 | Entrada real | Protótipo | `tfc:micro-entry` compra por GTC no ask; faltam cap de slippage, confirmação de fill parcial, posição e idempotência. |
 | Saída / reverse / danger exit | Ausente | `evaluateLateFlip` só avalia parte do sinal e não executa ciclo de posição. Danger exit não existe no robô. |
 | OMS e user WebSocket | Ausente | Não há máquina de estados de ordem nem canal autenticado de ordens/trades. |
@@ -189,46 +189,49 @@ As fases são sequenciais para promoção, mas tarefas internas sem dependência
 
 ### P0 — Baseline confiável e governança
 
-**Status:** próximo.
+**Status:** concluído (2026-07-18).
 
 Entregáveis:
 
-- tornar este documento e o runbook as fontes canônicas;
-- alinhar `watch`/`micro-entry` ao preset V7 e eliminar ambiguidade V6/V7;
-- corrigir metadados de pacote: `main` hoje aponta para `src/server.js`, que não existe;
-- adicionar `test`, `lint` e CI, com Node 22 fixado;
-- registrar ADR da separação engine/estratégia e proibir imports de `strategy/*` no core;
-- definir schema versionado para `runs` e política de retenção/sanitização;
-- documentar ambientes `local`, `shadow`, `canary` e `production`.
+- [x] este documento e o runbook como fontes canônicas;
+- [x] alinhar `watch`/`micro-entry` ao preset V7 e eliminar ambiguidade V6/V7;
+- [x] corrigir metadados de pacote: `main` → `src/index.js` (biblioteca; engine ainda ausente);
+- [x] adicionar `test`, `lint` e CI, com Node 22 fixado;
+- [x] ADR da separação engine/estratégia + `npm run check:architecture`;
+- [x] schema versionado para `runs` e política de retenção/sanitização;
+- [x] documentar ambientes `local`, `shadow`, `canary` e `production`;
+- [x] `tfc:latency` e `test:order` exigem `--live` (exit 2 sem a flag); cancel em `finally` na latência.
 
 Gate de saída:
 
-- instalação limpa, lint e testes rodam em CI;
-- nenhum comando documentado está ausente;
-- nenhum teste live pode ser acionado por comando ambíguo ou configuração default.
+- [x] instalação limpa, lint e testes rodam em CI;
+- [x] nenhum comando documentado está ausente (ver scripts/README);
+- [x] nenhum teste live pode ser acionado por comando ambíguo ou configuração default.
 
 ### P1 — Kernel genérico e contrato de estratégia
 
-**Status:** ausente.
+**Status:** concluído (2026-07-18).
 
 Entregáveis:
 
-- engine runtime sem dependência de TFC: lifecycle, scheduler, strategy registry e composition root;
-- contrato da seção 4 com manifest, preset schema, estado versionado, intents e diagnostics;
-- schemas runtime para `MarketSnapshot`, `PositionView`, `ExecutionEvent`, `TradeIntent` e `StrategyResult`;
-- modo shadow que percorre o mesmo pipeline e troca somente o execution sink;
-- duas estratégias fictícias diferentes para provar que o runtime não conhece TFC;
-- suíte de conformidade e regra arquitetural contra imports proibidos.
+- [x] engine runtime sem dependência de TFC: lifecycle, strategy registry e composition root;
+- [x] contrato com manifest, preset, estado versionado, intents e diagnostics;
+- [x] schemas runtime para `MarketSnapshot`, `PositionView`, `ExecutionEvent`, `TradeIntent` e `StrategyResult`;
+- [x] modo shadow que percorre o mesmo pipeline e troca somente o execution sink;
+- [x] duas estratégias fictícias (`fixture-price-cross`, `fixture-spread-wide`);
+- [x] suíte de conformidade + regra arquitetural contra imports proibidos.
 
 Gate de saída:
 
-- as duas estratégias fictícias rodam sem alteração no core;
-- dry-run, shadow e live compartilham máquina de estados e intents;
-- o grafo de dependências prova que o core não importa nenhuma estratégia concreta.
+- [x] as duas estratégias fictícias rodam sem alteração no core;
+- [x] dry-run, shadow e live compartilham máquina de estados e intents;
+- [x] o grafo de dependências prova que o core não importa nenhuma estratégia concreta.
+
+Ver [arquitetura/engine-p1.md](./arquitetura/engine-p1.md).
 
 ### P2 — Dados de mercado, relógio e replay genéricos
 
-**Status:** parcial.
+**Status:** próximo (parcial nos feeds legados).
 
 Entregáveis:
 

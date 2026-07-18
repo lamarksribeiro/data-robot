@@ -1,4 +1,4 @@
-/** Parâmetros do preset campeão TFC V6 Hybrid (data-backtest). */
+/** Histórico: V6 Hybrid (hedge stop). Não usar em promoção — alvo é preset-v7.js. */
 export const TFC_V6_HYBRID = {
   walletSize: 100,
   entryBudget: 10,
