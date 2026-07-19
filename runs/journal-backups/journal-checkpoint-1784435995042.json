@@ -1,0 +1,122 @@
+{
+  "savedAt": "2026-07-19T04:39:55.042Z",
+  "entries": [
+    {
+      "seq": 1,
+      "type": "order",
+      "tsMs": 1784435995041,
+      "action": "created",
+      "order": {
+        "orderId": "ord-1",
+        "intentId": "fixture-price-cross:1.0.0:0:p5-mkt:ENTER:1",
+        "strategyInstanceId": "fixture-price-cross:1.0.0:0",
+        "marketId": "p5-mkt",
+        "kind": "ENTER",
+        "tokenSide": "UP",
+        "state": "CREATED",
+        "qty": 2,
+        "qtyFilled": 0,
+        "price": 0.5,
+        "orderType": "GTC",
+        "tradeSide": "BUY",
+        "reason": "btc_crossed_threshold",
+        "timeline": [
+          {
+            "state": "CREATED",
+            "tsMs": 1784435995041
+          },
+          {
+            "state": "LIVE",
+            "tsMs": 1784435995041,
+            "source": "ACK"
+          },
+          {
+            "state": "MATCHED",
+            "tsMs": 1784435995041,
+            "source": "FILL"
+          }
+        ],
+        "createdAtMs": 1784435995041,
+        "updatedAtMs": 1784435995041,
+        "hasExchangeId": false
+      }
+    },
+    {
+      "seq": 2,
+      "type": "bind_exchange_id",
+      "tsMs": 1784435995041,
+      "intentId": "fixture-price-cross:1.0.0:0:p5-mkt:ENTER:1",
+      "exchangeOrderId": "sim-ex-1"
+    },
+    {
+      "seq": 3,
+      "type": "order_transition",
+      "tsMs": 1784435995041,
+      "intentId": "fixture-price-cross:1.0.0:0:p5-mkt:ENTER:1",
+      "to": "LIVE",
+      "source": "ACK"
+    },
+    {
+      "seq": 4,
+      "type": "order_transition",
+      "tsMs": 1784435995041,
+      "intentId": "fixture-price-cross:1.0.0:0:p5-mkt:ENTER:1",
+      "to": "MATCHED",
+      "source": "FILL"
+    },
+    {
+      "seq": 5,
+      "type": "checkpoint",
+      "tsMs": 1784435995041,
+      "orders": {
+        "fixture-price-cross:1.0.0:0:p5-mkt:ENTER:1": {
+          "orderId": "ord-1",
+          "intentId": "fixture-price-cross:1.0.0:0:p5-mkt:ENTER:1",
+          "strategyInstanceId": "fixture-price-cross:1.0.0:0",
+          "marketId": "p5-mkt",
+          "kind": "ENTER",
+          "tokenSide": "UP",
+          "state": "MATCHED",
+          "qty": 2,
+          "qtyFilled": 2,
+          "price": 0.5,
+          "orderType": "GTC",
+          "tradeSide": "BUY",
+          "exchangeOrderId": "sim-ex-1",
+          "reason": "btc_crossed_threshold",
+          "timeline": [
+            {
+              "state": "CREATED",
+              "tsMs": 1784435995041
+            },
+            {
+              "state": "LIVE",
+              "tsMs": 1784435995041,
+              "source": "ACK"
+            },
+            {
+              "state": "MATCHED",
+              "tsMs": 1784435995041,
+              "source": "FILL"
+            }
+          ],
+          "createdAtMs": 1784435995041,
+          "updatedAtMs": 1784435995041
+        }
+      },
+      "positions": {
+        "fixture-price-cross:1.0.0:0": {
+          "marketId": "p5-mkt",
+          "side": "UP",
+          "qty": 2,
+          "avgPrice": 0.5,
+          "realizedPnl": 0
+        }
+      },
+      "seenEventIds": [
+        "sim-ack-fixture-price-cross:1.0.0:0:p5-mkt:ENTER:1",
+        "sim-fill-fixture-price-cross:1.0.0:0:p5-mkt:ENTER:1"
+      ]
+    }
+  ]
+}

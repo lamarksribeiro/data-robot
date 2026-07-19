@@ -4,7 +4,17 @@
  */
 
 export { default as config } from './config.js';
-export { evaluateEntryGates, evaluateLateFlip, favoriteSide } from './tfc/evaluate.js';
+export {
+  evaluateEntryGates,
+  evaluateLateFlip,
+  evaluateLateFlipAction,
+  evaluateDangerExit,
+  favoriteSide,
+  oppositeSide,
+  signedDistance,
+  spotVolatility,
+  orderBookImbalance,
+} from './tfc/evaluate.js';
 export { TFC_V7, MICRO_TEST } from './tfc/preset-v7.js';
 export { TFC_V6_HYBRID } from './tfc/preset-v6-hybrid.js';
 export { calculateTakerFee, summarizeTradeFees } from './fees/polymarketFee.js';
@@ -22,7 +32,6 @@ export {
 export { StrategyRegistry } from './engine/registry.js';
 export { createEngine } from './engine/runtime.js';
 export { createSinkForMode, createDryRunSink, createShadowSink } from './engine/sinks.js';
-export { createBasicRisk } from './engine/risk.js';
 export { bootstrapEngine, createDefaultRegistry } from './composition/bootstrap.js';
 export { runConformanceSuite } from './strategy/conformance.js';
 
@@ -49,3 +58,27 @@ export { ORDER_STATES, isTerminal } from './oms/states.js';
 export { createExecutor, createTransportForMode } from './executor/createExecutor.js';
 export { createSimTransport, createLiveTransportStub } from './executor/transport.js';
 export { createUserChannel } from './executor/userChannel.js';
+
+export { createRiskEngine, createBasicRisk } from './risk/createRiskEngine.js';
+export { createAccountRiskBook } from './risk/accountBook.js';
+export { createPreflight } from './risk/preflight.js';
+export { createKillSwitch } from './risk/killSwitch.js';
+export { RISK_REASON } from './risk/reasons.js';
+
+export { createMetrics } from './observability/metrics.js';
+export { createLogger } from './observability/logger.js';
+export { createAlertHub } from './observability/alerts.js';
+export { evaluateSlos, DEFAULT_SLOS } from './observability/slo.js';
+export { createJournalBackup } from './observability/journalBackup.js';
+export { buildHealthReport } from './control/health.js';
+export { createControlServer } from './control/httpServer.js';
+export { createEngineApp } from './control/engineApp.js';
+export { runSoak } from './control/soak.js';
+
+export {
+  createTfcV7Strategy,
+  TFC_V7_STRATEGY_ID,
+  TFC_V7_PRESET_ID,
+  mergeTfcV7Preset,
+} from './strategy/tfcV7.js';
+export { defaultPresetFor } from './composition/presets.js';
