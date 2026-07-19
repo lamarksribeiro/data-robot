@@ -7,6 +7,7 @@ import { createEngine } from '../engine/runtime.js';
 import { StrategyRegistry } from '../engine/registry.js';
 import { createSinkForMode } from '../engine/sinks.js';
 import { createBasicRisk } from '../engine/risk.js';
+import { ingestFilteredSnapshot } from '../market/ingest.js';
 import { createPriceCrossStrategy } from '../strategy/fixtures/priceCross.js';
 import { createSpreadWideStrategy } from '../strategy/fixtures/spreadWide.js';
 
@@ -36,7 +37,7 @@ export function bootstrapEngine(opts) {
   const mode = opts.mode ?? 'dry-run';
   const preset = opts.preset ?? {};
 
-  return createEngine({
+  const engine = createEngine({
     mode,
     strategy,
     preset,
@@ -44,5 +45,20 @@ export function bootstrapEngine(opts) {
     sink: opts.sink ?? createSinkForMode(mode),
     risk: opts.risk ?? createBasicRisk(opts.riskOpts),
     clock: opts.clock,
+  });
+
+  return Object.assign(engine, {
+    strategyCapabilities: [...strategy.manifest.capabilities],
+    /**
+     * Ingest com filtro de capabilities + gate de elegibilidade.
+     * @param {object} snapshot
+     * @param {object} [gateOpts]
+     */
+    async ingestMarketSnapshot(snapshot, gateOpts = {}) {
+      return ingestFilteredSnapshot(engine, snapshot, {
+        capabilities: strategy.manifest.capabilities,
+        requireEligible: gateOpts.requireEligible,
+      });
+    },
   });
 }

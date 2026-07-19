@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CORE_DIRS = ['engine', 'oms', 'risk', 'journal', 'executor', 'reconciler'];
+const CORE_DIRS = ['engine', 'oms', 'risk', 'journal', 'executor', 'reconciler', 'market'];
 
 function listJsFiles(dir) {
   if (!fs.existsSync(dir)) return [];

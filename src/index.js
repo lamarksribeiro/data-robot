@@ -25,3 +25,27 @@ export { createSinkForMode, createDryRunSink, createShadowSink } from './engine/
 export { createBasicRisk } from './engine/risk.js';
 export { bootstrapEngine, createDefaultRegistry } from './composition/bootstrap.js';
 export { runConformanceSuite } from './strategy/conformance.js';
+
+export { STALENESS, evaluateFeedHealth, evaluateClockSkew } from './market/health.js';
+export { buildMarketSnapshot, marketIdFromEvent } from './market/normalize.js';
+export { evaluateSnapshotEligibility } from './market/eligibility.js';
+export {
+  filterSnapshotForCapabilities,
+  assertCapabilitiesHonored,
+} from './market/capabilities.js';
+export { createMarketHub } from './market/hub.js';
+export {
+  canonicalize,
+  createReplayRecorder,
+  loadReplayJsonl,
+  assertReplayDeterministic,
+  replaySnapshots,
+} from './market/replay.js';
+
+export { createOms } from './oms/createOms.js';
+export { createOmsSink } from './oms/omsSink.js';
+export { createReconciler } from './oms/reconciler.js';
+export { ORDER_STATES, isTerminal } from './oms/states.js';
+export { createExecutor, createTransportForMode } from './executor/createExecutor.js';
+export { createSimTransport, createLiveTransportStub } from './executor/transport.js';
+export { createUserChannel } from './executor/userChannel.js';
