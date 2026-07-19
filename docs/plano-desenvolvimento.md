@@ -43,17 +43,17 @@ Ficam fora deste ciclo:
 | Auth L1/L2, signer, funder | Parcial | `check:api-key`, `derive-key:write` e `test:connection` existem; falta bloqueio obrigatório no startup da engine. |
 | Descoberta BTC 5m e PTB | Parcial | Implementada para o slot atual/próximo; faltam retry observável, validação de `acceptingOrders` e testes de transição de evento. |
 | RTDS e CLOB market feed | Feito (P2) | Normalização + staleness + hub; WS legado permanece em `src/feeds/`. |
-| Engine / contrato de estratégia | Feito (P1) | Runtime + registry + fixtures; TFC ainda não é plugin do contrato. |
-| Gates de entrada | Parcial | V6/V7 compartilham os gates atuais; não há testes unitários, replay diferencial nem paridade documentada. |
+| Engine / contrato de estratégia | Feito (P1+P6) | Runtime + registry + fixtures + plugin `tfc-v7`. |
+| Gates de entrada | Feito (P6) | `evaluateEntryGates` + late flip + danger exit no plugin. |
 | Preset de produção | Alinhado | `watch` / `micro-entry` usam `preset-v7.js` (`btc-champion-v7`). V6 Hybrid permanece só como histórico. |
 | Entrada real | Protótipo | `tfc:micro-entry` compra por GTC no ask; faltam cap de slippage, confirmação de fill parcial, posição e idempotência. |
 | Saída / reverse / danger exit | Ausente | `evaluateLateFlip` só avalia parte do sinal e não executa ciclo de posição. Danger exit não existe no robô. |
 | OMS e user WebSocket | Feito (P3 sim) | OMS+executor+journal; live CLOB/user-WS ainda stub. |
-| Risco e kill switch | Ausente | Não há limites de perda, exposição, frequência, evento único ou comando de desligamento seguro. |
-| Persistência / recovery | Ausente | Estado fica em memória; restart pode perder intenção, ordem ou posição. |
-| Observabilidade | Inicial | Há JSON/JSONL de alguns scripts; faltam schema/versionamento, métricas, alertas e correlação. |
-| Testes e CI | Ausente | Não existem scripts `test`, `lint`, `typecheck` ou pipeline de CI. |
-| Deploy | UI apenas | Docker inicia `sirv`; não há processo da engine, health/readiness ou estratégia de rollback. |
+| Risco e kill switch | Feito (P4) | Risk engine + kill + circuit + audit; geoblock/auth injetáveis. |
+| Persistência / recovery | Feito (P4) | Checkpoint/restore engine + OMS journal. |
+| Observabilidade | Feito (P5 código) | Métricas p50/p95/p99, logger, alertas, SLOs; calibragem Giovanna pendente. |
+| Testes e CI | Feito | `npm run ci` (lint + architecture + testes); sem rede/ordens reais. |
+| Deploy | Parcial (P5) | UI `:3200` + engine `:3201` (`Dockerfile.engine`); soak ≥7d / Coolify ops pendente. |
 
 ### Evidência já obtida
 
@@ -273,62 +273,75 @@ Ver [arquitetura/oms-p3.md](./arquitetura/oms-p3.md).
 
 ### P4 — Risk, persistência e recovery da engine
 
-**Status:** próximo.
+**Status:** concluído (2026-07-18).
 
 Entregáveis:
 
-- pre-trade checks e limites locais/globais da seção 5;
-- geoblock, clock, balance, auth, health e market eligibility fail-closed;
-- circuit breakers, kill switch e shutdown seguro;
-- checkpoints, migração de state version e reconstrução por journal;
-- testes de concorrência entre instâncias, mesmo que produção comece com uma só.
+- [x] pre-trade checks e limites locais/globais (notional, evento, conta, perda, rate, piso 4s);
+- [x] geoblock/auth/clock/balance/live fail-closed (checks injetáveis);
+- [x] circuit breaker, kill switch e shutdown com cancel de resting;
+- [x] checkpoint/restore da engine + OMS journal + migrateState;
+- [x] teste multi-instância com exposição agregada compartilhada.
 
 Gate de saída:
 
-- falhas injetadas provam comportamento fail-closed;
-- cada bloqueio tem reason code, métrica e trilha de auditoria;
-- replay/restart não duplica intenção nem perde exposição;
-- limite global bloqueia duas estratégias que, somadas, excederiam o risco da conta.
+- [x] falhas injetadas provam fail-closed;
+- [x] cada bloqueio tem reason code + métrica de audit;
+- [x] restore preserva posição sem duplicar intenção de entrada indevida;
+- [x] limite global bloqueia segunda strategy quando a soma estoura.
+
+Ver [arquitetura/risk-p4.md](./arquitetura/risk-p4.md).
 
 ### P5 — Resiliência, observabilidade, deploy e gate Engine Ready
 
-**Status:** ausente.
+**Status:** código concluído (2026-07-19); **ops Engine Ready ainda aberto** (soak ≥7d / Giovanna).
 
 Entregáveis:
 
-- engine em processo/container próprio, separada da UI;
-- métricas de feed, decisão, OMS, p50/p95/p99, exposure e PnL;
-- logs estruturados com correlação/redaction e alertas operacionais;
-- backup do journal, rollback, health/readiness/armed/live/halted;
-- testes de desconexão, restart, 401/429/503, cancel-only e perda do user WS;
-- soak com estratégias fake no mesmo artefato que depois hospedará TFC.
+- [x] engine em processo/container próprio, separada da UI (`engine:serve`, `Dockerfile.engine`);
+- [x] métricas (histogramas p50/p95/p99) + exposure/orphans via health;
+- [x] logs estruturados com redaction e alertas operacionais;
+- [x] backup do journal, checkpoint/rollback, health/ready/armed/live/halted;
+- [x] testes de desconexão, restart, 401/429/503 e perda do user WS;
+- [x] soak harness com fixtures (sem TFC) — `engine:soak`.
 
-**Gate Engine Ready — obrigatório antes de qualquer estratégia live:**
+Gate de saída (código / CI):
 
-- soak ≥7 dias sem estado divergente não resolvido;
-- restart, recovery, kill switch e rollback ensaiados;
-- zero ordem órfã e zero violação de risco em fault injection;
-- SLOs e alertas validados no Giovanna;
-- engine aprovada sem depender de resultado, código ou comportamento da TFC.
+- [x] fault injection sem órfãs (`test/observability-p5.test.js`);
+- [x] control HTTP `/health` `/metrics` `/control/kill`;
+- [x] engine aprovável com fixtures, sem importar TFC no core.
+
+**Gate Engine Ready — ops, obrigatório antes de qualquer estratégia live:**
+
+- [ ] soak ≥7 dias sem estado divergente não resolvido;
+- [ ] restart, recovery, kill switch e rollback ensaiados em staging;
+- [ ] zero ordem órfã e zero violação de risco no soak longo;
+- [ ] SLOs e alertas validados no Giovanna;
+- [x] engine aprovada sem depender de resultado, código ou comportamento da TFC.
+
+Ver [arquitetura/observability-p5.md](./arquitetura/observability-p5.md).
 
 ### P6 — Plugin TFC V7 e paridade shadow
 
-**Status:** parcial; funções de gates existem, plugin completo não.
+**Status:** código concluído (2026-07-19); shadow ≥100 eventos **reais** ainda ops.
 
 Entregáveis:
 
-- implementar TFC V7 pelo contrato genérico, sem SDK, env, rede ou filesystem;
-- estado próprio serializável; ordens e posição permanecem sob engine/OMS;
-- entrada, late flip exit/reverse 8→4s e danger exit em [4s, 5s);
-- paridade de volatilidade, `signedDistance`, preset e limites com o GLS;
-- shadow por no mínimo 100 eventos no kernel aprovado.
+- [x] TFC V7 pelo contrato genérico, sem SDK, env, rede ou filesystem;
+- [x] estado próprio serializável; ordens/posição sob engine/OMS;
+- [x] entrada, late flip exit/reverse 8→4s e danger exit em [4s, 5s);
+- [x] paridade de volatilidade, `signedDistance`, preset e limites com o GLS (helpers + testes);
+- [x] paridade sintética ≥100 casos no CI; [ ] shadow ≥100 eventos reais (ops).
 
 Gate de saída:
 
-- diferença de intenção em replay = 0 ou tolerância explicitamente aprovada;
-- testes cobrem limites UP/DOWN, tempo, spread, OBI, odds sum e velocity;
-- 0 decisão com feed stale e todos os mismatches de 100 eventos explicados;
-- suíte genérica de conformidade também passa para TFC V7.
+- [x] diferença de intenção em replay sintético = 0;
+- [x] testes cobrem limites UP/DOWN, tempo, spread, OBI, odds sum e velocity;
+- [x] 0 decisão com feed stale;
+- [x] suíte genérica de conformidade passa para TFC V7;
+- [ ] mismatches de 100 eventos reais explicados (ops / Giovanna).
+
+Ver [arquitetura/tfc-v7-p6.md](./arquitetura/tfc-v7-p6.md).
 
 ### P7 — Micro-live TFC de entrada
 

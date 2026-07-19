@@ -6,18 +6,22 @@
 import { createEngine } from '../engine/runtime.js';
 import { StrategyRegistry } from '../engine/registry.js';
 import { createSinkForMode } from '../engine/sinks.js';
-import { createBasicRisk } from '../engine/risk.js';
+import { createRiskEngine } from '../risk/createRiskEngine.js';
+import { createAccountRiskBook } from '../risk/accountBook.js';
 import { ingestFilteredSnapshot } from '../market/ingest.js';
 import { createPriceCrossStrategy } from '../strategy/fixtures/priceCross.js';
 import { createSpreadWideStrategy } from '../strategy/fixtures/spreadWide.js';
+import { createTfcV7Strategy } from '../strategy/tfcV7.js';
+import { defaultPresetFor } from './presets.js';
 
 /**
- * Registry com estratégias fictícias (prova P1) e hooks para plugins reais depois.
+ * Registry com fixtures (P1) + TFC V7 (P6).
  */
 export function createDefaultRegistry() {
   const registry = new StrategyRegistry();
   registry.register(createPriceCrossStrategy());
   registry.register(createSpreadWideStrategy());
+  registry.register(createTfcV7Strategy());
   return registry;
 }
 
@@ -29,22 +33,36 @@ export function createDefaultRegistry() {
  * @param {import('../engine/registry.js').StrategyRegistry} [opts.registry]
  * @param {object} [opts.sink]
  * @param {object} [opts.risk]
+ * @param {object} [opts.accountBook]
  * @param {() => number} [opts.clock]
+ * @param {boolean} [opts.liveEnabled]
  */
 export function bootstrapEngine(opts) {
   const registry = opts.registry ?? createDefaultRegistry();
   const strategy = registry.resolve(opts.strategyId);
   const mode = opts.mode ?? 'dry-run';
-  const preset = opts.preset ?? {};
+  const preset = opts.preset ?? defaultPresetFor(opts.strategyId);
+  const clock = opts.clock;
+
+  const risk =
+    opts.risk ??
+    createRiskEngine({
+      clock,
+      liveEnabled: opts.liveEnabled === true,
+      accountBook: opts.accountBook,
+      ...(opts.riskOpts ?? {}),
+    });
 
   const engine = createEngine({
     mode,
     strategy,
     preset,
     strategyInstanceId: opts.strategyInstanceId,
-    sink: opts.sink ?? createSinkForMode(mode),
-    risk: opts.risk ?? createBasicRisk(opts.riskOpts),
-    clock: opts.clock,
+    sink: opts.sink ?? createSinkForMode(mode, { clock }),
+    risk,
+    clock,
+    liveEnabled: opts.liveEnabled === true,
+    accountBook: opts.accountBook,
   });
 
   return Object.assign(engine, {
@@ -62,3 +80,6 @@ export function bootstrapEngine(opts) {
     },
   });
 }
+
+export { createAccountRiskBook, createRiskEngine };
+export { defaultPresetFor } from './presets.js';

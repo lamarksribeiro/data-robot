@@ -1,10 +1,26 @@
 /**
- * Avaliação read-only dos gates de entrada TFC (sem enviar ordens).
+ * Avaliação pura TFC V7 (sem SDK, rede, env ou filesystem).
+ * Espelha TerminalFavoriteCarry.gls + btc-champion-v7.
  */
 
 export function favoriteSide(btc, priceToBeat) {
   if (!Number.isFinite(btc) || !Number.isFinite(priceToBeat)) return null;
   return btc >= priceToBeat ? 'UP' : 'DOWN';
+}
+
+export function oppositeSide(side) {
+  if (side === 'UP') return 'DOWN';
+  if (side === 'DOWN') return 'UP';
+  return null;
+}
+
+/**
+ * Distância sinalizada a favor da posição.
+ * UP: btc - ptb; DOWN: ptb - btc. Cruzamento contra = <= lateFlipExitCrossDist.
+ */
+export function signedDistance(side, btc, priceToBeat) {
+  if (!side || !Number.isFinite(btc) || !Number.isFinite(priceToBeat)) return null;
+  return side === 'DOWN' ? priceToBeat - btc : btc - priceToBeat;
 }
 
 export function orderBookImbalance(side, book, levels = 5) {
@@ -28,6 +44,35 @@ export function spotVelocity(history, lookbackSecs, nowMs) {
 }
 
 /**
+ * σ populacional do spot nos últimos `lookbackSecs` (paridade GLS signals.volatility).
+ */
+export function spotVolatility(history, lookbackSecs, nowMs) {
+  if (!history?.length) return 0;
+  const cutoff = nowMs - Number(lookbackSecs) * 1000;
+  const values = history.filter((h) => h.ts >= cutoff && Number.isFinite(h.btc)).map((h) => h.btc);
+  if (values.length < 2) return 0;
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  return Math.sqrt(values.reduce((sum, v) => sum + (v - avg) ** 2, 0) / values.length);
+}
+
+/**
+ * Contagem de flips do favorito no lookback (minFlips V7 = 0 → sempre passa).
+ */
+export function ptbFlipCount(history, lookbackSecs, nowMs, priceToBeat) {
+  if (!history?.length || !Number.isFinite(priceToBeat)) return 0;
+  const cutoff = nowMs - lookbackSecs * 1000;
+  const recent = history.filter((h) => h.ts >= cutoff && Number.isFinite(h.btc));
+  let flips = 0;
+  let prev = null;
+  for (const h of recent) {
+    const fav = favoriteSide(h.btc, priceToBeat);
+    if (prev && fav && prev !== fav) flips += 1;
+    if (fav) prev = fav;
+  }
+  return flips;
+}
+
+/**
  * @returns {{ ok: boolean, fav: string|null, gates: Record<string, { pass: boolean, detail?: string }>, ask: number|null, bid: number|null }}
  */
 export function evaluateEntryGates(snapshot, params, history = []) {
@@ -36,15 +81,20 @@ export function evaluateEntryGates(snapshot, params, history = []) {
 
   gates.terminalWindow = {
     pass: secsLeft >= params.minSecondsLeft && secsLeft < params.maxSecondsLeft,
-    detail: `secsLeft=${secsLeft?.toFixed?.(1) ?? '?'}`,
+    detail: `secsLeft=${secsLeft?.toFixed?.(1) ?? secsLeft ?? '?'}`,
   };
 
-  const dist = Number.isFinite(btc) && Number.isFinite(priceToBeat)
-    ? Math.abs(btc - priceToBeat)
-    : null;
+  const dist = Number.isFinite(btc) && Number.isFinite(priceToBeat) ? Math.abs(btc - priceToBeat) : null;
   gates.distance = {
     pass: dist != null && dist < params.maxDistAbs,
     detail: dist != null ? `|btc-ptb|=${dist.toFixed(2)}` : 'btc/ptb indisponível',
+  };
+
+  const flips = ptbFlipCount(history, params.flipWindowSecs ?? 60, snapshot.nowMs, priceToBeat);
+  const minFlips = params.minFlips ?? 0;
+  gates.flips = {
+    pass: flips >= minFlips,
+    detail: `flips=${flips} min=${minFlips}`,
   };
 
   const fav = favoriteSide(btc, priceToBeat);
@@ -91,26 +141,93 @@ export function evaluateEntryGates(snapshot, params, history = []) {
 
   const ok = Object.values(gates).every((g) => g.pass);
 
-  return { ok, fav, gates, ask, bid, dist, oddsSum, spread, obi };
+  return { ok, fav, gates, ask, bid, dist, oddsSum, spread, obi, flips };
 }
 
 export function evaluateLateFlip(snapshot, params, positionSide) {
   const { btc, priceToBeat, secsLeft, book } = snapshot;
-  if (!positionSide) return { active: false };
+  if (!positionSide) return { active: false, signedDistance: null };
 
-  let signedDistance = btc - priceToBeat;
-  if (positionSide === 'DOWN') signedDistance = priceToBeat - btc;
-
+  const dist = signedDistance(positionSide, btc, priceToBeat);
   const bid = book?.[positionSide.toLowerCase()]?.bestBid;
   const inWindow = secsLeft <= params.lateFlipExitSec && secsLeft >= params.lateFlipMinSec;
-  const crossed = signedDistance <= params.lateFlipExitCrossDist;
+  const crossed = dist != null && dist <= params.lateFlipExitCrossDist;
   const bidOk = bid != null && bid >= params.stopMinBid;
 
   return {
-    active: inWindow && crossed && bidOk,
-    signedDistance,
+    active: Boolean(inWindow && crossed && bidOk),
+    signedDistance: dist,
     secsLeft,
     bid,
-    hedgeStopWindow: secsLeft <= params.hedgeStopPlaceSec && secsLeft >= params.lateFlipMinSec,
+    hedgeStopWindow:
+      params.hedgeStopPlaceSec != null &&
+      secsLeft <= params.hedgeStopPlaceSec &&
+      secsLeft >= params.lateFlipMinSec,
+  };
+}
+
+/**
+ * Late flip → REVERSE (preferido) ou EXIT.
+ */
+export function evaluateLateFlipAction(snapshot, params, positionSide, strategyState = {}) {
+  const base = evaluateLateFlip(snapshot, params, positionSide);
+  if (!params.lateFlipExitEnabled || !base.active || strategyState.closed || strategyState.reversed) {
+    return { action: null, ...base };
+  }
+
+  const oppSide = oppositeSide(positionSide);
+  const oppAsk = oppSide ? snapshot.book?.[oppSide.toLowerCase()]?.bestAsk : null;
+  const reverseOn = params.lateFlipReverseEnabled === true || params.lateFlipReverseEnabled === 1;
+  const askOk =
+    oppAsk != null &&
+    oppAsk > 0 &&
+    oppAsk >= (params.lateFlipReverseMinAsk ?? 0) &&
+    oppAsk <= (params.lateFlipReverseMaxAsk ?? 0.95);
+
+  if (reverseOn && !strategyState.reversed && askOk) {
+    return {
+      action: 'REVERSE',
+      oppSide,
+      oppAsk,
+      exitBid: base.bid,
+      reason: 'late_flip_reverse',
+      ...base,
+    };
+  }
+
+  return {
+    action: 'EXIT',
+    oppSide: null,
+    oppAsk: null,
+    exitBid: base.bid,
+    reason: 'late_flip_exit',
+    ...base,
+  };
+}
+
+/**
+ * Danger exit: τ ∈ [floor, floor+1) e |signedDistance| < k × σ(5s).
+ */
+export function evaluateDangerExit(snapshot, params, positionSide, history = []) {
+  if (!params.dangerExitEnabled || !positionSide) {
+    return { active: false, signedDistance: null, sigma: null };
+  }
+  const floor = params.dangerExitFloorSec ?? 4;
+  const secsLeft = snapshot.secsLeft;
+  const inWindow = secsLeft >= floor && secsLeft < floor + 1;
+  const dist = signedDistance(positionSide, snapshot.btc, snapshot.priceToBeat);
+  const sigma = spotVolatility(history, 5, snapshot.nowMs);
+  const threshold = (params.dangerExitK ?? 0.3) * sigma;
+  const active =
+    inWindow && dist != null && Number.isFinite(sigma) && Math.abs(dist) < threshold && threshold > 0;
+
+  return {
+    active: Boolean(active),
+    signedDistance: dist,
+    sigma,
+    threshold,
+    secsLeft,
+    bid: snapshot.book?.[positionSide.toLowerCase()]?.bestBid ?? null,
+    reason: 'danger_exit',
   };
 }

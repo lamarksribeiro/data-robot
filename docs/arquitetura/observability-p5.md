@@ -1,0 +1,56 @@
+# Observabilidade P5 — control plane e Engine Ready (código)
+
+Status: **código implementado** (2026-07-19). CI sem rede/ordens reais.  
+**Ops pendente:** soak ≥7 dias e validação de SLOs/alertas no Giovanna (gate Engine Ready completo).
+
+## Separação de processos
+
+| Processo | Porta | Comando |
+|----------|-------|---------|
+| UI estática | 3200 | `npm start` (sirv) |
+| Engine + control HTTP | 3201 | `npm run engine:serve` |
+| Soak (sem HTTP) | — | `npm run engine:soak` |
+
+Container da engine: `Dockerfile.engine` (CMD `scripts/engine-serve.js`). Live exige `ENGINE_MODE=live` **e** `ENGINE_LIVE_ENABLED=1`.
+
+## Módulos
+
+### `src/observability/`
+
+| Arquivo | Papel |
+|---------|-------|
+| `metrics.js` | Contadores + histogramas (p50/p95/p99) |
+| `logger.js` | JSON estruturado + redaction de secrets |
+| `alerts.js` | Alertas operacionais (`createAlertHub`) |
+| `slo.js` | Avaliação de SLOs locais |
+| `journalBackup.js` | Backup/restore do journal |
+
+### `src/control/`
+
+| Arquivo | Papel |
+|---------|-------|
+| `health.js` | Probes healthy / ready / armed / live / halted |
+| `httpServer.js` | `/health` `/ready` `/status` `/metrics` + `POST /control/kill` |
+| `engineApp.js` | Composition: engine + métricas + HTTP |
+| `faultInjection.js` | 401/429/503, user-WS loss, restart/kill |
+| `soak.js` | Harness de soak com fixtures (sem TFC) |
+
+## Endpoints
+
+- `GET /health` — 200 se ok; 503 caso contrário  
+- `GET /ready` — readiness da máquina de estados  
+- `GET /status` — status da engine  
+- `GET /metrics` — snapshot de métricas  
+- `POST /control/kill` — exige `x-ops-token` se `ENGINE_OPS_TOKEN` estiver setado  
+
+## Gate Engine Ready
+
+| Item | Código / CI | Ops |
+|------|-------------|-----|
+| Métricas, logs, alertas, SLOs | ✓ | Calibrar no Giovanna |
+| Health/readiness + processo separado | ✓ | Deploy Coolify |
+| Fault injection (401/429/503, WS, kill) | ✓ testes | Ensaiar em staging |
+| Soak curto (fixtures) | ✓ `engine:soak` | Soak ≥7 dias sem divergência |
+| Aprovação sem depender de TFC | ✓ (fixtures) | — |
+
+Ver checklist no [plano P5](../plano-desenvolvimento.md#p5--resiliência-observabilidade-deploy-e-gate-engine-ready).

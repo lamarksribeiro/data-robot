@@ -96,9 +96,9 @@ describe('conformance fixtures', () => {
 });
 
 describe('registry + bootstrap', () => {
-  it('lista as duas fixtures sem TFC', () => {
+  it('lista fixtures + tfc-v7', () => {
     const ids = createDefaultRegistry().list().map((m) => m.id).sort();
-    assert.deepEqual(ids, ['fixture-price-cross', 'fixture-spread-wide']);
+    assert.deepEqual(ids, ['fixture-price-cross', 'fixture-spread-wide', 'tfc-v7']);
   });
 });
 
@@ -147,6 +147,7 @@ describe('engine dry-run / shadow', () => {
         strategyId: 'fixture-price-cross',
         mode,
         preset: { threshold: 1 },
+        liveEnabled: mode === 'live',
       });
       const status = engine.start();
       assert.ok(ENGINE_STATES.includes(status.state));

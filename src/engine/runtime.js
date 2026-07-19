@@ -1,10 +1,10 @@
 /**
- * Engine runtime genérica — lifecycle + intents + sink.
+ * Engine runtime genérica — lifecycle + intents + sink + risk/persistence P4.
  * Não importa plugins de estratégia.
  */
 
 import { buildStrategyContext, normalizeStrategyResult } from './contract.js';
-import { createBasicRisk } from './risk.js';
+import { createRiskEngine } from '../risk/createRiskEngine.js';
 import {
   ENGINE_STATES,
   EXECUTION_MODES,
@@ -12,6 +12,11 @@ import {
   emptyPosition,
 } from './schemas.js';
 import { createSinkForMode } from './sinks.js';
+import {
+  ENGINE_STATE_VERSION,
+  buildEngineCheckpoint,
+  migrateStrategyState,
+} from './persistence.js';
 
 /**
  * @param {object} opts
@@ -41,11 +46,23 @@ export function createEngine(opts) {
   const strategyInstanceId =
     opts.strategyInstanceId ?? `${strategy.manifest.id}:${strategy.manifest.version}:0`;
   const sink = opts.sink ?? createSinkForMode(mode);
-  const risk = opts.risk ?? createBasicRisk();
   const clock = opts.clock ?? (() => Date.now());
+
+  const risk =
+    opts.risk ??
+    createRiskEngine({
+      clock,
+      liveEnabled: opts.liveEnabled === true,
+      accountBook: opts.accountBook,
+      ...opts.riskOpts,
+    });
+
+  // Compat: createBasicRisk devolve { evaluate, _engine }
+  const riskEngine = risk._engine ?? risk;
 
   let state = 'BOOT';
   let strategyState = {};
+  let strategyStateVersion = strategy.manifest.stateVersion ?? 1;
   let position = emptyPosition();
   let lastSnapshot = null;
   let lastDiagnostics = {};
@@ -104,10 +121,14 @@ export function createEngine(opts) {
       }
     } else if (kind === 'EXIT') {
       const closeQty = Math.min(position.qty, qty);
+      let pnlDelta = 0;
       if (position.avgPrice != null && price != null) {
         const dir = position.side === 'UP' ? 1 : -1;
-        // Em tokens binários o PnL real depende da resolução; aqui só marca mark-to-exit shadow.
-        position.realizedPnl += dir * (price - position.avgPrice) * closeQty;
+        pnlDelta = dir * (price - position.avgPrice) * closeQty;
+        position.realizedPnl += pnlDelta;
+      }
+      if (pnlDelta !== 0 && typeof riskEngine.recordPnl === 'function') {
+        riskEngine.recordPnl(pnlDelta);
       }
       position = {
         ...position,
@@ -123,9 +144,14 @@ export function createEngine(opts) {
   }
 
   async function dispatchIntent(intent) {
-    const decision = risk.evaluate(intent, {
+    const decision = riskEngine.evaluate(intent, {
       health: lastSnapshot?.feeds?.healthy === false ? { ok: false } : { ok: true },
       mode,
+      halted: state === 'HALTED',
+      snapshot: lastSnapshot,
+      position: { ...position },
+      openIntents: [...pendingIntents.values()],
+      eligibility: lastSnapshot?.eligibility,
     });
     journal.push({
       type: 'risk',
@@ -133,7 +159,16 @@ export function createEngine(opts) {
       decision,
       tsMs: clock(),
     });
-    if (!decision.allow) return;
+    if (!decision.allow) {
+      if (typeof riskEngine.recordFailure === 'function') {
+        riskEngine.recordFailure(decision.reasonCode);
+      }
+      return { allowed: false, decision };
+    }
+
+    if (typeof riskEngine.recordAccepted === 'function') {
+      riskEngine.recordAccepted(intent);
+    }
 
     pendingIntents.set(intent.intentId, intent);
 
@@ -150,9 +185,14 @@ export function createEngine(opts) {
       tsMs: clock(),
     });
 
+    if (result.accepted === false && typeof riskEngine.recordFailure === 'function') {
+      riskEngine.recordFailure(result.events?.[0]?.reason ?? 'SINK_REJECT');
+    }
+
     for (const event of result.events ?? []) {
       await ingestExecutionEvent(event);
     }
+    return { allowed: true, decision, result };
   }
 
   async function ingestExecutionEvent(event) {
@@ -185,7 +225,24 @@ export function createEngine(opts) {
     }
   }
 
-  return {
+  async function safeShutdown(reason = 'shutdown') {
+    haltReason = reason;
+    if (state !== 'HALTED') transition('HALTED', reason);
+    pendingIntents.clear();
+
+    let canceled = [];
+    if (typeof sink.cancelOnDisconnect === 'function') {
+      const r = sink.cancelOnDisconnect();
+      canceled = r?.canceled ?? [];
+    } else if (typeof sink.dispose === 'function') {
+      sink.dispose();
+    }
+
+    journal.push({ type: 'shutdown', reason, canceled, tsMs: clock() });
+    return { state, haltReason, canceled };
+  }
+
+  const api = {
     get state() {
       return state;
     },
@@ -207,11 +264,27 @@ export function createEngine(opts) {
     get strategyId() {
       return strategy.manifest.id;
     },
+    get risk() {
+      return riskEngine;
+    },
 
     start() {
       if (state !== 'BOOT' && state !== 'HALTED') {
         throw new Error(`start inválido em ${state}`);
       }
+
+      if (typeof riskEngine.runPreflight === 'function') {
+        const pf = riskEngine.runPreflight({ mode });
+        if (!pf.ok) {
+          const first = pf.failures[0];
+          throw new Error(`preflight fail-closed: ${first?.reasonCode ?? 'PREFLIGHT'}`);
+        }
+      }
+
+      if (riskEngine.killSwitch?.active) {
+        riskEngine.killSwitch.reset();
+      }
+
       haltReason = null;
       const init = strategy.initialize(
         buildStrategyContext({
@@ -237,21 +310,27 @@ export function createEngine(opts) {
       transition('MARKET_SYNCING', 'start');
       transition('OBSERVING', 'start');
       transition('ARMED', 'start');
-      return this.getStatus();
+      return api.getStatus();
     },
 
     halt(reason = 'halt') {
-      haltReason = reason;
-      transition('HALTED', reason);
-      pendingIntents.clear();
-      return this.getStatus();
+      return safeShutdown(reason);
     },
+
+    kill(reason = 'kill') {
+      if (typeof riskEngine.tripKill === 'function') {
+        riskEngine.tripKill(reason);
+      }
+      return safeShutdown(reason);
+    },
+
+    safeShutdown,
 
     /**
      * @param {import('./schemas.js').MarketSnapshot} snapshot
      */
     async ingestSnapshot(snapshot) {
-      if (state === 'HALTED') {
+      if (state === 'HALTED' || riskEngine.killSwitch?.active) {
         return { skipped: true, reason: 'HALTED' };
       }
       if (state === 'BOOT') {
@@ -283,7 +362,6 @@ export function createEngine(opts) {
       strategyState = normalized.state;
       lastDiagnostics = normalized.diagnostics;
 
-      // Anexa seq determinística se o plugin omitiu intentId completo
       const intents = normalized.intents.map((intent) => {
         if (intent.intentId) return intent;
         intentSeq += 1;
@@ -312,6 +390,74 @@ export function createEngine(opts) {
 
     ingestExecutionEvent,
 
+    checkpoint() {
+      if (typeof sink.oms?.checkpoint === 'function') {
+        sink.oms.checkpoint();
+      }
+      const omsJournal =
+        typeof sink.oms?.journal?.snapshot === 'function' ? sink.oms.journal.snapshot() : null;
+      const cp = buildEngineCheckpoint({
+        clock,
+        mode,
+        engineState: state,
+        haltReason,
+        strategyId: strategy.manifest.id,
+        strategyVersion: strategy.manifest.version,
+        strategyInstanceId,
+        strategyStateVersion,
+        strategyState,
+        position,
+        intentSeq,
+        pendingIntents: [...pendingIntents.values()],
+        lastSnapshot,
+        riskSnapshot: typeof riskEngine.snapshot === 'function' ? riskEngine.snapshot() : null,
+        omsCheckpoint: null,
+        journalTail: journal.slice(-50),
+      });
+      cp.omsJournal = omsJournal;
+      journal.push({ type: 'checkpoint', tsMs: clock(), schemaVersion: ENGINE_STATE_VERSION });
+      return cp;
+    },
+
+    /**
+     * @param {object} cp
+     */
+    restore(cp) {
+      if (!cp || typeof cp !== 'object') throw new Error('checkpoint inválido');
+
+      const fromVer = cp.strategyStateVersion ?? 1;
+      const toVer = strategy.manifest.stateVersion ?? 1;
+      strategyState = migrateStrategyState(cp.strategyState, fromVer, toVer, strategy);
+      strategyStateVersion = toVer;
+
+      position = { ...emptyPosition(), ...(cp.position ?? {}) };
+      intentSeq = cp.intentSeq ?? 0;
+      haltReason = cp.haltReason ?? null;
+      lastSnapshot = cp.lastSnapshot ?? null;
+      pendingIntents.clear();
+      for (const intent of cp.pendingIntents ?? []) {
+        pendingIntents.set(intent.intentId, intent);
+      }
+
+      if (cp.risk && typeof riskEngine.restore === 'function') {
+        riskEngine.restore(cp.risk);
+      }
+
+      if (cp.omsJournal && sink.oms && typeof sink.oms.restoreFromJournal === 'function') {
+        sink.oms.restoreFromJournal(cp.omsJournal);
+      }
+
+      state = cp.engineState === 'HALTED' ? 'HALTED' : 'BOOT';
+      journal.push({
+        type: 'restore',
+        from: cp.savedAtMs,
+        engineState: cp.engineState,
+        tsMs: clock(),
+      });
+
+      return api.getStatus();
+    },
+
     getStatus() {
       return {
         state,
@@ -325,7 +471,11 @@ export function createEngine(opts) {
         lastMarketId: lastSnapshot?.marketId ?? null,
         diagnostics: { ...lastDiagnostics },
         journalLength: journal.length,
+        killActive: Boolean(riskEngine.killSwitch?.active),
+        riskMetrics: typeof riskEngine.audit?.metrics === 'function' ? riskEngine.audit.metrics() : {},
       };
     },
   };
+
+  return api;
 }
