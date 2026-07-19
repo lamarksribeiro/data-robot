@@ -1,6 +1,6 @@
 {
   "name": "data-robot",
-  "version": "1.3.0",
+  "version": "1.5.0",
   "description": "Robô de trading real GoldenLens — Polymarket BTC 5m",
   "type": "module",
   "main": "src/index.js",

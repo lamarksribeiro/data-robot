@@ -9,6 +9,8 @@
 | [Plano de desenvolvimento](./plano-desenvolvimento.md) | Engine independente de estratégia, arquitetura-alvo, invariantes, roadmap P0–P9 e Definition of Done |
 | [ADR-001 — Engine ≠ estratégia](./arquitetura/adr-001-engine-strategy-separation.md) | Contrato de plugin; core não importa TFC/strategy |
 | [Engine P1](./arquitetura/engine-p1.md) | Kernel, sinks dry-run/shadow, fixtures e bootstrap |
+| [Market P2](./arquitetura/market-p2.md) | Snapshots, health, capabilities, hub e replay |
+| [OMS P3](./arquitetura/oms-p3.md) | Ordens, executor sim, journal, reconciler |
 | [Schema de runs](./arquitetura/runs-schema.md) | Envelope versionado, sanitização e retenção de evidência |
 | [Ambientes](./operacao/ambientes.md) | local / shadow / canary / production |
 | [Validação TFC V7 em conta real](./tfc-validacao-real.md) | Runbook F0–F7, evidência exigida e gates de promoção |

@@ -57,6 +57,26 @@ describe('architecture boundary', () => {
       }
     }
   });
+
+  it('src/market não importa strategy nem tfc', () => {
+    const marketDir = path.join(root, 'src', 'market');
+    const files = listJs(marketDir);
+    assert.ok(files.length > 0);
+    const importRe = /from\s+['"]([^'"]+)['"]/g;
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8');
+      let m;
+      importRe.lastIndex = 0;
+      while ((m = importRe.exec(text))) {
+        const spec = m[1];
+        assert.equal(
+          /(^|[./])(strategy|tfc)(\/|$)/.test(spec),
+          false,
+          `${path.relative(root, file)} importa ${spec}`,
+        );
+      }
+    }
+  });
 });
 
 describe('conformance fixtures', () => {

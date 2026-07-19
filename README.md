@@ -2,7 +2,7 @@
 
 Executor de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
 
-**Status:** P0–P1 concluídos. Kernel genérico com dry-run/shadow e fixtures. OMS, risk completo, feeds normalizados e TFC-as-plugin ainda no roadmap (P2+). `npm start` serve apenas a UI estática.
+**Status:** P0–P3 concluídos. Kernel + market + OMS/sim. Risk completo (P4), Engine Ready (P5) e TFC-as-plugin (P6) ainda no roadmap. `npm start` serve apenas a UI estática. Live CLOB real ainda é stub.
 
 Substitui o `polymarket-robot` como base do novo desenvolvimento.
 
@@ -48,16 +48,14 @@ npm run ci
 ```
 src/
   index.js            # entry da biblioteca
-  composition/        # liga engine ↔ plugins (único lugar)
-  engine/             # core P1 — não importa strategy/tfc
-  strategy/           # fixtures + conformidade (+ TFC futuro)
-  cli/                # gates de segurança (--live)
-  clob/ feeds/ markets/
-  tfc/                # gates/presets CLI (ainda não plugin)
-  runs/               # schema de evidência
-scripts/              # CLI operacional
-test/                 # node:test
-public/               # UI estática (sirv)
+  composition/        # liga engine ↔ plugins
+  engine/             # runtime P1
+  market/             # snapshots P2
+  oms/                # OMS + journal + reconciler P3
+  executor/           # transport sim + user channel
+  strategy/           # fixtures + conformidade
+  cli/ clob/ feeds/ markets/ tfc/ runs/
+scripts/ test/ public/
 ```
 
 ## Projetos relacionados

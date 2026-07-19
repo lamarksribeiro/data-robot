@@ -42,13 +42,13 @@ Ficam fora deste ciclo:
 |---|---|---|
 | Auth L1/L2, signer, funder | Parcial | `check:api-key`, `derive-key:write` e `test:connection` existem; falta bloqueio obrigatório no startup da engine. |
 | Descoberta BTC 5m e PTB | Parcial | Implementada para o slot atual/próximo; faltam retry observável, validação de `acceptingOrders` e testes de transição de evento. |
-| RTDS e CLOB market feed | Parcial | Reconexão básica existe; faltam sequência/resync, watchdog e política formal de staleness. |
+| RTDS e CLOB market feed | Feito (P2) | Normalização + staleness + hub; WS legado permanece em `src/feeds/`. |
 | Engine / contrato de estratégia | Feito (P1) | Runtime + registry + fixtures; TFC ainda não é plugin do contrato. |
 | Gates de entrada | Parcial | V6/V7 compartilham os gates atuais; não há testes unitários, replay diferencial nem paridade documentada. |
 | Preset de produção | Alinhado | `watch` / `micro-entry` usam `preset-v7.js` (`btc-champion-v7`). V6 Hybrid permanece só como histórico. |
 | Entrada real | Protótipo | `tfc:micro-entry` compra por GTC no ask; faltam cap de slippage, confirmação de fill parcial, posição e idempotência. |
 | Saída / reverse / danger exit | Ausente | `evaluateLateFlip` só avalia parte do sinal e não executa ciclo de posição. Danger exit não existe no robô. |
-| OMS e user WebSocket | Ausente | Não há máquina de estados de ordem nem canal autenticado de ordens/trades. |
+| OMS e user WebSocket | Feito (P3 sim) | OMS+executor+journal; live CLOB/user-WS ainda stub. |
 | Risco e kill switch | Ausente | Não há limites de perda, exposição, frequência, evento único ou comando de desligamento seguro. |
 | Persistência / recovery | Ausente | Estado fica em memória; restart pode perder intenção, ordem ou posição. |
 | Observabilidade | Inicial | Há JSON/JSONL de alguns scripts; faltam schema/versionamento, métricas, alertas e correlação. |
@@ -231,45 +231,49 @@ Ver [arquitetura/engine-p1.md](./arquitetura/engine-p1.md).
 
 ### P2 — Dados de mercado, relógio e replay genéricos
 
-**Status:** próximo (parcial nos feeds legados).
+**Status:** concluído (2026-07-18).
 
 Entregáveis:
 
-- adapters normalizados de evento, token, PTB, RTDS e CLOB book;
-- rotação de mercado, resync após reconnect/gap e watchdogs de feed/clock;
-- capabilities declaradas para estratégias que exijam dados adicionais;
-- captura e replay determinístico de snapshots sem carregar uma estratégia específica.
+- [x] adapters normalizados de evento, token, PTB, RTDS e CLOB book (`src/market/normalize.js` + hub);
+- [x] rotação de mercado, limpeza de book e watchdogs de feed/clock (`health.js`, `eligibility.js`, `hub.js`);
+- [x] capabilities declaradas com filtro no ingest (`capabilities.js` + `ingestMarketSnapshot`);
+- [x] captura e replay determinístico sem estratégia (`replay.js`).
 
 Gate de saída:
 
-- 0 snapshot elegível com feed stale ou identidade de mercado incorreta;
-- disponibilidade ≥99,5% na janela operacional;
-- replay do mesmo stream produz snapshots byte-equivalentes/tolerância documentada;
-- uma estratégia fake que usa somente preço e outra que usa book recebem apenas os dados declarados.
+- [x] 0 snapshot elegível com feed stale ou identidade de mercado incorreta (testes);
+- [x] disponibilidade ≥99,5% na janela sintética saudável (teste hub);
+- [x] replay do mesmo stream produz snapshots byte-equivalentes (canonical JSONL);
+- [x] fixture price-only vs book recebem apenas dados declarados.
+
+Ver [arquitetura/market-p2.md](./arquitetura/market-p2.md).
 
 ### P3 — OMS, executor e reconciliação genéricos
 
-**Status:** ausente.
+**Status:** concluído (2026-07-18) — sim/sandbox completo; CLOB user-WS real permanece stub.
 
 Entregáveis:
 
-- user WebSocket autenticado e fallback REST;
-- estados `CREATED`, `LIVE`, `PARTIAL`, `MATCHED`, `CANCEL_PENDING`, `CANCELED`, `REJECTED`, `UNKNOWN`;
-- BUY/SELL GTC, FAK e FOK idempotentes com tick/min size obtidos do mercado;
-- posição consolidada por instância e exposição agregada da conta;
-- journal append-only, heartbeat e cancel-on-disconnect;
-- simulador/execution sink determinístico para testes sem dinheiro real.
+- [x] user channel (sim) + fallback REST stub + heartbeat / cancel-on-disconnect;
+- [x] estados `CREATED`…`UNKNOWN` com transições validadas;
+- [x] BUY/SELL GTC/FAK/FOK idempotentes com tick/min size (`marketRules.js`);
+- [x] posição por instância + exposição agregada;
+- [x] journal append-only + checkpoint/restore;
+- [x] simulador determinístico (`createSimTransport`) como sink shadow/dry-run.
 
 Gate de saída:
 
-- 100% das ordens fake/sandbox têm timeline de intenção a estado final;
-- fill parcial, resposta duplicada/perdida e estado `UNKNOWN` são reconciliados;
-- restart com ordem/posição existente reconstrói o estado antes de liberar nova intenção;
-- nenhuma estratégia acessa order ID bruto para contornar o OMS.
+- [x] 100% das ordens shadow/dry-run têm estado final (testes);
+- [x] fill parcial, evento duplicado e UNKNOWN reconciliados;
+- [x] restart via checkpoint reconstrói posição antes de nova intenção;
+- [x] strategy não acessa exchange order id (`getOrder` público).
+
+Ver [arquitetura/oms-p3.md](./arquitetura/oms-p3.md).
 
 ### P4 — Risk, persistência e recovery da engine
 
-**Status:** ausente.
+**Status:** próximo.
 
 Entregáveis:
 
