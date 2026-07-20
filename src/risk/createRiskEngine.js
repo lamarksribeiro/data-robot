@@ -33,6 +33,9 @@ export function createRiskEngine(opts = {}) {
     onePositionPerInstance: opts.onePositionPerInstance !== false,
     oneIntentPerEvent: opts.oneIntentPerEvent !== false,
     maxSlippage: opts.maxSlippage ?? null,
+    /** Cap P7 — se setado (ou canaryMode), bloqueia notional acima deste valor. */
+    maxCanaryBudget: opts.maxCanaryBudget ?? null,
+    canaryMode: opts.canaryMode === true,
   };
 
   const accountBook = opts.accountBook ?? createAccountRiskBook({
@@ -176,6 +179,20 @@ export function createRiskEngine(opts = {}) {
     const notional = intentNotional(intent);
 
     if (intent.kind === 'ENTER' || intent.kind === 'REVERSE') {
+      const canaryCap =
+        limits.maxCanaryBudget != null
+          ? Number(limits.maxCanaryBudget)
+          : limits.canaryMode
+            ? 0.1
+            : null;
+      if (canaryCap != null && notional != null && notional > canaryCap) {
+        return deny(
+          RISK_REASON.CANARY_BUDGET_EXCEEDED,
+          { notional, maxCanaryBudget: canaryCap },
+          meta,
+        );
+      }
+
       if (notional != null && notional > limits.maxNotionalPerOrder) {
         return deny(
           RISK_REASON.MAX_NOTIONAL_ORDER,
@@ -213,7 +230,7 @@ export function createRiskEngine(opts = {}) {
           intent.side === 'UP'
             ? ctx.snapshot.book?.up?.bestAsk
             : ctx.snapshot.book?.down?.bestAsk;
-        if (ask != null && intent.maxPrice - ask > limits.maxSlippage) {
+        if (ask != null && intent.maxPrice - ask > limits.maxSlippage + 1e-9) {
           return deny(
             RISK_REASON.SLIPPAGE_CAP,
             { maxPrice: intent.maxPrice, ask, maxSlippage: limits.maxSlippage },

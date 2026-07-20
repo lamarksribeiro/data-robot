@@ -180,7 +180,18 @@ export function createEngine(opts) {
     journal.push({
       type: 'sink',
       intentId: intent.intentId,
+      intent: {
+        kind: intent.kind,
+        side: intent.side,
+        budget: intent.budget,
+        maxPrice: intent.maxPrice,
+        orderType: intent.orderType ?? null,
+        reason: intent.reason,
+        marketId: intent.marketId,
+        tokenId: intent.tokenId ?? null,
+      },
       accepted: result.accepted,
+      events: result.events ?? [],
       eventCount: result.events?.length ?? 0,
       tsMs: clock(),
     });

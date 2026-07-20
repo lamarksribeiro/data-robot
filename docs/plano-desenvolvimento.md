@@ -46,7 +46,7 @@ Ficam fora deste ciclo:
 | Engine / contrato de estratégia | Feito (P1+P6) | Runtime + registry + fixtures + plugin `tfc-v7`. |
 | Gates de entrada | Feito (P6) | `evaluateEntryGates` + late flip + danger exit no plugin. |
 | Preset de produção | Alinhado | `watch` / `micro-entry` usam `preset-v7.js` (`btc-champion-v7`). V6 Hybrid permanece só como histórico. |
-| Entrada real | Protótipo | `tfc:micro-entry` compra por GTC no ask; faltam cap de slippage, confirmação de fill parcial, posição e idempotência. |
+| Entrada real | Feito (P7 código) | `tfc:micro-live` via engine + canary cap; ops ≥10 dias pendente. |
 | Saída / reverse / danger exit | Ausente | `evaluateLateFlip` só avalia parte do sinal e não executa ciclo de posição. Danger exit não existe no robô. |
 | OMS e user WebSocket | Feito (P3 sim) | OMS+executor+journal; live CLOB/user-WS ainda stub. |
 | Risco e kill switch | Feito (P4) | Risk engine + kill + circuit + audit; geoblock/auth injetáveis. |
@@ -345,20 +345,23 @@ Ver [arquitetura/tfc-v7-p6.md](./arquitetura/tfc-v7-p6.md).
 
 ### P7 — Micro-live TFC de entrada
 
-**Status:** protótipo atual não elegível.
+**Status:** código concluído (2026-07-20); **ops** (≥10 dias live) aberto.
 
 Entregáveis:
 
-- intenção em dry-run/shadow e depois entrada mínima com cap;
-- ordem, partial/total fill, fee, saldo e posição reconciliados;
-- comparação live × replay do mesmo evento;
-- limite de canário independente do budget de $10 do preset.
+- [x] intenção em dry-run/shadow e entrada mínima com cap via engine (`tfc:micro-live`);
+- [x] ordem/fill/cancel via `createLiveTransport` (mock no CI; CLOB real com `--live`);
+- [x] relatório fee/slippage/órfã + paridade de intenção;
+- [x] limite de canário independente do budget de $10 (`CANARY_LIMITS` + risk).
 
 Gate de saída:
 
-- pelo menos 10 entradas micro-live em dias distintos;
-- 100% reconciliadas, sem órfã, duplicidade ou violação de cap;
-- slippage/fee explicado e nenhuma promoção só por aceite da ordem.
+- [ ] pelo menos 10 entradas micro-live em dias distintos;
+- [x] pipeline reconciliável sem órfã/duplicidade/violação de cap (testes mock);
+- [ ] slippage/fee explicado em runs live reais;
+- [x] nenhuma promoção só por aceite da ordem (relatório exige fill/reconcile).
+
+Ver [arquitetura/micro-live-p7.md](./arquitetura/micro-live-p7.md).
 
 ### P8 — Saídas TFC: late flip, reverse e danger exit
 

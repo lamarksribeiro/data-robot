@@ -21,7 +21,17 @@ export function createOmsSink(opts = {}) {
   const mode = opts.mode ?? 'shadow';
   const clock = opts.clock ?? (() => Date.now());
   const oms = opts.oms ?? createOms({ clock, marketRules: opts.marketRules });
-  const transport = opts.transport ?? createTransportForMode(mode, { clock, behavior: opts.simBehavior });
+  const transport =
+    opts.transport ??
+    createTransportForMode(mode, {
+      clock,
+      behavior: opts.simBehavior,
+      client: opts.client,
+      Side: opts.Side,
+      OrderType: opts.OrderType,
+      postOnly: opts.postOnly,
+      resolveTokenId: opts.resolveTokenId,
+    });
   const executor = createExecutor({ oms, transport, clock });
   const userChannel = opts.withUserChannel ? createUserChannel({ kind: 'sim' }) : null;
   if (userChannel) userChannel.connect();
@@ -89,7 +99,6 @@ export function createOmsSink(opts = {}) {
       if (!userChannel) return { canceled: [] };
       const canceled = [];
       for (const order of oms.openOrders()) {
-        // marca cancel protetivo
         oms.applyExchangeEvent({
           eventId: `cod-${order.intentId}`,
           intentId: order.intentId,
@@ -100,6 +109,33 @@ export function createOmsSink(opts = {}) {
         canceled.push(order.intentId);
       }
       userChannel.disconnect({ cancelOnDisconnect: true });
+      return { canceled };
+    },
+
+    /**
+     * Cancela resting no transport (live) e marca CANCEL no OMS.
+     */
+    async cancelOpenOrders(reason = 'ops-cancel') {
+      const canceled = [];
+      for (const order of oms.openOrders()) {
+        const raw = oms.getOrderRaw(order.intentId);
+        if (!raw) continue;
+        const result = await transport.cancel(raw);
+        for (const ev of result.events ?? []) {
+          oms.applyExchangeEvent(ev);
+        }
+        if (result.accepted) canceled.push(order.intentId);
+        else if (!raw.exchangeOrderId) {
+          oms.applyExchangeEvent({
+            eventId: `ops-cancel-${order.intentId}`,
+            intentId: order.intentId,
+            type: 'CANCEL',
+            reason,
+            tsMs: clock(),
+          });
+          canceled.push(order.intentId);
+        }
+      }
       return { canceled };
     },
 

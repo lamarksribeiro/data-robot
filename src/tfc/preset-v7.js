@@ -41,4 +41,21 @@ export const TFC_V7 = {
 export const MICRO_TEST = {
   entryBudget: 0.10,
   minShares: 1,
+  entryOrderType: 'FAK',
 };
+
+/**
+ * Cap de canário P7 — independente do entryBudget=$10 do preset campeão.
+ * Preferência de sizing continua MICRO_TEST ($0.10), mas 1 share no ask V7
+ * pode custar até ~$0.82; o cap cobre isso sem liberar $10.
+ */
+export const CANARY_LIMITS = Object.freeze({
+  maxCanaryBudget: 1.0,
+  preferredEntryBudget: 0.1,
+  maxSlippage: 0.02,
+});
+
+/** Preset efetivo para micro-live (gates V7 + sizing canário). */
+export function canaryPreset(override = {}) {
+  return { ...TFC_V7, ...MICRO_TEST, ...override };
+}

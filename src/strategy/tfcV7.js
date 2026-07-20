@@ -244,6 +244,15 @@ export function createTfcV7Strategy(opts = {}) {
           next.seq = (next.seq ?? 0) + 1;
           next.lastIntentKind = 'ENTER';
           const slippage = Number(params.entrySlippageMax ?? 0.02);
+          const identity = snapshot.identity ?? {};
+          const tokenId =
+            entry.fav === 'UP' ? identity.upTokenId ?? null : identity.downTokenId ?? null;
+          const maxPrice = entry.ask + slippage;
+          const minShares = Math.max(1, Number(params.minShares ?? 1));
+          const budget = Number(params.entryBudget);
+          const sized = Number.isFinite(budget) && entry.ask > 0 ? Math.floor(budget / entry.ask) : 0;
+          const quantity = Math.max(minShares, sized);
+          const notional = quantity * maxPrice;
           intents.push({
             intentId: makeIntentId({
               strategyInstanceId: ctx.strategyInstanceId,
@@ -255,13 +264,15 @@ export function createTfcV7Strategy(opts = {}) {
             side: entry.fav,
             marketId: snapshot.marketId,
             strategyInstanceId: ctx.strategyInstanceId,
-            budget: Number(params.entryBudget),
-            quantity: null,
-            maxPrice: entry.ask + slippage,
+            budget: notional,
+            quantity,
+            maxPrice,
             minPrice: null,
             deadlineMs: ctx.clockMs + 5000,
             reason: 'entry_gates',
             presetId: TFC_V7_PRESET_ID,
+            orderType: params.entryOrderType ?? 'GTC',
+            tokenId,
           });
         }
       }
