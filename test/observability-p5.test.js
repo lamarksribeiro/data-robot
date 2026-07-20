@@ -50,9 +50,10 @@ describe('observability', () => {
   it('logger redacta secrets', () => {
     const lines = [];
     const log = createLogger({ write: (l) => lines.push(l) });
-    log.info('test', { apiSecret: 'shh', ok: true });
+    log.info('test', { apiSecret: 'shh', opsToken: 'also-secret', ok: true });
     const parsed = JSON.parse(lines[0]);
     assert.equal(parsed.apiSecret, '[REDACTED]');
+    assert.equal(parsed.opsToken, '[REDACTED]');
     assert.equal(parsed.ok, true);
   });
 
@@ -68,11 +69,20 @@ describe('observability', () => {
 
   it('SLOs default', () => {
     const r = evaluateSlos(
-      { histograms: { decision_ms: { p99: 10 }, ingest_ms: { p99: 20 } } },
+      {
+        histograms: { decision_ms: { p99: 10 }, ingest_ms: { p99: 20 } },
+        gauges: { risk_violations: 0 },
+      },
       { availability: 1, orphanOrders: 0 },
       DEFAULT_SLOS,
     );
     assert.equal(r.ok, true);
+  });
+
+  it('SLO operacional reprova amostras obrigatórias ausentes', () => {
+    const result = evaluateSlos({ histograms: {}, gauges: {} }, { orphanOrders: 0 }, DEFAULT_SLOS);
+    assert.equal(result.ok, false);
+    assert.ok(result.checks.some((check) => check.actual == null && check.ok === false));
   });
 
   it('journal backup roundtrip', () => {
@@ -96,6 +106,19 @@ describe('health probes', () => {
     assert.equal(h.armed, true);
     assert.equal(h.live, false);
     assert.equal(h.halted, false);
+  });
+
+  it('readiness reprova feed, recovery ou user channel indisponível', () => {
+    const h = buildHealthReport({
+      engineStatus: { state: 'ARMED', mode: 'live', killActive: false },
+      feedsOk: false,
+      recoveryOk: false,
+      userChannelOk: false,
+      orphanOrders: 0,
+    });
+    assert.equal(h.ok, false);
+    assert.equal(h.ready, false);
+    assert.equal(h.live, false);
   });
 });
 
@@ -178,6 +201,33 @@ describe('engine app + soak', () => {
     assert.equal(report.orphans, 0);
     assert.equal(report.divergences, 0);
     await app.stop();
+  });
+
+  it('checkpoint durável restaura posição antes do start', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engine-cp-'));
+    const first = createEngineApp({
+      mode: 'shadow',
+      serveHttp: false,
+      backupDir: dir,
+      strategyId: 'fixture-price-cross',
+    });
+    await first.start();
+    await first.ingestSynthetic(snapshot());
+    const qty = first.engine.position.qty;
+    first.checkpoint();
+    await first.stop();
+
+    const restored = createEngineApp({
+      mode: 'shadow',
+      serveHttp: false,
+      backupDir: dir,
+      strategyId: 'fixture-price-cross',
+      restoreOnStart: true,
+    });
+    await restored.start();
+    assert.equal(restored.engine.position.qty, qty);
+    await restored.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });
 

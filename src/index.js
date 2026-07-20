@@ -36,6 +36,7 @@ export { bootstrapEngine, createDefaultRegistry } from './composition/bootstrap.
 export { runConformanceSuite } from './strategy/conformance.js';
 
 export { STALENESS, evaluateFeedHealth, evaluateClockSkew } from './market/health.js';
+export { runLivePreflight, preflightChecksFromResult } from './risk/livePreflight.js';
 export { buildMarketSnapshot, marketIdFromEvent } from './market/normalize.js';
 export { evaluateSnapshotEligibility } from './market/eligibility.js';
 export {

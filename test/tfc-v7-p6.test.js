@@ -95,6 +95,28 @@ describe('TFC V7 helpers', () => {
     assert.equal(result.reason, 'danger_exit');
   });
 
+  it('danger exit falha fechado sem bid executável', () => {
+    const nowMs = 1_700_000_000_000;
+    const result = evaluateDangerExit(
+      snap({
+        nowMs,
+        secsLeft: 4.5,
+        btc: 100.01,
+        priceToBeat: 100,
+        book: baseBook({ up: { bestBid: null, bestAsk: 0.62, bids: [], asks: [] } }),
+      }),
+      TFC_V7,
+      'UP',
+      [
+        { ts: nowMs - 3000, btc: 99.5 },
+        { ts: nowMs - 1000, btc: 100.5 },
+        { ts: nowMs, btc: 100.01 },
+      ],
+    );
+    assert.equal(result.active, false);
+    assert.equal(result.bidOk, false);
+  });
+
   it('late flip prefere REVERSE quando ask oposto ok', () => {
     const result = evaluateLateFlipAction(
       snap({
@@ -485,5 +507,33 @@ describe('shadow TFC V7 no kernel', () => {
       assert.equal(status.position.side, 'UP');
     }
     engine.halt('test-done');
+  });
+
+  it('restore preserva strategy state em vez de reinicializar', async () => {
+    const source = bootstrapEngine({
+      strategyId: TFC_V7_STRATEGY_ID,
+      mode: 'shadow',
+      preset: TFC_V7,
+    });
+    source.start();
+    const checkpoint = source.checkpoint();
+    checkpoint.strategyState = {
+      seq: 7,
+      history: [],
+      marketId: 'btc-5m-p6',
+      reversed: false,
+      closed: true,
+      lastIntentKind: 'EXIT',
+    };
+
+    const restored = bootstrapEngine({
+      strategyId: TFC_V7_STRATEGY_ID,
+      mode: 'shadow',
+      preset: TFC_V7,
+    });
+    restored.restore(checkpoint);
+    restored.start();
+    await restored.ingestSnapshot(snap({ marketId: 'btc-5m-p6', secsLeft: 18 }));
+    assert.equal(restored.journal.some((row) => row.type === 'sink'), false);
   });
 });

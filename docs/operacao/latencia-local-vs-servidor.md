@@ -4,7 +4,7 @@ Testes de latência CLOB feitos no PC com VPN **não representam** o ambiente de
 
 Estratégia: medir nos **dois ambientes** com o mesmo script e comparar — o delta vira baseline de melhoria e ajuda a calibrar timeouts da TFC.
 
-> **Atenção:** o script atual envia ordem real sem exigir `--live`. Execute somente com autorização explícita. Antes da próxima campanha, ele deve ser corrigido para exigir confirmação live e cancelar a ordem em `finally` mesmo quando uma etapa intermediária falhar.
+> **Atenção:** o script exige `--live` explícito e cancela a ordem em `finally`. Ainda movimenta dinheiro real; execute somente dentro do gate aprovado.
 
 ## Baseline de 15/07/2026
 

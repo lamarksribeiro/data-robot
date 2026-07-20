@@ -5,7 +5,8 @@ import { createReconciler } from '../src/oms/reconciler.js';
 import { createOmsSink } from '../src/oms/omsSink.js';
 import { createSimTransport } from '../src/executor/transport.js';
 import { createExecutor } from '../src/executor/createExecutor.js';
-import { createUserChannel } from '../src/executor/userChannel.js';
+import { createUserChannel, normalizeUserMessage } from '../src/executor/userChannel.js';
+import { createPositionLedger } from '../src/oms/positionLedger.js';
 import { quantizePrice, materializeOrderRequest } from '../src/oms/marketRules.js';
 import { bootstrapEngine } from '../src/composition/bootstrap.js';
 import { isTerminal } from '../src/oms/states.js';
@@ -44,6 +45,40 @@ describe('market rules', () => {
 });
 
 describe('OMS idempotência e estados', () => {
+  it('executor recusa deadline expirado antes de enviar', async () => {
+    const oms = createOms();
+    const exec = createExecutor({
+      oms,
+      transport: createSimTransport(),
+      clock: () => 100,
+    });
+    const result = await exec.executeIntent({ ...intent({ intentId: 'expired' }), deadlineMs: 99 });
+    assert.equal(result.accepted, false);
+    assert.equal(result.events[0].reason, 'DEADLINE_EXPIRED');
+    assert.equal(oms.listOrders().length, 0);
+  });
+
+  it('PnL de EXIT DOWN usa a mesma direção econômica de UP', () => {
+    const ledger = createPositionLedger();
+    ledger.applyFill({
+      strategyInstanceId: 'down',
+      marketId: 'm',
+      side: 'DOWN',
+      qty: 2,
+      price: 0.6,
+      kind: 'ENTER',
+    });
+    const position = ledger.applyFill({
+      strategyInstanceId: 'down',
+      marketId: 'm',
+      side: 'DOWN',
+      qty: 2,
+      price: 0.7,
+      kind: 'EXIT',
+    });
+    assert.ok(Math.abs(position.realizedPnl - 0.2) < 1e-9);
+  });
+
   it('dedupa mesmo intentId', async () => {
     const oms = createOms();
     const exec = createExecutor({ oms, transport: createSimTransport() });
@@ -236,5 +271,28 @@ describe('user channel', () => {
     ch.disconnect();
     assert.equal(ch.connected, false);
     stop();
+  });
+
+  it('normaliza trade MATCHED usando quantidade real', () => {
+    const oms = createOms();
+    oms.registerIntent(intent({ intentId: 'ws-1', quantity: 3 }));
+    oms.bindExchangeId('ws-1', 'exchange-1');
+    const events = normalizeUserMessage(
+      {
+        event_type: 'trade',
+        type: 'TRADE',
+        status: 'MATCHED',
+        id: 'trade-1',
+        taker_order_id: 'exchange-1',
+        size: '1.5',
+        price: '0.61',
+        timestamp: '1700000000',
+        maker_orders: [],
+      },
+      oms,
+    );
+    assert.equal(events[0].type, 'PARTIAL');
+    assert.equal(events[0].qty, 1.5);
+    assert.equal(events[0].price, 0.61);
   });
 });

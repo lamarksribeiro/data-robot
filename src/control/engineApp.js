@@ -44,6 +44,9 @@ export function createEngineApp(opts = {}) {
   let lastCheckpoint = null;
   let ticks = 0;
   let eligibleTicks = 0;
+  let lastFeedsOk = false;
+  let recoveryOk = opts.restoreOnStart !== true;
+  let autoCheckpointTimer = null;
 
   function status() {
     return engine.getStatus();
@@ -52,13 +55,23 @@ export function createEngineApp(opts = {}) {
   function health() {
     const st = status();
     const open = sink.oms?.openOrders?.() ?? [];
+    const userHeartbeatAgeMs =
+      sink.userChannel?.lastHeartbeatMs == null
+        ? Infinity
+        : Date.now() - sink.userChannel.lastHeartbeatMs;
     // órfã: open sem intentId (não deve ocorrer) ou UNKNOWN não reconciliado
     const unknowns = (sink.oms?.listOrders?.() ?? []).filter((o) => o.state === 'UNKNOWN');
     return buildHealthReport({
       engineStatus: st,
       mode,
-      feedsOk: true,
-      orphanOrders: unknowns.length,
+      feedsOk: lastFeedsOk,
+      recoveryOk,
+      userChannelOk:
+        mode !== 'live' ||
+        (sink.userChannel?.connected === true &&
+          userHeartbeatAgeMs <= Number(opts.userWsStaleMs ?? 30_000) &&
+          !sink.lastChannelError),
+      orphanOrders: unknowns.length + (sink.orphanCount ?? 0),
       openOrders: open.length,
       availability: ticks > 0 ? eligibleTicks / ticks : null,
     });
@@ -69,12 +82,17 @@ export function createEngineApp(opts = {}) {
     metrics.gauge('exposure_qty', st.position?.qty ?? 0);
     metrics.gauge('realized_pnl', st.position?.realizedPnl ?? 0);
     metrics.gauge('open_orders', sink.oms?.openOrders?.().length ?? 0);
+    metrics.gauge(
+      'risk_violations',
+      Object.values(st.riskMetrics ?? {}).reduce((sum, value) => sum + (Number(value) || 0), 0),
+    );
     return metrics.snapshot();
   }
 
   async function ingestSynthetic(snapshot) {
     const t0 = performance.now();
     ticks += 1;
+    lastFeedsOk = snapshot.feeds?.healthy === true;
     const result = await engine.ingestSnapshot(snapshot);
     metrics.observe('ingest_ms', performance.now() - t0);
     metrics.observe('decision_ms', performance.now() - t0);
@@ -103,6 +121,7 @@ export function createEngineApp(opts = {}) {
     if (sink.oms?.journal) {
       backup.save(sink.oms.journal.snapshot(), 'checkpoint');
     }
+    backup.saveCheckpoint?.(lastCheckpoint, 'engine');
     logger.info('checkpoint_saved', { state: engine.state });
     return lastCheckpoint;
   }
@@ -144,17 +163,47 @@ export function createEngineApp(opts = {}) {
     evaluateSlos: () => evaluateSlos(metricsSnap(), health(), opts.slos ?? DEFAULT_SLOS),
 
     async start() {
+      if (opts.restoreOnStart === true) {
+        const latest = backup.latestCheckpoint?.();
+        if (latest) {
+          lastCheckpoint = backup.loadCheckpoint(latest);
+          engine.restore(lastCheckpoint);
+          const previousFeed = lastCheckpoint.lastSnapshot?.feeds?.healthy;
+          lastFeedsOk = previousFeed === true;
+        }
+      }
+      await sink.start?.();
+      if (lastCheckpoint || mode === 'live') {
+        const recovery = await sink.reconcileAll?.();
+        recoveryOk = recovery?.ok !== false;
+        if (!recoveryOk) {
+          await engine.safeShutdown('recovery-unresolved');
+          throw new Error('recovery falhou: ordens não reconciliadas');
+        }
+      } else {
+        recoveryOk = true;
+      }
       engine.start();
       logger.info('engine_started', { strategyId, mode, state: engine.state });
       if (opts.serveHttp !== false) {
         await httpServer.start();
         logger.info('control_listen', { host: httpServer.host, port: httpServer.port });
       }
+      const autoCheckpointMs = Number(opts.autoCheckpointMs ?? 0);
+      if (autoCheckpointMs > 0) {
+        autoCheckpointTimer = setInterval(checkpoint, autoCheckpointMs);
+        if (autoCheckpointTimer.unref) autoCheckpointTimer.unref();
+      }
       return status();
     },
 
     async stop() {
+      if (autoCheckpointTimer) {
+        clearInterval(autoCheckpointTimer);
+        autoCheckpointTimer = null;
+      }
       await engine.safeShutdown('app-stop');
+      if (opts.persistOnStop === true || opts.restoreOnStart === true) checkpoint();
       if (opts.serveHttp !== false) {
         try {
           await httpServer.stop();

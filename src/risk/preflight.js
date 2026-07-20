@@ -11,13 +11,8 @@ import { RISK_REASON } from './reasons.js';
  */
 export function createPreflight(opts = {}) {
   const liveEnabled = opts.liveEnabled === true;
-  const checks = {
-    auth: opts.checks?.auth ?? (() => ({ ok: true })),
-    geoblock: opts.checks?.geoblock ?? (() => ({ ok: true, blocked: false })),
-    clock: opts.checks?.clock ?? (() => ({ ok: true, skewMs: 0 })),
-    balance: opts.checks?.balance ?? (() => ({ ok: true, balance: Infinity })),
-    ...opts.checks,
-  };
+  const checks = { ...(opts.checks ?? {}) };
+  const requiredLiveChecks = ['auth', 'geoblock', 'clock', 'balance'];
 
   /**
    * @param {{ mode?: string }} [ctx]
@@ -34,8 +29,34 @@ export function createPreflight(opts = {}) {
       });
     }
 
-    for (const [name, fn] of Object.entries(checks)) {
+    const names = new Set([
+      ...Object.keys(checks),
+      ...(ctx.mode === 'live' ? requiredLiveChecks : []),
+    ]);
+
+    for (const name of names) {
+      const fn = checks[name];
+      if (typeof fn !== 'function') {
+        const missing = { ok: false, missing: true, reason: 'CHECK_NOT_CONFIGURED' };
+        results[name] = missing;
+        failures.push({
+          check: name,
+          reasonCode:
+            name === 'auth'
+              ? RISK_REASON.PREFLIGHT_AUTH
+              : name === 'geoblock'
+                ? RISK_REASON.PREFLIGHT_GEOBLOCK
+                : name === 'clock'
+                  ? RISK_REASON.PREFLIGHT_CLOCK
+                  : RISK_REASON.PREFLIGHT_BALANCE,
+          detail: missing,
+        });
+        continue;
+      }
       const r = fn(ctx) ?? { ok: false };
+      if (r && typeof r.then === 'function') {
+        throw new Error(`preflight check ${name} retornou Promise; injete resultado previamente validado`);
+      }
       results[name] = r;
       if (!r.ok) {
         const reasonCode =

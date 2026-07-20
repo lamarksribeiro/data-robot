@@ -3,8 +3,8 @@
 | Ambiente | Dinheiro real | Papel | Como roda hoje |
 |----------|---------------|-------|----------------|
 | **local** | Só com `--live` explícito | Dev, latência VPN, dry-run | PC + `.env` |
-| **shadow** | Não | Mesmo pipeline da engine; sink de execução simulado | Ainda não (P1+) |
-| **canary** | Sim, budget mínimo | Micro-live / degraus de promoção | Servidor Giovanna / Coolify com limites |
+| **shadow** | Não | Mesmo pipeline da engine; sink de execução simulado | Código disponível; campanha ≥100 eventos reais pendente |
+| **canary** | Sim, budget mínimo | Micro-live / degraus de promoção | Harness disponível; campanha bloqueada pelos gates P3–P5 |
 | **production** | Sim, budget aprovado | Operação limitada pós P9 | Processo engine separado da UI |
 
 ## Regras comuns
@@ -13,6 +13,8 @@
 - Qualquer script que poste ordem exige `--live` (exit 2 se omitido).
 - Secrets só no `.env` do host; nunca no frontend `public/`.
 - `npm start` / Docker atual servem **somente** a UI estática — não é a engine.
+- Engine/control plane fora de localhost exige `ENGINE_OPS_TOKEN`.
+- Modo live exige preflight real, User WS autenticado e heartbeat CLOB antes de `ARMED`.
 
 ## Labels de run
 

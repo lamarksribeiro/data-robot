@@ -1,6 +1,6 @@
 # Plano de desenvolvimento — Data Robot
 
-**Revisado em:** 17/07/2026  
+**Revisado em:** 20/07/2026
 **Estado atual:** protótipo operacional e ferramentas de diagnóstico; **ainda não é um robô autônomo de produção**.  
 **Estratégia-alvo:** Terminal Favorite Carry **V7 Danger Floor**, promovida no `data-backtest` em 07/07/2026.
 
@@ -35,12 +35,15 @@ Ficam fora deste ciclo:
 7. **Maker não significa apenas fee zero.** Maker não paga fee de protocolo e pode receber rebate. A hipótese local de maker ainda precisa de um fill real para ser considerada validada.
 8. **O medidor de latência exige `--live`.** Sem a flag, o comando recusa (exit 2) e cancela em `finally` quando a ordem foi criada.
 9. **A engine vem antes da estratégia.** Core, OMS, risk, persistência, recovery e observabilidade não podem importar TFC. TFC V7 será o primeiro adaptador do contrato genérico, não o centro da arquitetura.
+10. **“Código concluído” não equivale a “gate live aprovado”.** P3–P7 distinguem explicitamente CI/simulação de evidência real no Giovanna.
+11. **POST de ordem é somente ACK.** Fill e preço executado vêm do user WS ou de reconciliação REST; FAK pode preencher parcialmente.
+12. **REVERSE permanece bloqueado em live.** A promoção exige saga persistida `SELL → reconcile → BUY`, não uma compra isolada do lado oposto.
 
 ## 3. Diagnóstico do estado atual
 
 | Área | Estado | Evidência / lacuna |
 |---|---|---|
-| Auth L1/L2, signer, funder | Parcial | `check:api-key`, `derive-key:write` e `test:connection` existem; falta bloqueio obrigatório no startup da engine. |
+| Auth L1/L2, signer, funder | Código endurecido; ops aberto | `runLivePreflight` valida auth, identidade, saldo/allowance, relógio, geoblock e ausência de ordens abertas. Falta evidência repetida no serviço do Giovanna. |
 | Descoberta BTC 5m e PTB | Parcial | Implementada para o slot atual/próximo; faltam retry observável, validação de `acceptingOrders` e testes de transição de evento. |
 | RTDS e CLOB market feed | Feito (P2) | Normalização + staleness + hub; WS legado permanece em `src/feeds/`. |
 | Engine / contrato de estratégia | Feito (P1+P6) | Runtime + registry + fixtures + plugin `tfc-v7`. |
@@ -48,10 +51,10 @@ Ficam fora deste ciclo:
 | Preset de produção | Alinhado | `watch` / `micro-entry` usam `preset-v7.js` (`btc-champion-v7`). V6 Hybrid permanece só como histórico. |
 | Entrada real | Feito (P7 código) | `tfc:micro-live` via engine + canary cap; ops ≥10 dias pendente. |
 | Saída / reverse / danger exit | Ausente | `evaluateLateFlip` só avalia parte do sinal e não executa ciclo de posição. Danger exit não existe no robô. |
-| OMS e user WebSocket | Feito (P3 sim) | OMS+executor+journal; live CLOB/user-WS ainda stub. |
-| Risco e kill switch | Feito (P4) | Risk engine + kill + circuit + audit; geoblock/auth injetáveis. |
-| Persistência / recovery | Feito (P4) | Checkpoint/restore engine + OMS journal. |
-| Observabilidade | Feito (P5 código) | Métricas p50/p95/p99, logger, alertas, SLOs; calibragem Giovanna pendente. |
+| OMS e user WebSocket | Código live implementado; ops aberto | User WS autenticado, heartbeat CLOB, reconciliação por ordem e detecção de órfãs; validação real prolongada ainda pendente. |
+| Risco e kill switch | Código endurecido; ops aberto | Preflight live obrigatório, deadlines, caps, kill/circuit e `REVERSE` bloqueado até P8. |
+| Persistência / recovery | Código endurecido; ops aberto | Checkpoint atômico, restore de strategy/OMS/risk e reconciliação antes do start; falta ensaio real com ordem/posição existentes. |
+| Observabilidade | Código endurecido; ops aberto | Readiness depende de feed/recovery/user WS; métricas ausentes reprovam SLO; calibragem Giovanna pendente. |
 | Testes e CI | Feito | `npm run ci` (lint + architecture + testes); sem rede/ordens reais. |
 | Deploy | Parcial (P5) | UI `:3200` + engine `:3201` (`Dockerfile.engine`); soak ≥7d / Coolify ops pendente. |
 
@@ -251,11 +254,12 @@ Ver [arquitetura/market-p2.md](./arquitetura/market-p2.md).
 
 ### P3 — OMS, executor e reconciliação genéricos
 
-**Status:** concluído (2026-07-18) — sim/sandbox completo; CLOB user-WS real permanece stub.
+**Status:** CI/sim completo; adaptadores live implementados em 2026-07-20; **gate real ainda aberto**.
 
 Entregáveis:
 
-- [x] user channel (sim) + fallback REST stub + heartbeat / cancel-on-disconnect;
+- [x] user channel sim e WebSocket autenticado real, normalização de order/trade e fallback REST;
+- [x] heartbeat CLOB real com `heartbeat_id`, cancelamento remoto e `cancelAll` de emergência;
 - [x] estados `CREATED`…`UNKNOWN` com transições validadas;
 - [x] BUY/SELL GTC/FAK/FOK idempotentes com tick/min size (`marketRules.js`);
 - [x] posição por instância + exposição agregada;
@@ -269,16 +273,23 @@ Gate de saída:
 - [x] restart via checkpoint reconstrói posição antes de nova intenção;
 - [x] strategy não acessa exchange order id (`getOrder` público).
 
+Gate live adicional:
+
+- [ ] User WS + REST reconciliam fills parciais e cancelamentos reais sem duplicar posição;
+- [ ] heartbeat/cancel-on-disconnect comprovado no Giovanna;
+- [ ] zero ordem remota sem intent/journal local.
+
 Ver [arquitetura/oms-p3.md](./arquitetura/oms-p3.md).
 
 ### P4 — Risk, persistência e recovery da engine
 
-**Status:** concluído (2026-07-18).
+**Status:** código endurecido em 2026-07-20; **recovery/preflight real ainda ops**.
 
 Entregáveis:
 
 - [x] pre-trade checks e limites locais/globais (notional, evento, conta, perda, rate, piso 4s);
-- [x] geoblock/auth/clock/balance/live fail-closed (checks injetáveis);
+- [x] geoblock/auth/clock/balance/allowance/live fail-closed; check ausente bloqueia live;
+- [x] deadline revalidado em risk e executor; `REVERSE` live bloqueado sem saga;
 - [x] circuit breaker, kill switch e shutdown com cancel de resting;
 - [x] checkpoint/restore da engine + OMS journal + migrateState;
 - [x] teste multi-instância com exposição agregada compartilhada.
@@ -289,12 +300,13 @@ Gate de saída:
 - [x] cada bloqueio tem reason code + métrica de audit;
 - [x] restore preserva posição sem duplicar intenção de entrada indevida;
 - [x] limite global bloqueia segunda strategy quando a soma estoura.
+- [ ] restart real com ordem aberta, partial fill e posição existente reconciliado antes de `ARMED`.
 
 Ver [arquitetura/risk-p4.md](./arquitetura/risk-p4.md).
 
 ### P5 — Resiliência, observabilidade, deploy e gate Engine Ready
 
-**Status:** código concluído (2026-07-19); **ops Engine Ready ainda aberto** (soak ≥7d / Giovanna).
+**Status:** código endurecido (2026-07-20); **ops Engine Ready ainda aberto** (soak ≥7d / Giovanna).
 
 Entregáveis:
 
@@ -304,6 +316,9 @@ Entregáveis:
 - [x] backup do journal, checkpoint/rollback, health/ready/armed/live/halted;
 - [x] testes de desconexão, restart, 401/429/503 e perda do user WS;
 - [x] soak harness com fixtures (sem TFC) — `engine:soak`.
+- [x] health/readiness falham com feed, recovery ou user WS indisponível;
+- [x] checkpoint atômico e restore automático opcionais no processo da engine;
+- [x] soak suporta duração real (`--duration-hours`) e intervalo entre ticks.
 
 Gate de saída (código / CI):
 
@@ -345,7 +360,7 @@ Ver [arquitetura/tfc-v7-p6.md](./arquitetura/tfc-v7-p6.md).
 
 ### P7 — Micro-live TFC de entrada
 
-**Status:** código concluído (2026-07-20); **ops** (≥10 dias live) aberto.
+**Status:** harness e proteções de código concluídos (2026-07-20); **campanha live bloqueada** até os gates reais de P3–P5.
 
 Entregáveis:
 
@@ -360,12 +375,16 @@ Gate de saída:
 - [x] pipeline reconciliável sem órfã/duplicidade/violação de cap (testes mock);
 - [ ] slippage/fee explicado em runs live reais;
 - [x] nenhuma promoção só por aceite da ordem (relatório exige fill/reconcile).
+- [x] resposta do POST não gera fill artificial; FAK é reconciliada por quantidade/preço reais;
+- [x] finally executa cancelamento remoto e encerra heartbeats/feed.
 
 Ver [arquitetura/micro-live-p7.md](./arquitetura/micro-live-p7.md).
 
 ### P8 — Saídas TFC: late flip, reverse e danger exit
 
 **Status:** ausente.
+
+O risk engine rejeita `REVERSE` em live com `LIVE_REVERSE_UNSUPPORTED` até esta fase implementar e validar a saga de duas pernas.
 
 Ordem de validação:
 
@@ -384,7 +403,7 @@ Gate de saída:
 
 ### P9 — Canário e produção limitada
 
-**Status:** bloqueado por P0–P8.
+**Status:** bloqueado pelos gates reais ainda abertos de P3–P8.
 
 Promoção progressiva:
 

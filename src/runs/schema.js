@@ -7,7 +7,7 @@ export const RUN_SCHEMA_VERSION = 1;
 
 /** Campos que nunca devem ir para relatório versionado ou log compartilhado. */
 const SECRET_KEY_RE =
-  /^(private[_-]?key|api[_-]?secret|passphrase|secret|mnemonic|seed)$/i;
+  /^(private[_-]?key|api[_-]?(key|secret|passphrase)|passphrase|secret|ops[_-]?token|access[_-]?token|refresh[_-]?token|mnemonic|seed)$/i;
 const SECRET_VALUE_RE = /0x[a-fA-F0-9]{64}|sk_[a-zA-Z0-9]+/g;
 
 /**

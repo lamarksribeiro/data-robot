@@ -4,6 +4,8 @@ import { bootstrapEngine, createAccountRiskBook, createRiskEngine } from '../src
 import { createPreflight } from '../src/risk/preflight.js';
 import { RISK_REASON } from '../src/risk/reasons.js';
 import { createOmsSink } from '../src/oms/omsSink.js';
+import { createSimTransport } from '../src/executor/transport.js';
+import { runLivePreflight } from '../src/risk/livePreflight.js';
 
 function snap(over = {}) {
   return {
@@ -27,6 +29,37 @@ describe('preflight fail-closed', () => {
     const pf = risk.runPreflight({ mode: 'live' });
     assert.equal(pf.ok, false);
     assert.ok(pf.failures.some((f) => f.reasonCode === RISK_REASON.LIVE_DISABLED));
+  });
+
+  it('bloqueia liveEnabled quando checks obrigatórios não foram configurados', () => {
+    const risk = createRiskEngine({ liveEnabled: true });
+    const pf = risk.runPreflight({ mode: 'live' });
+    assert.equal(pf.ok, false);
+    for (const check of ['auth', 'geoblock', 'clock', 'balance']) {
+      assert.ok(pf.failures.some((failure) => failure.check === check));
+    }
+  });
+
+  it('preflight real agrega auth, clock, balance/allowance e geoblock', async () => {
+    const nowMs = 1_700_000_000_000;
+    const client = {
+      getOpenOrders: async () => [],
+      getServerTime: async () => nowMs / 1000,
+      getBalanceAllowance: async () => ({
+        balance: '2000000',
+        allowances: { exchange: '2000000' },
+      }),
+    };
+    const result = await runLivePreflight({
+      client,
+      clock: () => nowMs,
+      signerAddress: `0x${'1'.repeat(40)}`,
+      funderAddress: `0x${'2'.repeat(40)}`,
+      signatureType: 1,
+      minBalanceUsd: 1,
+      fetchFn: async () => ({ ok: true, json: async () => ({ blocked: false, country: 'BR' }) }),
+    });
+    assert.equal(result.ok, true);
   });
 
   it('geoblock injetado falha no start', () => {
@@ -63,6 +96,28 @@ describe('preflight fail-closed', () => {
 });
 
 describe('risk limits + audit', () => {
+  it('bloqueia deadline expirado e reverse live sem saga', () => {
+    const nowMs = 1000;
+    const risk = createRiskEngine({ liveEnabled: true, clock: () => nowMs });
+    const base = {
+      intentId: 'deadline',
+      kind: 'ENTER',
+      side: 'UP',
+      marketId: 'm',
+      strategyInstanceId: 's',
+      budget: 1,
+      maxPrice: 0.5,
+      deadlineMs: nowMs,
+      reason: 'test',
+    };
+    assert.equal(risk.evaluate(base, { mode: 'live' }).reasonCode, RISK_REASON.DEADLINE_EXPIRED);
+    assert.equal(
+      risk.evaluate({ ...base, intentId: 'reverse', kind: 'REVERSE', deadlineMs: nowMs + 1 }, { mode: 'live' })
+        .reasonCode,
+      RISK_REASON.LIVE_REVERSE_UNSUPPORTED,
+    );
+  });
+
   it('bloqueia notional acima do limite com reason code', async () => {
     const risk = createRiskEngine({ maxNotionalPerOrder: 1 });
     const engine = bootstrapEngine({
@@ -106,6 +161,26 @@ describe('risk limits + audit', () => {
     await engine.ingestSnapshot(snap({ healthy: false }));
     assert.equal(engine.position.qty, 0);
     assert.ok(risk.audit.metrics()[RISK_REASON.HEALTH_BLOCK] >= 1);
+  });
+
+  it('libera reserva quando o transport rejeita a entrada', async () => {
+    const book = createAccountRiskBook({ maxAccountExposure: 5 });
+    const risk = createRiskEngine({ accountBook: book, maxNotionalPerOrder: 5 });
+    const sink = createOmsSink({
+      mode: 'shadow',
+      transport: createSimTransport({ behavior: 'reject' }),
+    });
+    const engine = bootstrapEngine({
+      strategyId: 'fixture-price-cross',
+      mode: 'shadow',
+      preset: { threshold: 1, budget: 2, maxPrice: 0.5 },
+      risk,
+      sink,
+      strategyInstanceId: 'release-on-reject',
+    });
+    engine.start();
+    await engine.ingestSnapshot(snap());
+    assert.equal(book.totalExposure(), 0);
   });
 });
 

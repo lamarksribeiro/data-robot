@@ -20,6 +20,8 @@ export default {
 
   rtdsWsUrl: process.env.RTDS_WS_URL || 'wss://ws-live-data.polymarket.com',
   clobWsUrl: process.env.CLOB_WS_URL || 'wss://ws-subscriptions-clob.polymarket.com/ws/market',
+  clobUserWsUrl:
+    process.env.CLOB_USER_WS_URL || 'wss://ws-subscriptions-clob.polymarket.com/ws/user',
 
   deriveNonceMax: parseInt(process.env.POLYMARKET_DERIVE_NONCE_MAX || '50', 10),
 };

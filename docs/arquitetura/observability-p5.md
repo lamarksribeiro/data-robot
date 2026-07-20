@@ -1,6 +1,6 @@
 # Observabilidade P5 — control plane e Engine Ready (código)
 
-Status: **código implementado** (2026-07-19). CI sem rede/ordens reais.  
+Status: **código endurecido** (2026-07-20). CI sem rede/ordens reais.
 **Ops pendente:** soak ≥7 dias e validação de SLOs/alertas no Giovanna (gate Engine Ready completo).
 
 ## Separação de processos
@@ -23,17 +23,17 @@ Container da engine: `Dockerfile.engine` (CMD `scripts/engine-serve.js`). Live e
 | `logger.js` | JSON estruturado + redaction de secrets |
 | `alerts.js` | Alertas operacionais (`createAlertHub`) |
 | `slo.js` | Avaliação de SLOs locais |
-| `journalBackup.js` | Backup/restore do journal |
+| `journalBackup.js` | Checkpoint atômico de engine/OMS/risk/strategy + restore |
 
 ### `src/control/`
 
 | Arquivo | Papel |
 |---------|-------|
-| `health.js` | Probes healthy / ready / armed / live / halted |
+| `health.js` | Probes dependentes de feed, recovery, user WS e órfãs |
 | `httpServer.js` | `/health` `/ready` `/status` `/metrics` + `POST /control/kill` |
 | `engineApp.js` | Composition: engine + métricas + HTTP |
 | `faultInjection.js` | 401/429/503, user-WS loss, restart/kill |
-| `soak.js` | Harness de soak com fixtures (sem TFC) |
+| `soak.js` | Soak por iterações ou duração real, com intervalo configurável |
 
 ## Endpoints
 
@@ -54,3 +54,11 @@ Container da engine: `Dockerfile.engine` (CMD `scripts/engine-serve.js`). Live e
 | Aprovação sem depender de TFC | ✓ (fixtures) | — |
 
 Ver checklist no [plano P5](../plano-desenvolvimento.md#p5--resiliência-observabilidade-deploy-e-gate-engine-ready).
+
+Comando operacional planejado:
+
+```bash
+npm run engine:soak -- --duration-hours=168 --interval-ms=1000 --json
+```
+
+Métrica ou disponibilidade ausente reprova o SLO; não é interpretada como sucesso. O control plane fora de localhost exige `ENGINE_OPS_TOKEN`.

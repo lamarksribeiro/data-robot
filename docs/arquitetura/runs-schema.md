@@ -29,7 +29,7 @@ Use `buildRunEnvelope()` + `sanitizeRunRecord()` antes de gravar ou anexar a PR/
 
 `sanitizeRunRecord` / `redactValue` removem ou mascaram:
 
-- chaves: `privateKey`, `apiSecret`, `passphrase`, `secret`, `mnemonic`, `seed`
+- chaves: `privateKey`, `apiKey`, `apiSecret`, `passphrase`, `secret`, `opsToken`, access/refresh tokens, `mnemonic`, `seed`
 - padrões: private keys hex `0x`+64, tokens `sk_…`
 
 Nunca versionar: private key, API secret, passphrase, endereço completo desnecessário, saldo detalhado da conta.

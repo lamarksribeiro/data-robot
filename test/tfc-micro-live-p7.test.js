@@ -21,6 +21,52 @@ import { hasLiveFlag } from '../src/cli/liveGate.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+function mockWsChannel() {
+  let connected = false;
+  const eventListeners = new Set();
+  const disconnectListeners = new Set();
+  return {
+    kind: 'ws',
+    get connected() {
+      return connected;
+    },
+    get lastHeartbeatMs() {
+      return connected ? Date.now() : null;
+    },
+    connect() {
+      connected = true;
+      return { ok: true };
+    },
+    disconnect() {
+      connected = false;
+    },
+    startHeartbeat() {
+      return () => {};
+    },
+    onEvent(fn) {
+      eventListeners.add(fn);
+      return () => eventListeners.delete(fn);
+    },
+    onDisconnect(fn) {
+      disconnectListeners.add(fn);
+      return () => disconnectListeners.delete(fn);
+    },
+    simulateDisconnect(detail = { code: 1006 }) {
+      connected = false;
+      for (const listener of disconnectListeners) listener(detail);
+    },
+  };
+}
+
+function passingPreflightChecks() {
+  return {
+    auth: () => ({ ok: true }),
+    geoblock: () => ({ ok: true, blocked: false }),
+    clock: () => ({ ok: true }),
+    balance: () => ({ ok: true }),
+  };
+}
+
 function bookOk() {
   return {
     up: {
@@ -106,7 +152,7 @@ describe('canary risk P7', () => {
 });
 
 describe('live transport mock', () => {
-  it('matched → ACK + FILL', async () => {
+  it('matched → ACK no POST e FILL somente após reconcile', async () => {
     const client = createMockClobClient({ behavior: 'matched' });
     const transport = createLiveTransport({ client, Side, OrderType });
     const result = await transport.submit(
@@ -122,7 +168,16 @@ describe('live transport mock', () => {
     );
     assert.equal(result.accepted, true);
     assert.ok(result.events.some((e) => e.type === 'ACK'));
-    assert.ok(result.events.some((e) => e.type === 'FILL'));
+    assert.equal(result.events.some((e) => e.type === 'FILL'), false);
+    const reconciled = await transport.reconcile({
+      intentId: 'x',
+      tokenSide: 'UP',
+      exchangeOrderId: result.exchangeOrderId,
+      qty: 1,
+      qtyFilled: 0,
+      price: 0.62,
+    });
+    assert.ok(reconciled.events.some((e) => e.type === 'FILL'));
   });
 
   it('reject sem tokenId', async () => {
@@ -139,7 +194,8 @@ describe('live transport mock', () => {
   it('cancelOpenOrders no sink live mock', async () => {
     const client = createMockClobClient({ behavior: 'live' });
     const transport = createLiveTransport({ client, Side, OrderType });
-    const sink = createOmsSink({ mode: 'live', transport });
+    const sink = createOmsSink({ mode: 'live', transport, userChannel: mockWsChannel() });
+    await sink.start();
     await sink.submit({
       intentId: 'c1',
       kind: 'ENTER',
@@ -156,6 +212,46 @@ describe('live transport mock', () => {
     assert.equal(sink.oms.openOrders().length, 1);
     const r = await sink.cancelOpenOrders('test');
     assert.ok(r.canceled.length >= 1);
+  });
+
+  it('recovery detecta ordem remota sem intent local', async () => {
+    const client = createMockClobClient({ behavior: 'live' });
+    await client.createAndPostOrder({
+      tokenID: 'tok-up',
+      side: Side.BUY,
+      size: 1,
+      price: 0.62,
+    });
+    const transport = createLiveTransport({ client, Side, OrderType });
+    const sink = createOmsSink({ mode: 'live', transport, userChannel: mockWsChannel() });
+    await sink.start();
+    const report = await sink.reconcileAll();
+    assert.equal(report.ok, false);
+    assert.equal(report.orphans.length, 1);
+    await transport.cancelAll();
+    sink.dispose();
+  });
+
+  it('perda do user WS leva a engine live para HALTED', async () => {
+    const client = createMockClobClient({ behavior: 'matched' });
+    const channel = mockWsChannel();
+    const sink = createOmsSink({
+      mode: 'live',
+      transport: createLiveTransport({ client, Side, OrderType }),
+      userChannel: channel,
+    });
+    const engine = bootstrapTfcCanaryEngine({
+      mode: 'live',
+      liveEnabled: true,
+      sink,
+      riskOpts: { preflightChecks: passingPreflightChecks() },
+    });
+    await sink.start();
+    engine.start();
+    channel.simulateDisconnect();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(engine.state, 'HALTED');
+    sink.dispose();
   });
 });
 
@@ -185,12 +281,14 @@ describe('bootstrap TFC canary', () => {
   it('live + mock CLOB preenche posição sem rede', async () => {
     const client = createMockClobClient({ behavior: 'matched' });
     const transport = createLiveTransport({ client, Side, OrderType });
-    const sink = createOmsSink({ mode: 'live', transport });
+    const sink = createOmsSink({ mode: 'live', transport, userChannel: mockWsChannel() });
     const engine = bootstrapTfcCanaryEngine({
       mode: 'live',
       liveEnabled: true,
       sink,
+      riskOpts: { preflightChecks: passingPreflightChecks() },
     });
+    await sink.start();
     engine.start();
     const nowMs = Date.now();
     for (let i = 0; i < 5; i++) {
@@ -199,13 +297,17 @@ describe('bootstrap TFC canary', () => {
       );
     }
     await engine.ingestSnapshot(snap({ nowMs, secsLeft: 15, btc: 100.6 }));
+    const sinkEntry = [...engine.journal].reverse().find((j) => j.type === 'sink');
+    await sink.reconcileOrder(sinkEntry.intentId);
     const status = engine.getStatus();
     assert.ok(status.position.qty > 0, 'posição deveria abrir no fill mock');
     assert.equal(status.position.side, 'UP');
 
     const report = buildMicroLiveReport({
-      intent: [...engine.journal].reverse().find((j) => j.type === 'sink')?.intent,
-      events: [...engine.journal].reverse().find((j) => j.type === 'sink')?.events,
+      intent: sinkEntry.intent,
+      events: engine.journal
+        .filter((row) => row.type === 'execution' && row.event?.intentId === sinkEntry.intentId)
+        .map((row) => row.event),
       position: status.position,
       askAtSignal: 0.62,
     });

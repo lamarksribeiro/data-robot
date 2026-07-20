@@ -68,6 +68,7 @@ export function createEngine(opts) {
   let lastDiagnostics = {};
   let haltReason = null;
   let intentSeq = 0;
+  let restored = false;
   const journal = [];
   const pendingIntents = new Map();
 
@@ -123,8 +124,7 @@ export function createEngine(opts) {
       const closeQty = Math.min(position.qty, qty);
       let pnlDelta = 0;
       if (position.avgPrice != null && price != null) {
-        const dir = position.side === 'UP' ? 1 : -1;
-        pnlDelta = dir * (price - position.avgPrice) * closeQty;
+        pnlDelta = (price - position.avgPrice) * closeQty;
         position.realizedPnl += pnlDelta;
       }
       if (pnlDelta !== 0 && typeof riskEngine.recordPnl === 'function') {
@@ -184,9 +184,13 @@ export function createEngine(opts) {
         kind: intent.kind,
         side: intent.side,
         budget: intent.budget,
+        quantity: intent.quantity ?? null,
         maxPrice: intent.maxPrice,
+        minPrice: intent.minPrice ?? null,
+        deadlineMs: intent.deadlineMs ?? null,
         orderType: intent.orderType ?? null,
         reason: intent.reason,
+        presetId: intent.presetId ?? null,
         marketId: intent.marketId,
         tokenId: intent.tokenId ?? null,
       },
@@ -207,11 +211,22 @@ export function createEngine(opts) {
   }
 
   async function ingestExecutionEvent(event) {
+    const pendingBefore = event.intentId ? pendingIntents.get(event.intentId) : null;
     journal.push({ type: 'execution', event, tsMs: clock() });
     applyFill(event);
 
     if (event.type === 'FILL' || event.type === 'CANCEL' || event.type === 'REJECT') {
       if (event.intentId) pendingIntents.delete(event.intentId);
+    }
+
+    if (
+      pendingBefore &&
+      (event.type === 'FILL' || event.type === 'CANCEL' || event.type === 'REJECT') &&
+      typeof riskEngine.accountBook?.set === 'function'
+    ) {
+      const openNotional =
+        position.qty > 0 && position.avgPrice != null ? position.qty * position.avgPrice : 0;
+      riskEngine.accountBook.set(strategyInstanceId, openNotional);
     }
 
     if (state === 'HALTED') return;
@@ -239,14 +254,23 @@ export function createEngine(opts) {
   async function safeShutdown(reason = 'shutdown') {
     haltReason = reason;
     if (state !== 'HALTED') transition('HALTED', reason);
-    pendingIntents.clear();
 
     let canceled = [];
-    if (typeof sink.cancelOnDisconnect === 'function') {
-      const r = sink.cancelOnDisconnect();
+    if (typeof sink.cancelOpenOrders === 'function') {
+      const r = await sink.cancelOpenOrders(reason);
+      canceled = r?.canceled ?? [];
+    } else if (typeof sink.cancelOnDisconnect === 'function') {
+      const r = await sink.cancelOnDisconnect();
       canceled = r?.canceled ?? [];
     } else if (typeof sink.dispose === 'function') {
       sink.dispose();
+    }
+
+    pendingIntents.clear();
+    if (typeof riskEngine.accountBook?.set === 'function') {
+      const openNotional =
+        position.qty > 0 && position.avgPrice != null ? position.qty * position.avgPrice : 0;
+      riskEngine.accountBook.set(strategyInstanceId, openNotional);
     }
 
     journal.push({ type: 'shutdown', reason, canceled, tsMs: clock() });
@@ -284,6 +308,8 @@ export function createEngine(opts) {
         throw new Error(`start inválido em ${state}`);
       }
 
+      if (mode === 'live' && typeof sink.assertReady === 'function') sink.assertReady();
+
       if (typeof riskEngine.runPreflight === 'function') {
         const pf = riskEngine.runPreflight({ mode });
         if (!pf.ok) {
@@ -297,26 +323,29 @@ export function createEngine(opts) {
       }
 
       haltReason = null;
-      const init = strategy.initialize(
-        buildStrategyContext({
-          snapshot: lastSnapshot ?? {
-            marketId: 'bootstrap',
-            nowMs: clock(),
-            secsLeft: null,
-            btc: null,
-            priceToBeat: null,
-            book: {},
-          },
-          position: { ...position },
-          mode,
-          clockMs: clock(),
+      if (!restored) {
+        const init = strategy.initialize(
+          buildStrategyContext({
+            snapshot: lastSnapshot ?? {
+              marketId: 'bootstrap',
+              nowMs: clock(),
+              secsLeft: null,
+              btc: null,
+              priceToBeat: null,
+              book: {},
+            },
+            position: { ...position },
+            mode,
+            clockMs: clock(),
+            preset,
+            strategyInstanceId,
+          }),
           preset,
-          strategyInstanceId,
-        }),
-        preset,
-      );
-      strategyState = init?.state ?? {};
-      lastDiagnostics = init?.diagnostics ?? {};
+        );
+        strategyState = init?.state ?? {};
+        lastDiagnostics = init?.diagnostics ?? {};
+      }
+      restored = false;
       transition('ACCOUNT_READY', 'start');
       transition('MARKET_SYNCING', 'start');
       transition('OBSERVING', 'start');
@@ -459,6 +488,7 @@ export function createEngine(opts) {
       }
 
       state = cp.engineState === 'HALTED' ? 'HALTED' : 'BOOT';
+      restored = true;
       journal.push({
         type: 'restore',
         from: cp.savedAtMs,
@@ -487,6 +517,16 @@ export function createEngine(opts) {
       };
     },
   };
+
+  if (typeof sink.onExecutionEvent === 'function') {
+    sink.onExecutionEvent((event) => ingestExecutionEvent(event));
+  }
+  if (typeof sink.onCritical === 'function') {
+    sink.onCritical((detail) => {
+      if (state !== 'HALTED') return safeShutdown(detail?.reason ?? 'sink-critical');
+      return null;
+    });
+  }
 
   return api;
 }

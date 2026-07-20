@@ -41,6 +41,11 @@ export function createOms(opts = {}) {
     return byIntent.get(intentId) ?? null;
   }
 
+  function findOrderByExchangeId(exchangeOrderId) {
+    const intentId = byExchangeId.get(exchangeOrderId);
+    return intentId ? publicOrder(byIntent.get(intentId)) : null;
+  }
+
   /**
    * Registra intenção de forma idempotente.
    * @param {import('../engine/schemas.js').TradeIntent} intent
@@ -302,6 +307,7 @@ export function createOms(opts = {}) {
       return o ? publicOrder(o) : null;
     },
     getOrderRaw,
+    findOrderByExchangeId,
     openOrders,
     listOrders,
     position: (instanceId) => positions.get(instanceId),

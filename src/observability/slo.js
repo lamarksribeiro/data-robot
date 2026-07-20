@@ -21,7 +21,7 @@ export function evaluateSlos(metricsSnapshot, health = {}, slos = DEFAULT_SLOS) 
   const decisionP99 = metricsSnapshot?.histograms?.decision_ms?.p99;
   checks.push({
     id: 'decision_p99',
-    ok: decisionP99 == null || decisionP99 <= slos.decisionP99Ms,
+    ok: decisionP99 != null && decisionP99 <= slos.decisionP99Ms,
     actual: decisionP99,
     target: slos.decisionP99Ms,
   });
@@ -29,7 +29,7 @@ export function evaluateSlos(metricsSnapshot, health = {}, slos = DEFAULT_SLOS) 
   const ingestP99 = metricsSnapshot?.histograms?.ingest_ms?.p99;
   checks.push({
     id: 'ingest_p99',
-    ok: ingestP99 == null || ingestP99 <= slos.ingestP99Ms,
+    ok: ingestP99 != null && ingestP99 <= slos.ingestP99Ms,
     actual: ingestP99,
     target: slos.ingestP99Ms,
   });
@@ -37,7 +37,7 @@ export function evaluateSlos(metricsSnapshot, health = {}, slos = DEFAULT_SLOS) 
   const availability = health.availability;
   checks.push({
     id: 'availability',
-    ok: availability == null || availability >= slos.availabilityMin,
+    ok: availability != null && availability >= slos.availabilityMin,
     actual: availability,
     target: slos.availabilityMin,
   });
@@ -48,6 +48,16 @@ export function evaluateSlos(metricsSnapshot, health = {}, slos = DEFAULT_SLOS) 
     ok: orphans <= slos.maxOrphanOrders,
     actual: orphans,
     target: slos.maxOrphanOrders,
+  });
+
+  const riskViolations = metricsSnapshot?.gauges?.risk_violations;
+  checks.push({
+    id: 'risk_violations',
+    ok:
+      riskViolations != null &&
+      riskViolations <= Number(slos.maxRiskViolationsInSoak ?? 0),
+    actual: riskViolations ?? null,
+    target: Number(slos.maxRiskViolationsInSoak ?? 0),
   });
 
   return {

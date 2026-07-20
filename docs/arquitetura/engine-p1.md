@@ -5,7 +5,7 @@ Status: **implementado** (2026-07-18).
 ## O que existe
 
 ```text
-snapshot → strategy.onSnapshot → intents → risk → sink (dry-run|shadow|live-stub)
+snapshot → strategy.onSnapshot → intents → risk → sink (dry-run|shadow|live fail-closed)
                                               ↓
                                     execution events → position + strategy.onExecutionEvent
 ```
@@ -21,7 +21,7 @@ snapshot → strategy.onSnapshot → intents → risk → sink (dry-run|shadow|l
 |------|------|---------|
 | `dry-run` | ACK sem fill | não abre |
 | `shadow` | ACK + FILL simulado | atualiza |
-| `live` | REJECT stub até P3 | — |
+| `live` | Exige sink iniciado, preflight obrigatório e composição CLOB/User WS | atualiza somente por evento reconciliado |
 
 ## Uso rápido
 
@@ -48,6 +48,6 @@ console.log(engine.getStatus());
 
 Trocar para `fixture-spread-wide` não altera o core — só `strategyId` + preset.
 
-## Próximo (P2)
+## Evolução P2+
 
-Adapters de mercado reais, watchdogs de feed e replay determinístico alimentando o mesmo `ingestSnapshot`.
+Adapters de mercado, watchdogs e replay já alimentam o mesmo `ingestSnapshot`. Evidência operacional e promoção continuam nos gates P3–P9 do roadmap.
