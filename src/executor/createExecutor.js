@@ -1,8 +1,9 @@
+import { createSimTransport, createLiveTransportStub } from './transport.js';
+import { createLiveTransport } from './liveTransport.js';
+
 /**
  * Executor — traduz intent/OMS order → transport; não conhece strategy.
  */
-
-import { createSimTransport, createLiveTransportStub } from './transport.js';
 
 /**
  * @param {object} opts
@@ -96,7 +97,13 @@ export function createExecutor(opts) {
 }
 
 export function createTransportForMode(mode, opts = {}) {
-  if (mode === 'live') return createLiveTransportStub();
+  if (opts.transport) return opts.transport;
+  if (mode === 'live') {
+    if (opts.client && opts.Side && opts.OrderType) {
+      return createLiveTransport(opts);
+    }
+    return createLiveTransportStub();
+  }
   if (mode === 'dry-run') {
     return createSimTransport({ ...opts, behavior: opts.behavior ?? 'dry' });
   }

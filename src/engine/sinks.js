@@ -20,7 +20,7 @@ export function createShadowSink(opts = {}) {
   return createOmsSink({ mode: 'shadow', simBehavior: opts.behavior, ...opts });
 }
 
-/** Live stub via OMS — não chama CLOB real. */
+/** Live via OMS — passa transport/client via opts; default stub em createOmsSink. */
 export function createLiveStubSink(opts = {}) {
   return createOmsSink({ mode: 'live', ...opts });
 }

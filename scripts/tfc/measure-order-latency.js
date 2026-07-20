@@ -18,6 +18,7 @@
 import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { OrderType, Side } from '@polymarket/clob-client-v2';
 import { buildClobClient } from '../../src/clob/buildClient.js';
 import { createSigner } from '../../src/clob/wallet.js';
@@ -112,7 +113,7 @@ async function runOnce(client, event) {
   }
 }
 
-async function main() {
+export async function main() {
   requireLiveFlag('tfc:latency', {
     hint: 'npm run tfc:latency -- --live --label=local --repeat=3',
   });
@@ -186,7 +187,12 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(`[tfc:latency] ${err.message}`);
-  process.exit(1);
-});
+const isDirect = process.argv[1]
+  && path.resolve(fileURLToPath(import.meta.url)) === path.resolve(process.argv[1]);
+
+if (isDirect) {
+  main().catch((err) => {
+    console.error(`[tfc:latency] ${err.message}`);
+    process.exit(1);
+  });
+}

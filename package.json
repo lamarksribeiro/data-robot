@@ -1,6 +1,6 @@
 {
   "name": "data-robot",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Robô de trading real GoldenLens — Polymarket BTC 5m",
   "type": "module",
   "main": "src/index.js",
@@ -17,8 +17,10 @@
     "test:fee": "node scripts/fees/maker-vs-taker.js",
     "tfc:watch": "node scripts/tfc/watch-terminal.js",
     "tfc:latency": "node scripts/tfc/measure-order-latency.js",
+    "tfc:latency:giovanna-exit": "node scripts/tfc/latency-via-giovanna-exit.js",
     "tfc:latency:compare": "node scripts/tfc/compare-latency.js",
     "tfc:micro-entry": "node scripts/tfc/micro-entry.js",
+    "tfc:micro-live": "node scripts/tfc/micro-live.js",
     "lint": "node scripts/lint-check.js",
     "test": "node scripts/run-tests.js",
     "ci": "npm run lint && npm run check:architecture && npm test",
@@ -34,6 +36,7 @@
     "dotenv": "^16.4.0",
     "ethers": "^6.13.0",
     "sirv-cli": "^2.0.2",
+    "socks-proxy-agent": "^10.1.0",
     "ws": "^8.18.0"
   },
   "engines": {

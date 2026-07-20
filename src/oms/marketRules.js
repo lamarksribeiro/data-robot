@@ -53,6 +53,7 @@ export function materializeOrderRequest(intent, rules = {}) {
     marketId: intent.marketId,
     strategyInstanceId: intent.strategyInstanceId,
     tokenSide: intent.side,
+    tokenId: intent.tokenId ?? null,
     tradeSide: side,
     orderType,
     price: qPrice,

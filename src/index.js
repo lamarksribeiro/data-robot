@@ -15,7 +15,7 @@ export {
   spotVolatility,
   orderBookImbalance,
 } from './tfc/evaluate.js';
-export { TFC_V7, MICRO_TEST } from './tfc/preset-v7.js';
+export { TFC_V7, MICRO_TEST, CANARY_LIMITS, canaryPreset } from './tfc/preset-v7.js';
 export { TFC_V6_HYBRID } from './tfc/preset-v6-hybrid.js';
 export { calculateTakerFee, summarizeTradeFees } from './fees/polymarketFee.js';
 export { RUN_SCHEMA_VERSION, sanitizeRunRecord } from './runs/schema.js';
@@ -82,3 +82,6 @@ export {
   mergeTfcV7Preset,
 } from './strategy/tfcV7.js';
 export { defaultPresetFor } from './composition/presets.js';
+export { bootstrapTfcCanaryEngine } from './composition/tfcCanary.js';
+export { createLiveTransport, createMockClobClient } from './executor/liveTransport.js';
+export { buildMicroLiveReport, compareIntentParity } from './oms/microLiveReport.js';
