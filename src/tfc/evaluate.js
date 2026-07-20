@@ -218,8 +218,15 @@ export function evaluateDangerExit(snapshot, params, positionSide, history = [])
   const dist = signedDistance(positionSide, snapshot.btc, snapshot.priceToBeat);
   const sigma = spotVolatility(history, 5, snapshot.nowMs);
   const threshold = (params.dangerExitK ?? 0.3) * sigma;
+  const bid = snapshot.book?.[positionSide.toLowerCase()]?.bestBid ?? null;
+  const bidOk = bid != null && bid >= Number(params.stopMinBid ?? 0);
   const active =
-    inWindow && dist != null && Number.isFinite(sigma) && Math.abs(dist) < threshold && threshold > 0;
+    inWindow &&
+    bidOk &&
+    dist != null &&
+    Number.isFinite(sigma) &&
+    Math.abs(dist) < threshold &&
+    threshold > 0;
 
   return {
     active: Boolean(active),
@@ -227,7 +234,8 @@ export function evaluateDangerExit(snapshot, params, positionSide, history = [])
     sigma,
     threshold,
     secsLeft,
-    bid: snapshot.book?.[positionSide.toLowerCase()]?.bestBid ?? null,
+    bid,
+    bidOk,
     reason: 'danger_exit',
   };
 }

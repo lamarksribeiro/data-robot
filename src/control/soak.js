@@ -11,14 +11,20 @@
  * @param {(i: number) => void} [opts.onTick]
  */
 export async function runSoak(app, opts) {
-  const iterations = opts.iterations ?? 100;
+  const requestedIterations = opts.iterations ?? 100;
+  const durationMs = Math.max(0, Number(opts.durationMs ?? 0));
+  const intervalMs = Math.max(0, Number(opts.intervalMs ?? 0));
   const makeSnapshot = opts.makeSnapshot;
   if (typeof makeSnapshot !== 'function') throw new Error('makeSnapshot obrigatório');
 
   let divergences = 0;
   let riskBlocks = 0;
 
-  for (let i = 0; i < iterations; i++) {
+  const startedAtMs = Date.now();
+  const deadlineMs = startedAtMs + durationMs;
+  let iterations = 0;
+  while (durationMs > 0 ? Date.now() < deadlineMs : iterations < requestedIterations) {
+    const i = iterations;
     const snap = makeSnapshot(i);
     const beforeOrders = app.sink.oms?.listOrders?.().length ?? 0;
     await app.ingestSynthetic(snap);
@@ -35,6 +41,10 @@ export async function runSoak(app, opts) {
     riskBlocks = denied;
 
     if (typeof opts.onTick === 'function') opts.onTick(i, { beforeOrders, afterOrders });
+    iterations += 1;
+    if (intervalMs > 0 && (durationMs === 0 || Date.now() < deadlineMs)) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
   }
 
   const slos = app.evaluateSlos();
@@ -43,12 +53,13 @@ export async function runSoak(app, opts) {
 
   return {
     iterations,
+    durationMs: Date.now() - startedAtMs,
     divergences,
     riskBlocks,
     orphans,
     slos,
     health,
     metrics: app.metricsSnap(),
-    ok: divergences === 0 && orphans === 0 && slos.ok,
+    ok: divergences === 0 && orphans === 0 && riskBlocks === 0 && slos.ok,
   };
 }

@@ -2,7 +2,7 @@
 
 Executor de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
 
-**Status:** P0–P7 (código) concluídos. Deploy Coolify Giovanna: https://robot.giovannarosito.com. Ops: migrar DNS `robot.fracta.online`, soak, ≥10 micro-lives. Saídas V7 = P8.
+**Status:** núcleo P0–P7 e proteções live implementados; gates operacionais P3–P7 ainda abertos. Não é produção autônoma. UI Coolify: https://robot.giovannarosito.com. Próximos gates: engine separada, shadow/soak real e somente depois ≥10 micro-lives. Saídas V7 = P8.
 
 Substitui o `polymarket-robot` como base do novo desenvolvimento.
 
@@ -32,7 +32,7 @@ npm run ci
 | `npm run test:order -- --live --wait 15` | Ordem teste UP (**exige --live**) |
 | `npm run lint` / `npm test` / `npm run ci` | Qualidade local / CI |
 | `npm run engine:serve` | Processo da engine + control HTTP (`:3201`) |
-| `npm run engine:soak` | Soak curto com fixtures (sem CLOB) |
+| `npm run engine:soak` | Soak com fixtures; suporta `--duration-hours` e `--interval-ms` |
 | `npm run tfc:watch` | Gates TFC V7 observe-only |
 | `npm run tfc:micro-entry` | Legado: dry-run/micro CLOB direto (não usar p/ promoção) |
 | `npm run tfc:micro-live` | P7: micro-entrada via engine (`--live` para real) |

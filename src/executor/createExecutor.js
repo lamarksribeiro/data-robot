@@ -21,6 +21,24 @@ export function createExecutor(opts) {
    * @param {import('../engine/schemas.js').TradeIntent} intent
    */
   async function executeIntent(intent) {
+    if (intent.deadlineMs != null && clock() >= Number(intent.deadlineMs)) {
+      return {
+        accepted: false,
+        deduped: false,
+        events: [
+          {
+            eventId: `exec-deadline-${intent.intentId}`,
+            intentId: intent.intentId,
+            type: 'REJECT',
+            side: intent.side,
+            qty: 0,
+            price: null,
+            reason: 'DEADLINE_EXPIRED',
+            tsMs: clock(),
+          },
+        ],
+      };
+    }
     const { order, deduped, request } = oms.registerIntent(intent);
 
     if (order.state === 'REJECTED') {

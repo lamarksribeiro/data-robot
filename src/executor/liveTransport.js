@@ -38,10 +38,7 @@ export function createLiveTransport(opts) {
     return Side.BUY;
   }
 
-  function isFilledStatus(status) {
-    const s = String(status || '').toLowerCase();
-    return s === 'matched' || s === 'filled' || s.includes('match');
-  }
+  let stopHeartbeat = null;
 
   return {
     kind: 'live',
@@ -83,6 +80,23 @@ export function createLiveTransport(opts) {
               qty: 0,
               price: null,
               reason: 'INVALID_SIZE_OR_PRICE',
+              tsMs,
+            },
+          ],
+        };
+      }
+      if (request.deadlineMs != null && tsMs >= Number(request.deadlineMs)) {
+        return {
+          accepted: false,
+          exchangeOrderId: null,
+          events: [
+            {
+              eventId: `live-rej-deadline-${order.intentId}`,
+              intentId: order.intentId,
+              type: 'REJECT',
+              qty: 0,
+              price: null,
+              reason: 'DEADLINE_EXPIRED',
               tsMs,
             },
           ],
@@ -144,21 +158,17 @@ export function createLiveTransport(opts) {
           },
         ];
 
-        if (isFilledStatus(resp.status)) {
-          events.push({
-            eventId: `live-fill-${order.intentId}`,
-            intentId: order.intentId,
-            exchangeOrderId,
-            type: 'FILL',
-            side: order.tokenSide,
-            qty: request.size,
-            price: request.price,
-            reason: 'clob_matched',
-            tsMs: tsMs + 1,
-          });
-        }
-
-        return { accepted: true, exchangeOrderId, events };
+        return {
+          accepted: true,
+          exchangeOrderId,
+          events,
+          placement: {
+            status: resp.status ?? null,
+            tradeIds: resp.tradeIDs ?? [],
+            takingAmount: resp.takingAmount ?? null,
+            makingAmount: resp.makingAmount ?? null,
+          },
+        };
       } catch (err) {
         log.push({ action: 'submit_error', intentId: order.intentId, error: err.message, tsMs });
         return {
@@ -243,6 +253,135 @@ export function createLiveTransport(opts) {
       if (typeof client.getOpenOrders !== 'function') return [];
       return client.getOpenOrders();
     },
+
+    async reconcile(order) {
+      const tsMs = clock();
+      if (!order?.exchangeOrderId || typeof client.getOrder !== 'function') {
+        return { ok: false, events: [], reason: 'GET_ORDER_UNAVAILABLE' };
+      }
+      try {
+        const remote = await client.getOrder(order.exchangeOrderId);
+        const original = Number(remote?.original_size ?? order.qty) || Number(order.qty) || 0;
+        const matched = Number(remote?.size_matched ?? 0) || 0;
+        const already = Number(order.qtyFilled ?? 0) || 0;
+        const delta = Math.max(0, matched - already);
+        const status = String(remote?.status ?? '').toUpperCase();
+        const events = [];
+
+        if (delta > 0) {
+          let fillPrice = Number(remote?.price ?? order.price);
+          const tradeIds = remote?.associate_trades ?? [];
+          if (tradeIds.length && typeof client.getTrades === 'function') {
+            const fills = [];
+            for (const tradeId of tradeIds) {
+              const trades = await client.getTrades({ id: tradeId }, true);
+              for (const trade of trades ?? []) {
+                if (trade.taker_order_id === order.exchangeOrderId) {
+                  fills.push({ qty: Number(trade.size), price: Number(trade.price) });
+                }
+                for (const maker of trade.maker_orders ?? []) {
+                  if (maker.order_id === order.exchangeOrderId) {
+                    fills.push({ qty: Number(maker.matched_amount), price: Number(maker.price) });
+                  }
+                }
+              }
+            }
+            const qty = fills.reduce((sum, fill) => sum + (Number(fill.qty) || 0), 0);
+            if (qty > 0) {
+              fillPrice =
+                fills.reduce(
+                  (sum, fill) => sum + (Number(fill.qty) || 0) * (Number(fill.price) || 0),
+                  0,
+                ) / qty;
+            }
+          }
+          events.push({
+            eventId: `rest-fill-${order.intentId}-${matched}`,
+            intentId: order.intentId,
+            exchangeOrderId: order.exchangeOrderId,
+            type: matched >= original ? 'FILL' : 'PARTIAL',
+            side: order.tokenSide,
+            qty: delta,
+            price: fillPrice,
+            reason: 'rest_reconcile',
+            tsMs,
+          });
+        }
+
+        if (status === 'LIVE' || status === 'OPEN' || status === 'DELAYED') {
+          if (events.length === 0) {
+            events.push({
+              eventId: `rest-ack-${order.intentId}-${status}`,
+              intentId: order.intentId,
+              exchangeOrderId: order.exchangeOrderId,
+              type: 'ACK',
+              qty: 0,
+              price: Number(remote?.price ?? order.price),
+              reason: `rest_${status.toLowerCase()}`,
+              tsMs,
+            });
+          }
+        } else if (
+          ['CANCELED', 'CANCELLED', 'UNMATCHED'].includes(status) &&
+          matched < original
+        ) {
+          events.push({
+            eventId: `rest-cancel-${order.intentId}-${matched}`,
+            intentId: order.intentId,
+            exchangeOrderId: order.exchangeOrderId,
+            type: 'CANCEL',
+            qty: 0,
+            price: Number(remote?.price ?? order.price),
+            reason: `rest_${status.toLowerCase()}`,
+            tsMs: tsMs + events.length,
+          });
+        }
+
+        return { ok: true, events, remote };
+      } catch (err) {
+        return { ok: false, events: [], reason: err.message || 'RECONCILE_ERROR' };
+      }
+    },
+
+    async cancelAll() {
+      if (typeof client.cancelAll !== 'function') return { canceled: [], notCanceled: {} };
+      const response = await client.cancelAll();
+      return {
+        canceled: response?.canceled ?? [],
+        notCanceled: response?.not_canceled ?? {},
+      };
+    },
+
+    async startHeartbeat(onFailure, intervalMs = 5000) {
+      if (typeof client.postHeartbeat !== 'function') {
+        throw new Error('CLOB heartbeat indisponível no client');
+      }
+      let heartbeatId = '';
+      let busy = false;
+      const beat = async (failClosed = false) => {
+        if (busy) return;
+        busy = true;
+        try {
+          const response = await client.postHeartbeat(heartbeatId);
+          heartbeatId = response?.heartbeat_id ?? heartbeatId;
+        } catch (err) {
+          if (typeof onFailure === 'function') onFailure(err);
+          if (failClosed) throw err;
+        } finally {
+          busy = false;
+        }
+      };
+      await beat(true);
+      const timer = setInterval(beat, intervalMs);
+      if (timer.unref) timer.unref();
+      stopHeartbeat = () => clearInterval(timer);
+      return stopHeartbeat;
+    },
+
+    stopHeartbeat() {
+      stopHeartbeat?.();
+      stopHeartbeat = null;
+    },
   };
 }
 
@@ -266,8 +405,24 @@ export function createMockClobClient(opts = {}) {
       seq += 1;
       const orderID = `mock-ord-${seq}`;
       const status = behavior === 'matched' ? 'matched' : 'live';
-      orders.set(orderID, { ...args, orderID, status });
-      return { success: true, orderID, status };
+      orders.set(orderID, {
+        ...args,
+        id: orderID,
+        orderID,
+        status,
+        original_size: String(args.size),
+        size_matched: behavior === 'matched' ? String(args.size) : '0',
+        price: String(args.price),
+        associate_trades: [],
+      });
+      return {
+        success: true,
+        orderID,
+        status,
+        takingAmount: behavior === 'matched' ? String(args.size) : '0',
+        makingAmount: behavior === 'matched' ? String(args.size * args.price) : '0',
+        tradeIDs: [],
+      };
     },
     async cancelOrder({ orderID }) {
       if (!orders.has(orderID)) return { success: false, canceled: [] };
@@ -277,8 +432,21 @@ export function createMockClobClient(opts = {}) {
     async getOpenOrders() {
       return [...orders.values()].filter((o) => o.status === 'live').map((o) => ({ id: o.orderID }));
     },
+    async getOrder(orderID) {
+      const order = orders.get(orderID);
+      if (!order) throw new Error('mock order not found');
+      return { ...order };
+    },
     async getTrades() {
       return [];
+    },
+    async postHeartbeat(id = '') {
+      return { heartbeat_id: id || 'mock-heartbeat' };
+    },
+    async cancelAll() {
+      const canceled = [...orders.keys()];
+      orders.clear();
+      return { canceled, not_canceled: {} };
     },
   };
 }

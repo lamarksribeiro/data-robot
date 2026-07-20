@@ -1,6 +1,6 @@
 # OMS P3 — ordens, executor, journal, reconciliação
 
-Status: **implementado** (2026-07-18). CLOB user-WS autenticado real ainda é stub estrutural (`live-stub`).
+Status: **código sim + live implementado** (endurecido em 2026-07-20). A validação real prolongada no Giovanna continua sendo gate operacional.
 
 ## Componentes
 
@@ -10,10 +10,11 @@ Status: **implementado** (2026-07-18). CLOB user-WS autenticado real ainda é st
 | `src/oms/states.js` | CREATED→…→MATCHED/CANCELED/REJECTED/UNKNOWN |
 | `src/oms/journal.js` | Append-only + checkpoint |
 | `src/oms/positionLedger.js` | Posição por instância + exposição agregada |
-| `src/oms/reconciler.js` | UNKNOWN / duplicatas / REST snapshot |
+| `src/oms/reconciler.js` | UNKNOWN / duplicatas / REST snapshot / órfãs remotas |
 | `src/oms/omsSink.js` | Sink da engine (dry-run/shadow/live) |
-| `src/executor/transport.js` | Sim determinístico + live-stub |
-| `src/executor/userChannel.js` | Canal de usuário (sim) + heartbeat + cancel-on-disconnect |
+| `src/executor/transport.js` | Sim determinístico + stub fail-closed |
+| `src/executor/liveTransport.js` | Place/cancel/reconcile REST + heartbeat CLOB real |
+| `src/executor/userChannel.js` | Canal sim ou WS autenticado, PING/PONG e normalização order/trade |
 | `src/executor/createExecutor.js` | Intent → transport → OMS |
 
 ## Contrato com a strategy
@@ -28,7 +29,7 @@ Status: **implementado** (2026-07-18). CLOB user-WS autenticado real ainda é st
 |------|-----------|---------------------|
 | `dry-run` | sim `dry` (ACK+CANCEL) | CANCELED, sem posição |
 | `shadow` | sim `full` / `partial` | MATCHED |
-| `live` | live-stub | REJECT até CLOB real |
+| `live` | CLOB + user WS + REST | ACK no POST; PARTIAL/FILL/CANCEL só por evento/reconciliação |
 
 ## Recovery
 
@@ -39,3 +40,10 @@ const entries = oms.journal.snapshot();
 oms2.restoreFromJournal(entries);
 // posição e ordens restauradas antes de nova intenção
 ```
+
+## Gate real ainda aberto
+
+- provar User WS + REST sem fill duplicado;
+- provar heartbeat/cancel remoto durante desconexão e shutdown;
+- reconciliar restart com ordem aberta, partial fill e posição existente;
+- zero ordem remota sem intent/journal local.

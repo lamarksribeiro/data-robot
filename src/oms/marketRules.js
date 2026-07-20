@@ -59,6 +59,7 @@ export function materializeOrderRequest(intent, rules = {}) {
     price: qPrice,
     size: qSize,
     reason: intent.reason,
+    deadlineMs: intent.deadlineMs ?? null,
     valid:
       intent.kind === 'CANCEL' ||
       (qSize != null && qSize > 0 && (intent.kind === 'EXIT' ? true : qPrice != null)),

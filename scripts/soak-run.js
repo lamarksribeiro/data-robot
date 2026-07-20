@@ -4,6 +4,7 @@
  *
  *   npm run engine:soak
  *   npm run engine:soak -- --iterations=500
+ *   npm run engine:soak -- --duration-hours=168 --interval-ms=1000
  */
 
 import { createEngineApp } from '../src/control/engineApp.js';
@@ -19,6 +20,12 @@ function parseArgs(argv) {
   };
   return {
     iterations: Math.max(1, parseInt(valueOf('--iterations') ?? process.env.ENGINE_SOAK_ITERATIONS ?? '100', 10)),
+    durationMs:
+      Math.max(0, Number(valueOf('--duration-hours') ?? process.env.ENGINE_SOAK_HOURS ?? 0)) *
+      60 *
+      60 *
+      1000,
+    intervalMs: Math.max(0, Number(valueOf('--interval-ms') ?? process.env.ENGINE_SOAK_INTERVAL_MS ?? 0)),
     json: args.includes('--json'),
   };
 }
@@ -34,6 +41,8 @@ await app.start();
 
 const report = await runSoak(app, {
   iterations: opts.iterations,
+  durationMs: opts.durationMs,
+  intervalMs: opts.intervalMs,
   makeSnapshot: (i) => ({
     marketId: 'soak-mkt',
     nowMs: Date.now() + i,

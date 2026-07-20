@@ -36,6 +36,7 @@ export function createRiskEngine(opts = {}) {
     /** Cap P7 — se setado (ou canaryMode), bloqueia notional acima deste valor. */
     maxCanaryBudget: opts.maxCanaryBudget ?? null,
     canaryMode: opts.canaryMode === true,
+    allowLiveReverse: opts.allowLiveReverse === true,
   };
 
   const accountBook = opts.accountBook ?? createAccountRiskBook({
@@ -112,6 +113,22 @@ export function createRiskEngine(opts = {}) {
 
     if (ctx.mode === 'live' && !preflight.liveEnabled) {
       return deny(RISK_REASON.LIVE_DISABLED, { liveEnabled: false }, meta);
+    }
+
+    if (intent.deadlineMs != null && clock() >= Number(intent.deadlineMs)) {
+      return deny(
+        RISK_REASON.DEADLINE_EXPIRED,
+        { deadlineMs: Number(intent.deadlineMs), nowMs: clock() },
+        meta,
+      );
+    }
+
+    if (ctx.mode === 'live' && intent.kind === 'REVERSE' && !limits.allowLiveReverse) {
+      return deny(
+        RISK_REASON.LIVE_REVERSE_UNSUPPORTED,
+        { reason: 'reverse exige saga SELL -> reconcile -> BUY' },
+        meta,
+      );
     }
 
     // Ação tática abaixo do piso — só CANCEL passa

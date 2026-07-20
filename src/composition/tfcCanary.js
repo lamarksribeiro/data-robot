@@ -4,7 +4,7 @@
 
 import { createOmsSink } from '../oms/omsSink.js';
 import { createLiveTransport } from '../executor/liveTransport.js';
-import { createLiveTransportStub } from '../executor/transport.js';
+import { createUserChannel } from '../executor/userChannel.js';
 import { CANARY_LIMITS, canaryPreset } from '../tfc/preset-v7.js';
 import { TFC_V7_STRATEGY_ID } from '../strategy/tfcV7.js';
 import { bootstrapEngine } from './bootstrap.js';
@@ -33,7 +33,7 @@ export function bootstrapTfcCanaryEngine(opts = {}) {
   }
 
   let transport = opts.transport;
-  if (!transport) {
+  if (!opts.sink && !transport) {
     if (mode === 'live') {
       if (opts.client && opts.Side && opts.OrderType) {
         transport = createLiveTransport({
@@ -44,10 +44,16 @@ export function bootstrapTfcCanaryEngine(opts = {}) {
           postOnly: opts.postOnly === true,
         });
       } else {
-        transport = createLiveTransportStub();
+        throw new Error('bootstrapTfcCanaryEngine: live exige client CLOB real');
       }
     }
   }
+
+  const userChannel =
+    opts.userChannel ??
+    (mode === 'live' && opts.client?.kind === 'mock-clob'
+      ? createUserChannel({ kind: 'sim', clock: opts.clock })
+      : null);
 
   const sink =
     opts.sink ??
@@ -55,6 +61,7 @@ export function bootstrapTfcCanaryEngine(opts = {}) {
       mode,
       transport,
       clock: opts.clock,
+      userChannel,
       withUserChannel: opts.withUserChannel === true,
     });
 
@@ -66,6 +73,7 @@ export function bootstrapTfcCanaryEngine(opts = {}) {
     clock: opts.clock,
     liveEnabled,
     riskOpts: {
+      ...(opts.riskOpts ?? {}),
       canaryMode: true,
       maxCanaryBudget: cap,
       maxNotionalPerOrder: Math.min(cap, Number(opts.riskOpts?.maxNotionalPerOrder ?? cap)),
@@ -73,9 +81,6 @@ export function bootstrapTfcCanaryEngine(opts = {}) {
       maxSlippage: opts.riskOpts?.maxSlippage ?? CANARY_LIMITS.maxSlippage,
       maxAccountExposure: opts.riskOpts?.maxAccountExposure ?? cap * 5,
       maxDailyLoss: opts.riskOpts?.maxDailyLoss ?? cap * 10,
-      ...(opts.riskOpts ?? {}),
-      canaryMode: true,
-      maxCanaryBudget: cap,
     },
   });
 

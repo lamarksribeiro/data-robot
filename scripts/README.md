@@ -51,12 +51,13 @@ npm run test:fee -- --mode=maker --live --size=5 --wait=120
 
 ## TFC V7 — validação incremental
 
-Ver [../docs/tfc-validacao-real.md](../docs/tfc-validacao-real.md). `watch` e `micro-entry` usam `preset-v7.js`.
+Ver [../docs/tfc-validacao-real.md](../docs/tfc-validacao-real.md). `micro-entry` é legado; somente `micro-live` passa pelo pipeline válido de promoção.
 
 | Script | npm | Descrição |
 |--------|-----|-----------|
 | `tfc/watch-terminal.js` | `tfc:watch` | Feeds + gates V7 (sem ordens) |
-| `tfc/micro-entry.js` | `tfc:micro-entry` | Dry-run / `--live` micro-entrada |
+| `tfc/micro-entry.js` | `tfc:micro-entry` | Legado/diagnóstico; não usar para promoção |
+| `tfc/micro-live.js` | `tfc:micro-live` | Strategy → risk → OMS → User WS/REST; live fail-closed |
 | `tfc/measure-order-latency.js` | `tfc:latency` | Latência (**`--live` obrigatório**) |
 | `tfc/compare-latency.js` | `tfc:latency:compare` | Compara `runs/latency-*.json` |
 
@@ -65,8 +66,9 @@ npm run tfc:watch -- --terminal-only
 npm run tfc:latency -- --live --label=local --repeat=3
 npm run tfc:latency -- --live --label=giovanna --repeat=5
 npm run tfc:latency:compare
-npm run tfc:micro-entry
-npm run tfc:micro-entry -- --live --cancel
+npm run tfc:micro-live
+# Somente após os gates operacionais:
+npm run tfc:micro-live -- --live --cancel --timeout=330
 ```
 
 ## Qualidade

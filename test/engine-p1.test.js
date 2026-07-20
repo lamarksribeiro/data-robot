@@ -143,11 +143,23 @@ describe('engine dry-run / shadow', () => {
 
   it('mesma máquina de estados nos modos', () => {
     for (const mode of ['dry-run', 'shadow', 'live']) {
+      const liveSink = {
+        assertReady: () => true,
+        submit: async () => ({ accepted: true, events: [] }),
+      };
+      const passingChecks = {
+        auth: () => ({ ok: true }),
+        geoblock: () => ({ ok: true, blocked: false }),
+        clock: () => ({ ok: true }),
+        balance: () => ({ ok: true }),
+      };
       const engine = bootstrapEngine({
         strategyId: 'fixture-price-cross',
         mode,
         preset: { threshold: 1 },
         liveEnabled: mode === 'live',
+        sink: mode === 'live' ? liveSink : undefined,
+        riskOpts: mode === 'live' ? { preflightChecks: passingChecks } : undefined,
       });
       const status = engine.start();
       assert.ok(ENGINE_STATES.includes(status.state));

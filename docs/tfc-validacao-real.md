@@ -4,7 +4,7 @@ Runbook incremental para validar a **Terminal Favorite Carry V7 Danger Floor** n
 
 > `--live` movimenta dinheiro real. Nunca execute uma fase live sem concluir e registrar a fase anterior.
 
-> Scripts que enviam ordem (`tfc:latency`, `test:order`, `tfc:micro-entry --live`, `test:fee --live`) recusam sem `--live` explícito (exit 2).
+> Scripts que enviam ordem (`tfc:latency`, `test:order`, `tfc:micro-entry --live`, `tfc:micro-live --live`, `test:fee --live`) exigem ativação live explícita.
 
 ## Princípios
 
@@ -20,7 +20,7 @@ Runbook incremental para validar a **Terminal Favorite Carry V7 Danger Floor** n
 
 Este runbook valida a TFC V7, não define a arquitetura da engine. A implementação válida deve executar a TFC pelo contrato de estratégia descrito no [plano de desenvolvimento](./plano-desenvolvimento.md): a estratégia recebe contexto normalizado e devolve intenções; somente risk, OMS e executor podem acessar a infraestrutura de ordens.
 
-Os scripts atuais `tfc:watch` e `tfc:micro-entry` ainda fazem orquestração específica e, no caso de `micro-entry`, chamam o CLOB diretamente. Eles servem como protótipos/diagnóstico, mas não devem virar a engine de produção por crescimento incremental.
+`tfc:watch` e `tfc:micro-entry` continuam legados/diagnóstico; `micro-entry` chama o CLOB diretamente e não vale para promoção. O caminho válido de P7 é `tfc:micro-live`, que passa por strategy → risk → OMS → transport e reconciliação.
 
 Para outra estratégia, cria-se outro módulo aderente ao mesmo contrato e um runbook próprio de sinais/paridade. Auth, feeds reutilizáveis, risk global, OMS, executor, journal, recovery, observabilidade e deploy continuam sendo os mesmos.
 
@@ -36,18 +36,18 @@ O alvo é `src/tfc/preset-v7.js`, espelho de `data-backtest/labs/strategies/term
 
 A V6 Hybrid é apenas referência histórica. Seu hedge stop não faz parte do plano de produção.
 
-## Estado das fases em 17/07/2026
+## Estado das fases em 20/07/2026
 
 | Fase | Estado | Evidência / próximo gate |
 |---|---|---|
-| F0 Conta e auth | Parcial | Scripts existem; tornar checks obrigatórios no startup. |
+| F0 Conta e auth | Código pronto; ops aberto | Preflight live obrigatório valida auth, identidade, saldo/allowance, clock, geoblock e ordens pré-existentes. Falta registrar evidência no Giovanna. |
 | F1 Feed + gates | Parcial | Scripts alinhados ao preset V7; falta evidência com amostras na janela 30→5s. |
 | F2 Latência | Baseline concluída | Local 1.723 ms; Giovanna 335 ms de mediana. Comando exige `--live`. Falta p95/p99. |
-| F3 Entrada dry/micro | Protótipo | `micro-entry` usa V7 + MICRO_TEST; ainda sem OMS/posição. |
-| F4 Late flip exit/reverse | Ausente | Implementar somente após OMS/risk/replay. |
-| F5 Danger exit | Ausente | Depende da paridade de volatilidade e de F4. |
-| F6 Recovery e risco | Ausente | User WS, journal, heartbeat, restart e kill switch. |
-| F7 Canário | Bloqueada | Depende de F0–F6 e critérios do roadmap. |
+| F3 Entrada dry/micro | Código pronto; campanha bloqueada | `tfc:micro-live` usa OMS/risk/User WS/REST, sem inferir fill pelo POST. Aguarda gates reais F0–F2/F6. |
+| F4 Late flip exit/reverse | Sinal pronto; execução ausente | `REVERSE` está bloqueado em live até saga SELL → reconcile → BUY. |
+| F5 Danger exit | Sinal pronto; execução ausente | Paridade sintética e bid fail-closed implementados; faltam shadow/live de saída. |
+| F6 Recovery e risco | Código pronto; ops aberto | Checkpoint durável, restore, heartbeat, cancel remoto e health existem; faltam soak/restart reais. |
+| F7 Canário | Bloqueada | Depende da evidência operacional F0–F6 e dos critérios do roadmap. |
 
 ## F0 — Conta, ambiente e preflight
 
@@ -106,7 +106,7 @@ Os limites de staleness são iniciais e devem ser calibrados sem relaxar o compo
 
 A meta inicial de total <700 ms no Giovanna foi atendida na mediana. Porém `getOpenOrders()` encontrou a ordem imediatamente em 2/5 tentativas no servidor e 0/3 localmente. Como todas foram canceladas, o teste deve medir tempo até visibilidade com polling e não apenas uma leitura imediata.
 
-Próxima medição, somente após o script exigir confirmação live e cancelar em `finally`:
+Próxima medição: o script já exige confirmação live e cancela em `finally`:
 
 ```bash
 npm run tfc:latency -- --live --label=giovanna --repeat=30 --note="baseline p95/p99"
@@ -138,17 +138,17 @@ Pré-requisitos:
 Sequência:
 
 ```powershell
-# 1. Apenas intenção
-npm run tfc:micro-entry -- --timeout=330
+# 1. Apenas intenção pelo pipeline válido
+npm run tfc:micro-live -- --timeout=330
 
 # 2. Ordem mínima e cancelamento/reconciliação
-npm run tfc:micro-entry -- --live --cancel --timeout=330
+npm run tfc:micro-live -- --live --cancel --timeout=330
 
 # 3. Fill real, somente após aprovação das etapas anteriores
-npm run tfc:micro-entry -- --live --timeout=330
+npm run tfc:micro-live -- --live --timeout=330
 ```
 
-O protótipo atual não satisfaz todos esses pré-requisitos. Em especial, uma GTC no ask pode ficar resting se não cruzar; a implementação de produção deve escolher explicitamente GTC/FAK/FOK, usar cap de preço e tratar fill parcial.
+O canário usa FAK, cap de preço e quantidade mínima de uma share. A resposta do POST é apenas ACK: User WS e REST determinam fill parcial/total, preço e cancelamento. Qualquer timeout vira `UNKNOWN`, dispara cancelamento e impede promoção.
 
 Critérios:
 

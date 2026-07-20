@@ -1,7 +1,7 @@
 # Micro-live P7 — entrada canário via engine
 
-Status: **código implementado** (2026-07-20). CI sem rede/ordens reais (transport mock).  
-**Ops pendente:** ≥10 entradas live em dias distintos com reconciliação.
+Status: **harness e proteções implementados** (2026-07-20). CI sem rede/ordens reais.
+**Campanha live bloqueada:** depende dos gates operacionais de User WS/recovery/Engine Ready; depois, ≥10 entradas em dias distintos.
 
 ## Pipeline
 
@@ -32,14 +32,16 @@ Reason code: `CANARY_BUDGET_EXCEEDED`.
 
 | Arquivo | Papel |
 |---------|-------|
-| `src/executor/liveTransport.js` | CLOB place/cancel (client injetável + mock) |
+| `src/executor/liveTransport.js` | CLOB place/cancel/reconcile + heartbeat (client injetável + mock) |
+| `src/executor/userChannel.js` | User WS autenticado e eventos order/trade |
+| `src/risk/livePreflight.js` | Checks read-only reais antes de armar live |
 | `src/composition/tfcCanary.js` | `bootstrapTfcCanaryEngine` |
 | `src/oms/microLiveReport.js` | Relatório fill/fee/slippage/órfã + paridade |
 | `scripts/tfc/micro-live.js` | Harness dry → live |
 
 ## Relatório
 
-`buildMicroLiveReport` exige timeline intenção → eventos → posição; marca `orphan` se ACK sem fill/cancel.
+`buildMicroLiveReport` exige timeline intenção → eventos → posição; marca `orphan` se ACK sem fill/cancel. O POST nunca gera fill artificial: FAK parcial/total vem de User WS ou REST.
 
 ## Gate ops (ainda aberto)
 

@@ -1,13 +1,14 @@
 # Risk P4 — fail-closed, kill, persistência
 
-Status: **implementado** (2026-07-18). Sem rede/VPN — checks de preflight são injetáveis.
+Status: **código endurecido** (2026-07-20). O canário executa preflight read-only real; ensaios de recovery live continuam pendentes.
 
 ## Módulos (`src/risk/`)
 
 | Arquivo | Papel |
 |---------|-------|
 | `createRiskEngine.js` | Pre-trade + limites + audit |
-| `preflight.js` | auth / geoblock / clock / balance / liveEnabled |
+| `preflight.js` | Gate síncrono fail-closed; check ausente bloqueia live |
+| `livePreflight.js` | Auth/identidade, clock, balance/allowance, geoblock e ordens abertas reais |
 | `accountBook.js` | Exposição agregada multi-instância |
 | `circuitBreaker.js` | Abre após N falhas consecutivas |
 | `killSwitch.js` | Trip + listeners |
@@ -17,8 +18,10 @@ Status: **implementado** (2026-07-18). Sem rede/VPN — checks de preflight são
 ## Engine
 
 - `start()` falha fechado se preflight negar
-- `kill()` / `safeShutdown()` → HALTED + cancel resting (OMS)
-- `checkpoint()` / `restore()` — strategy state migrável + OMS journal + risk snapshot
+- `kill()` / `safeShutdown()` → HALTED + cancel remoto verificado, com `cancelAll` de emergência
+- `checkpoint()` / `restore()` — strategy state migrável + OMS journal + risk snapshot duráveis
+- deadline é revalidado no risk e no executor
+- `REVERSE` live é negado até P8 implementar saga de duas pernas
 
 ## Limites default
 
@@ -29,3 +32,5 @@ Status: **implementado** (2026-07-18). Sem rede/VPN — checks de preflight são
 ## Gate
 
 Falhas injetadas (geoblock, health, notional, circuit, kill, exposição global) cobertas em `test/risk-p4.test.js`.
+
+Gate ops ainda aberto: restart real com ordem aberta/partial/posição e reconciliação antes de `ARMED`.

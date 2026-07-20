@@ -34,6 +34,35 @@ export function createJournalBackup(opts = {}) {
       return data.entries ?? [];
     },
 
+    saveCheckpoint(checkpoint, label = 'engine') {
+      fs.mkdirSync(dir, { recursive: true });
+      const file = path.join(dir, `checkpoint-${label}-${Date.now()}.json`);
+      const temp = `${file}.tmp`;
+      fs.writeFileSync(
+        temp,
+        `${JSON.stringify({ savedAt: new Date().toISOString(), checkpoint }, null, 2)}\n`,
+      );
+      fs.renameSync(temp, file);
+      return file;
+    },
+
+    loadCheckpoint(file) {
+      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+      if (!data.checkpoint || typeof data.checkpoint !== 'object') {
+        throw new Error('checkpoint persistido inválido');
+      }
+      return data.checkpoint;
+    },
+
+    latestCheckpoint() {
+      if (!fs.existsSync(dir)) return null;
+      const files = fs
+        .readdirSync(dir)
+        .filter((f) => f.startsWith('checkpoint-') && f.endsWith('.json'))
+        .sort();
+      return files.length ? path.join(dir, files[files.length - 1]) : null;
+    },
+
     list() {
       if (!fs.existsSync(dir)) return [];
       return fs

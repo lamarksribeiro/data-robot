@@ -56,8 +56,7 @@ export function createPositionLedger() {
     } else if (kind === 'EXIT') {
       const closeQty = Math.min(pos.qty, q);
       if (pos.avgPrice != null && price != null) {
-        const dir = pos.side === 'UP' ? 1 : -1;
-        pos.realizedPnl += dir * (price - pos.avgPrice) * closeQty;
+        pos.realizedPnl += (price - pos.avgPrice) * closeQty;
       }
       const remain = Math.max(0, pos.qty - closeQty);
       pos = {
