@@ -45,6 +45,7 @@ npm run ci
 - [Observabilidade P5](./docs/arquitetura/observability-p5.md) — control plane / Engine Ready
 - [TFC V7 P6](./docs/arquitetura/tfc-v7-p6.md) — plugin no contrato
 - [Micro-live P7](./docs/arquitetura/micro-live-p7.md) — canário via engine
+- [Deploy Giovanna](./docs/operacao/deploy-giovanna.md) — Coolify + domínios
 - [Ambientes](./docs/operacao/ambientes.md) — local / shadow / canary / production
 - [Validação TFC V7](./docs/tfc-validacao-real.md) — runbook
 - [docs/](./docs/) — índice completo
