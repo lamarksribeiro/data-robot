@@ -2,7 +2,7 @@
 
 Executor de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
 
-**Status:** P0–P7 (código) concluídos. Plugin TFC V7 + micro-live canário via engine. Ops: soak ≥7d, shadow real, ≥10 micro-lives em dias distintos. Saídas V7 = P8. `npm start` = UI `:3200`; `npm run engine:serve` = engine `:3201`. Live exige `--live`.
+**Status:** P0–P7 (código) concluídos. Deploy Coolify Giovanna: https://robot.giovannarosito.com. Ops: migrar DNS `robot.fracta.online`, soak, ≥10 micro-lives. Saídas V7 = P8.
 
 Substitui o `polymarket-robot` como base do novo desenvolvimento.
 
