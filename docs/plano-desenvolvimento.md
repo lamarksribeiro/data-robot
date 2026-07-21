@@ -1,17 +1,18 @@
 # Plano de desenvolvimento — Data Robot
 
-**Revisado em:** 20/07/2026
+**Revisado em:** 21/07/2026  
 **Estado atual:** protótipo operacional e ferramentas de diagnóstico; **ainda não é um robô autônomo de produção**.  
-**Estratégia-alvo:** Terminal Favorite Carry **V7 Danger Floor**, promovida no `data-backtest` em 07/07/2026.
+**URL oficial:** https://robot.fracta.online (Coolify Giovanna).  
+**Estratégia-alvo inicial:** **MIDAS Carry V1** (`btc-champion-v1` no `data-backtest`, 19/07/2026). Núcleo de execução = TFC V7 Danger Floor + envelope high-ask / tier. Plugin MIDAS no robot ainda **ausente**.
 
-Este é o roadmap canônico do `data-robot`. O [runbook de validação TFC](./tfc-validacao-real.md) descreve como provar cada etapa em conta real; ele não substitui este plano.
+Este é o roadmap canônico do `data-robot`. O [runbook de validação TFC](./tfc-validacao-real.md) descreve o caminho de evidência em conta real (baseline TFC); a promoção live usa MIDAS. O runbook não substitui este plano.
 
 ## 1. Objetivo e limites
 
 Entregar uma engine de trading real, segura e independente de estratégia, inicialmente validada em mercados BTC Up/Down de 5 minutos na Polymarket, que:
 
 - execute estratégias por um contrato estável, sem acoplá-las ao SDK, credenciais, OMS ou infraestrutura;
-- hospede inicialmente a TFC V7 com paridade verificável em relação ao `data-backtest`;
+- hospede inicialmente a **MIDAS Carry V1** com paridade verificável em relação ao `data-backtest` (TFC V7 permanece baseline / núcleo compartilhado);
 - não opere quando dados, conta, mercado ou controles de risco estiverem inválidos;
 - conheça o ciclo de vida das próprias ordens e posições mesmo após falhas ou reinício;
 - possa ser promovido de replay para shadow, micro-live e produção por gates mensuráveis;
@@ -20,24 +21,25 @@ Entregar uma engine de trading real, segura e independente de estratégia, inici
 Ficam fora deste ciclo:
 
 - descoberta ou otimização de estratégia, que pertencem ao `data-backtest`;
-- execução simultânea de múltiplas estratégias antes da TFC V7 atingir operação estável; a extensibilidade da engine, porém, é requisito desde o início;
+- execução simultânea de múltiplas estratégias antes da MIDAS atingir operação estável; a extensibilidade da engine, porém, é requisito desde o início;
 - execução com dinheiro de terceiros;
 - decisões táticas abaixo do piso de 4 segundos, exceto cancelamento protetivo.
 
 ## 2. Decisões corrigidas nesta revisão
 
-1. **V7 substitui V6 como alvo de produção.** A V6 Hybrid depende de stop-buy sintético. A validação do backtest concluiu que esse mecanismo pode disparar na zona abaixo de 4s, onde o book e a latência não sustentam execução fiel.
-2. **F4 não implementará hedge stop da V6.** A sequência correta é late flip exit/reverse da V7 e, depois, danger exit no piso de 4s.
-3. **Scripts atuais não formam um serviço de produção.** Hoje há feeds, avaliação de gates e CLIs de diagnóstico/micro-ordem; faltam engine contínua, OMS, posição, reconciliação, risco, persistência e observabilidade.
-4. **A UI estática não é o robô.** `npm start` serve somente `public/`. A engine deve ser um processo separado, sem secrets no frontend.
-5. **A latência média/mediana não basta.** Promoção exige p95/p99 por operação, visibilidade da ordem, taxa de erro e comportamento sob timeout.
-6. **REST imediato não é confirmação suficiente.** O canal WebSocket autenticado de usuário deve ser a fonte primária de eventos de ordem/trade; REST será usado para reconciliação.
-7. **Maker não significa apenas fee zero.** Maker não paga fee de protocolo e pode receber rebate. A hipótese local de maker ainda precisa de um fill real para ser considerada validada.
-8. **O medidor de latência exige `--live`.** Sem a flag, o comando recusa (exit 2) e cancela em `finally` quando a ordem foi criada.
-9. **A engine vem antes da estratégia.** Core, OMS, risk, persistência, recovery e observabilidade não podem importar TFC. TFC V7 será o primeiro adaptador do contrato genérico, não o centro da arquitetura.
-10. **“Código concluído” não equivale a “gate live aprovado”.** P3–P7 distinguem explicitamente CI/simulação de evidência real no Giovanna.
-11. **POST de ordem é somente ACK.** Fill e preço executado vêm do user WS ou de reconciliação REST; FAK pode preencher parcialmente.
-12. **REVERSE permanece bloqueado em live.** A promoção exige saga persistida `SELL → reconcile → BUY`, não uma compra isolada do lado oposto.
+1. **MIDAS Carry V1 é o alvo inicial de teste live.** Preset `btc-champion-v1` (tier 1.5×). Núcleo = TFC V7 Danger Floor; envelope high-ask (`maxAsk` 0.94, `maxDistAbs` 40) + budget em tier. Plugin ainda só no lab (`data-backtest`).
+2. **V7 substitui V6 como baseline de execução.** A V6 Hybrid depende de stop-buy sintético. A validação do backtest concluiu que esse mecanismo pode disparar na zona abaixo de 4s, onde o book e a latência não sustentam execução fiel.
+3. **F4 não implementará hedge stop da V6.** A sequência correta é late flip exit/reverse da V7/MIDAS e, depois, danger exit no piso de 4s.
+4. **Scripts atuais não formam um serviço de produção.** Hoje há feeds, avaliação de gates e CLIs de diagnóstico/micro-ordem; faltam engine contínua em deploy, evidência OMS live e plugin MIDAS.
+5. **A UI estática não é o robô.** `npm start` serve somente `public/`. URL oficial da UI: https://robot.fracta.online. A engine deve ser um processo separado (`:3201`), sem secrets no frontend.
+6. **A latência média/mediana não basta.** Promoção exige p95/p99 por operação, visibilidade da ordem, taxa de erro e comportamento sob timeout.
+7. **REST imediato não é confirmação suficiente.** O canal WebSocket autenticado de usuário deve ser a fonte primária de eventos de ordem/trade; REST será usado para reconciliação.
+8. **Maker não significa apenas fee zero.** Maker não paga fee de protocolo e pode receber rebate. A hipótese local de maker ainda precisa de um fill real para ser considerada validada.
+9. **O medidor de latência exige `--live`.** Sem a flag, o comando recusa (exit 2) e cancela em `finally` quando a ordem foi criada.
+10. **A engine vem antes da estratégia.** Core, OMS, risk, persistência, recovery e observabilidade não podem importar MIDAS/TFC. O primeiro adaptador live de promoção é MIDAS; TFC V7 no robot serve de referência e reuso de helpers.
+11. **“Código concluído” não equivale a “gate live aprovado”.** P3–P7 distinguem explicitamente CI/simulação de evidência real no Giovanna.
+12. **POST de ordem é somente ACK.** Fill e preço executado vêm do user WS ou de reconciliação REST; FAK pode preencher parcialmente.
+13. **REVERSE permanece bloqueado em live.** A promoção exige saga persistida `SELL → reconcile → BUY`, não uma compra isolada do lado oposto.
 
 ## 3. Diagnóstico do estado atual
 
@@ -46,17 +48,26 @@ Ficam fora deste ciclo:
 | Auth L1/L2, signer, funder | Código endurecido; ops aberto | `runLivePreflight` valida auth, identidade, saldo/allowance, relógio, geoblock e ausência de ordens abertas. Falta evidência repetida no serviço do Giovanna. |
 | Descoberta BTC 5m e PTB | Parcial | Implementada para o slot atual/próximo; faltam retry observável, validação de `acceptingOrders` e testes de transição de evento. |
 | RTDS e CLOB market feed | Feito (P2) | Normalização + staleness + hub; WS legado permanece em `src/feeds/`. |
-| Engine / contrato de estratégia | Feito (P1+P6) | Runtime + registry + fixtures + plugin `tfc-v7`. |
-| Gates de entrada | Feito (P6) | `evaluateEntryGates` + late flip + danger exit no plugin. |
-| Preset de produção | Alinhado | `watch` / `micro-entry` usam `preset-v7.js` (`btc-champion-v7`). V6 Hybrid permanece só como histórico. |
-| Entrada real | Feito (P7 código) | `tfc:micro-live` via engine + canary cap; ops ≥10 dias pendente. |
+| Engine / contrato de estratégia | Feito (P1+P6 TFC) | Runtime + registry + fixtures + plugin `tfc-v7`. **MIDAS ainda não portada.** |
+| Gates de entrada | Feito (P6 TFC) | `evaluateEntryGates` + late flip + danger exit no plugin TFC; MIDAS reusa + tier. |
+| Preset de produção | MIDAS pendente no robot | Lab: `btc-champion-v1`. Robot ainda alinha `watch`/`micro-entry` ao preset V7. |
+| Entrada real | Feito (P7 código TFC) | `tfc:micro-live` via engine + canary cap; campanha live bloqueada até P3–P5; MIDAS harness ainda inexistente. |
 | Saída / reverse / danger exit | Ausente | `evaluateLateFlip` só avalia parte do sinal e não executa ciclo de posição. Danger exit não existe no robô. |
 | OMS e user WebSocket | Código live implementado; ops aberto | User WS autenticado, heartbeat CLOB, reconciliação por ordem e detecção de órfãs; validação real prolongada ainda pendente. |
 | Risco e kill switch | Código endurecido; ops aberto | Preflight live obrigatório, deadlines, caps, kill/circuit e `REVERSE` bloqueado até P8. |
 | Persistência / recovery | Código endurecido; ops aberto | Checkpoint atômico, restore de strategy/OMS/risk e reconciliação antes do start; falta ensaio real com ordem/posição existentes. |
 | Observabilidade | Código endurecido; ops aberto | Readiness depende de feed/recovery/user WS; métricas ausentes reprovam SLO; calibragem Giovanna pendente. |
 | Testes e CI | Feito | `npm run ci` (lint + architecture + testes); sem rede/ordens reais. |
-| Deploy | Parcial (P5) | UI `:3200` + engine `:3201` (`Dockerfile.engine`); soak ≥7d / Coolify ops pendente. |
+| Deploy | UI oficial no ar | https://robot.fracta.online no Coolify Giovanna; engine `:3201` ainda não é serviço separado; soak ≥7d pendente. |
+
+### Próximos passos (ordem)
+
+1. **Commit + redeploy** do endurecimento live (working tree 1.10.0) em https://robot.fracta.online.
+2. **Deploy da engine** (`Dockerfile.engine` / `:3201`) no Giovanna, separada da UI.
+3. **Plugin MIDAS Carry V1** no robot (`btc-champion-v1` + paridade sintética vs GLS do lab).
+4. **Shadow MIDAS** + **soak Engine Ready** (≥7d) no Giovanna.
+5. **Micro-live MIDAS** com canary cap (após gates reais P3–P5).
+6. **P8** saídas live (late flip / reverse / danger) → depois **P9** canário contínuo.
 
 ### Evidência já obtida
 

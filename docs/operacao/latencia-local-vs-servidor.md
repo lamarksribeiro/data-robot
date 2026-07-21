@@ -1,6 +1,6 @@
 # Latência: máquina local (VPN) vs servidor Giovanna
 
-Testes de latência CLOB feitos no PC com VPN **não representam** o ambiente de produção. O robô vai operar no servidor do **Coolify Giovanna** (`coolify.giovannarosito.com`).
+Testes de latência CLOB feitos no PC com VPN **não representam** o ambiente de produção. O robô opera no **Coolify Giovanna** (`coolify.giovannarosito.com`); URL pública oficial: https://robot.fracta.online.
 
 Estratégia: medir nos **dois ambientes** com o mesmo script e comparar — o delta vira baseline de melhoria e ajuda a calibrar timeouts da TFC.
 

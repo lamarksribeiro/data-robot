@@ -2,7 +2,7 @@
 
 Executor de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
 
-**Status:** núcleo P0–P7 e proteções live implementados; gates operacionais P3–P7 ainda abertos. Não é produção autônoma. UI Coolify: https://robot.giovannarosito.com. Próximos gates: engine separada, shadow/soak real e somente depois ≥10 micro-lives. Saídas V7 = P8.
+**Status:** núcleo P0–P7 e proteções live implementados; gates operacionais P3–P7 ainda abertos. Não é produção autônoma. UI oficial: https://robot.fracta.online (Coolify Giovanna). Estratégia-alvo inicial: **MIDAS Carry V1** (ainda só no `data-backtest`). Próximos passos: engine `:3201` no Giovanna → plugin MIDAS + paridade → shadow/soak → micro-live canário → saídas (P8).
 
 Substitui o `polymarket-robot` como base do novo desenvolvimento.
 
@@ -45,9 +45,9 @@ npm run ci
 - [Observabilidade P5](./docs/arquitetura/observability-p5.md) — control plane / Engine Ready
 - [TFC V7 P6](./docs/arquitetura/tfc-v7-p6.md) — plugin no contrato
 - [Micro-live P7](./docs/arquitetura/micro-live-p7.md) — canário via engine
-- [Deploy Giovanna](./docs/operacao/deploy-giovanna.md) — Coolify + domínios
+- [Deploy Giovanna](./docs/operacao/deploy-giovanna.md) — Coolify + `robot.fracta.online`
 - [Ambientes](./docs/operacao/ambientes.md) — local / shadow / canary / production
-- [Validação TFC V7](./docs/tfc-validacao-real.md) — runbook
+- [Validação TFC V7](./docs/tfc-validacao-real.md) — runbook (baseline; alvo live = MIDAS)
 - [docs/](./docs/) — índice completo
 
 ## Estrutura
