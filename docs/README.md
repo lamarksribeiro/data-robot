@@ -16,7 +16,7 @@
 | [TFC V7 P6](./arquitetura/tfc-v7-p6.md) | Plugin no contrato; ENTER/late flip/danger; paridade sintética |
 | [Micro-live P7](./arquitetura/micro-live-p7.md) | Canário via engine; live transport; relatório reconcile |
 | [Schema de runs](./arquitetura/runs-schema.md) | Envelope versionado, sanitização e retenção de evidência |
-| [Deploy Giovanna](./operacao/deploy-giovanna.md) | Coolify app, domínios, smoke CLOB |
+| [Deploy Giovanna](./operacao/deploy-giovanna.md) | Coolify Giovanna, URL oficial `robot.fracta.online`, smoke CLOB, próximos passos |
 | [Ambientes](./operacao/ambientes.md) | local / shadow / canary / production |
 | [Validação TFC V7 em conta real](./tfc-validacao-real.md) | Runbook F0–F7, evidência exigida e gates de promoção |
 
