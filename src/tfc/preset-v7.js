@@ -46,11 +46,11 @@ export const MICRO_TEST = {
 
 /**
  * Cap de canário P7 — independente do entryBudget=$10 do preset campeão.
- * Preferência de sizing continua MICRO_TEST ($0.10), mas 1 share no ask V7
- * pode custar até ~$0.82; o cap cobre isso sem liberar $10.
+ * Preferência de sizing continua MICRO_TEST ($0.10), mas BUY marketable
+ * exige >=$1 notional (CLOB); com ask < 1 isso pode ser 2 shares (~$1.5–2).
  */
 export const CANARY_LIMITS = Object.freeze({
-  maxCanaryBudget: 1.0,
+  maxCanaryBudget: 2.0,
   preferredEntryBudget: 0.1,
   maxSlippage: 0.02,
 });
