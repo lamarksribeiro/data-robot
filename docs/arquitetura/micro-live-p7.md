@@ -1,9 +1,9 @@
 # Micro-live P7 — entrada canário via engine
 
-Status: **harness e proteções implementados** (2026-07-20). CI sem rede/ordens reais.
-**Campanha live bloqueada:** depende dos gates operacionais de User WS/recovery/Engine Ready; depois, ≥10 entradas em dias distintos.
+Status: **harness TFC e proteções genéricas implementados** (2026-07-20). CI sem rede/ordens reais.  
+**Campanha live:** nenhuma estratégia aprovada. Bloqueada pelos gates operacionais de User WS / recovery / Engine Ready; depois, ≥10 entradas em dias distintos **por plugin + preset**. MIDAS ainda não tem composition/harness próprio.
 
-## Pipeline
+## Pipeline (referência TFC)
 
 ```text
 feeds → snapshot → plugin tfc-v7 → risk (canary cap) → OMS → createLiveTransport → CLOB
@@ -16,7 +16,7 @@ npm run tfc:micro-live                 # dry-run via engine
 npm run tfc:micro-live -- --live --cancel --timeout=330
 ```
 
-`--live` é obrigatório para ordem real (exit 2 sem a flag).
+`--live` é obrigatório para ordem real (exit 2 sem a flag). Canário futuro deve receber `strategyId`, versão, preset e `marketScope` aprovados sem bootstrap hard-coded (ver [ADR-002](./adr-002-strategy-catalog-supervision.md)).
 
 ## Cap de canário (independente do preset $10)
 
@@ -26,7 +26,7 @@ npm run tfc:micro-live -- --live --cancel --timeout=330
 | `CANARY_LIMITS.maxCanaryBudget` | $1.00 | Risk hard cap (cobre 1 share no ask V7) |
 | Preset campeão `entryBudget` | $10 | **Bloqueado** em canary mode |
 
-Reason code: `CANARY_BUDGET_EXCEEDED`.
+Reason code: `CANARY_BUDGET_EXCEEDED`. Tier MIDAS do lab ($15/$20) **não** eleva o canário.
 
 ## Módulos
 
@@ -35,7 +35,7 @@ Reason code: `CANARY_BUDGET_EXCEEDED`.
 | `src/executor/liveTransport.js` | CLOB place/cancel/reconcile + heartbeat (client injetável + mock) |
 | `src/executor/userChannel.js` | User WS autenticado e eventos order/trade |
 | `src/risk/livePreflight.js` | Checks read-only reais antes de armar live |
-| `src/composition/tfcCanary.js` | `bootstrapTfcCanaryEngine` |
+| `src/composition/tfcCanary.js` | `bootstrapTfcCanaryEngine` (referência TFC) |
 | `src/oms/microLiveReport.js` | Relatório fill/fee/slippage/órfã + paridade |
 | `scripts/tfc/micro-live.js` | Harness dry → live |
 
@@ -45,8 +45,8 @@ Reason code: `CANARY_BUDGET_EXCEEDED`.
 
 ## Gate ops (ainda aberto)
 
-- [ ] 10 micro-entradas em dias distintos
+- [ ] 10 micro-entradas em dias distintos **por plugin + preset candidato**
 - [ ] 100% reconciliadas, sem órfã/duplicidade/violação de cap
 - [ ] Slippage/fee explicados; sem promoção só por aceite da ordem
 
-Ver [plano P7](../plano-desenvolvimento.md).
+Ver [plano P7](../plano-desenvolvimento.md#p7--micro-live-de-entrada-por-plugin).

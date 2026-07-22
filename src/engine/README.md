@@ -12,3 +12,5 @@ Runtime genérico (P1+). **Não** importa `src/strategy/*` nem `src/tfc/*`.
 | `sinks.js` | dry-run / shadow / live-stub |
 
 Plugins são ligados só em `src/composition/bootstrap.js`.
+
+O registry pode listar vários plugins, enquanto cada runtime atual executa uma instância selecionada. Política de catálogo, aprovação e evolução multi-instância: `docs/arquitetura/adr-002-strategy-catalog-supervision.md`.

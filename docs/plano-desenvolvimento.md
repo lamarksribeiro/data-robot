@@ -3,7 +3,8 @@
 **Revisado em:** 21/07/2026  
 **Estado atual:** protótipo operacional e ferramentas de diagnóstico; **ainda não é um robô autônomo de produção**.  
 **URL oficial:** https://robot.fracta.online (Coolify Giovanna).  
-**Estratégia-alvo inicial:** **MIDAS Carry V1** (`btc-champion-v1` no `data-backtest`, 19/07/2026). Núcleo de execução = TFC V7 Danger Floor + envelope high-ask / tier. Plugin MIDAS no robot ainda **ausente**.
+**Pacote:** `data-robot` **1.10.0**.  
+**Candidata inicial à promoção live:** **MIDAS Carry V1** (`strategyId` lab `midas-carry-v1`, preset `labs/strategies/terminal/midas-carry-v1/presets/btc-champion-v1.json`, 19/07/2026). Núcleo de execução = TFC V7 Danger Floor + envelope high-ask / tier. Plugin MIDAS no robot ainda **ausente**; isso não bloqueia o deploy nem o gate Engine Ready da engine.
 
 Este é o roadmap canônico do `data-robot`. O [runbook de validação TFC](./tfc-validacao-real.md) descreve o caminho de evidência em conta real (baseline TFC); a promoção live usa MIDAS. O runbook não substitui este plano.
 
@@ -12,7 +13,7 @@ Este é o roadmap canônico do `data-robot`. O [runbook de validação TFC](./tf
 Entregar uma engine de trading real, segura e independente de estratégia, inicialmente validada em mercados BTC Up/Down de 5 minutos na Polymarket, que:
 
 - execute estratégias por um contrato estável, sem acoplá-las ao SDK, credenciais, OMS ou infraestrutura;
-- hospede inicialmente a **MIDAS Carry V1** com paridade verificável em relação ao `data-backtest` (TFC V7 permanece baseline / núcleo compartilhado);
+- disponibilize um catálogo explícito de plugins aprovados, começando por TFC V7 como referência implementada e **MIDAS Carry V1** como candidata à promoção, ambas com paridade verificável em relação ao `data-backtest`;
 - não opere quando dados, conta, mercado ou controles de risco estiverem inválidos;
 - conheça o ciclo de vida das próprias ordens e posições mesmo após falhas ou reinício;
 - possa ser promovido de replay para shadow, micro-live e produção por gates mensuráveis;
@@ -21,13 +22,13 @@ Entregar uma engine de trading real, segura e independente de estratégia, inici
 Ficam fora deste ciclo:
 
 - descoberta ou otimização de estratégia, que pertencem ao `data-backtest`;
-- execução simultânea de múltiplas estratégias antes da MIDAS atingir operação estável; a extensibilidade da engine, porém, é requisito desde o início;
+- processos **multi-live** na mesma conta sem OMS/risk/recovery globais e duráveis; BTC 5m e ETH 5m simultâneos são suportados pelo alvo arquitetural, enquanto estratégias concorrentes no mesmo mercado exigem política adicional de conflito/netting;
 - execução com dinheiro de terceiros;
 - decisões táticas abaixo do piso de 4 segundos, exceto cancelamento protetivo.
 
 ## 2. Decisões corrigidas nesta revisão
 
-1. **MIDAS Carry V1 é o alvo inicial de teste live.** Preset `btc-champion-v1` (tier 1.5×). Núcleo = TFC V7 Danger Floor; envelope high-ask (`maxAsk` 0.94, `maxDistAbs` 40) + budget em tier. Plugin ainda só no lab (`data-backtest`).
+1. **MIDAS Carry V1 é a candidata inicial de teste live, não dependência da engine.** Preset MIDAS `btc-champion-v1` (tier 1.5×) em `midas-carry-v1/presets/` — não confundir com o preset TFC homônimo. Núcleo = TFC V7 Danger Floor; envelope high-ask (`maxAsk` 0.94, `maxDistAbs` 40) + budget em tier. Plugin ainda só no lab (`data-backtest`).
 2. **V7 substitui V6 como baseline de execução.** A V6 Hybrid depende de stop-buy sintético. A validação do backtest concluiu que esse mecanismo pode disparar na zona abaixo de 4s, onde o book e a latência não sustentam execução fiel.
 3. **F4 não implementará hedge stop da V6.** A sequência correta é late flip exit/reverse da V7/MIDAS e, depois, danger exit no piso de 4s.
 4. **Scripts atuais não formam um serviço de produção.** Hoje há feeds, avaliação de gates e CLIs de diagnóstico/micro-ordem; faltam engine contínua em deploy, evidência OMS live e plugin MIDAS.
@@ -36,10 +37,11 @@ Ficam fora deste ciclo:
 7. **REST imediato não é confirmação suficiente.** O canal WebSocket autenticado de usuário deve ser a fonte primária de eventos de ordem/trade; REST será usado para reconciliação.
 8. **Maker não significa apenas fee zero.** Maker não paga fee de protocolo e pode receber rebate. A hipótese local de maker ainda precisa de um fill real para ser considerada validada.
 9. **O medidor de latência exige `--live`.** Sem a flag, o comando recusa (exit 2) e cancela em `finally` quando a ordem foi criada.
-10. **A engine vem antes da estratégia.** Core, OMS, risk, persistência, recovery e observabilidade não podem importar MIDAS/TFC. O primeiro adaptador live de promoção é MIDAS; TFC V7 no robot serve de referência e reuso de helpers.
+10. **A engine vem antes e independe da estratégia.** Core, OMS, risk, persistência, recovery e observabilidade não podem importar MIDAS/TFC. Plugins aprovados entram por allowlist no composition root; disponibilidade não implica ativação live.
 11. **“Código concluído” não equivale a “gate live aprovado”.** P3–P7 distinguem explicitamente CI/simulação de evidência real no Giovanna.
 12. **POST de ordem é somente ACK.** Fill e preço executado vêm do user WS ou de reconciliação REST; FAK pode preencher parcialmente.
 13. **REVERSE permanece bloqueado em live.** A promoção exige saga persistida `SELL → reconcile → BUY`, não uma compra isolada do lado oposto.
+14. **Catálogo ≠ ativação; conta compartilhada ≠ estado isolado.** Todos os plugins aprovados podem ficar disponíveis. BTC 5m e ETH 5m podem operar simultaneamente como instâncias distintas, mas devem compartilhar coordenação global e durável de saldo, risk, OMS e recovery. Estratégias concorrentes no mesmo mercado permanecem bloqueadas sem arbitragem. Ver [ADR-002](./arquitetura/adr-002-strategy-catalog-supervision.md).
 
 ## 3. Diagnóstico do estado atual
 
@@ -47,10 +49,12 @@ Ficam fora deste ciclo:
 |---|---|---|
 | Auth L1/L2, signer, funder | Código endurecido; ops aberto | `runLivePreflight` valida auth, identidade, saldo/allowance, relógio, geoblock e ausência de ordens abertas. Falta evidência repetida no serviço do Giovanna. |
 | Descoberta BTC 5m e PTB | Parcial | Implementada para o slot atual/próximo; faltam retry observável, validação de `acceptingOrders` e testes de transição de evento. |
+| ETH 5m | Arquitetura compatível; adapters/plugins ausentes | Exige descoberta/normalização do mercado ETH 5m e plugin aprovado com `supportedMarkets`; reutiliza engine, account risk, OMS e control plane. |
 | RTDS e CLOB market feed | Feito (P2) | Normalização + staleness + hub; WS legado permanece em `src/feeds/`. |
 | Engine / contrato de estratégia | Feito (P1+P6 TFC) | Runtime + registry + fixtures + plugin `tfc-v7`. **MIDAS ainda não portada.** |
+| Catálogo / supervisão | Registry básico feito; evolução pendente | Plugins já são selecionáveis por `strategyId`; faltam estados de aprovação, `marketScope`, deployment config e supervisor. Multi-mercado live exige coordenador global da conta. |
 | Gates de entrada | Feito (P6 TFC) | `evaluateEntryGates` + late flip + danger exit no plugin TFC; MIDAS reusa + tier. |
-| Preset de produção | MIDAS pendente no robot | Lab: `btc-champion-v1`. Robot ainda alinha `watch`/`micro-entry` ao preset V7. |
+| Preset de produção | MIDAS pendente no robot | Lab MIDAS: `midas-carry-v1/presets/btc-champion-v1.json`. Robot ainda alinha `watch`/`micro-entry` ao `btc-champion-v7`. |
 | Entrada real | Feito (P7 código TFC) | `tfc:micro-live` via engine + canary cap; campanha live bloqueada até P3–P5; MIDAS harness ainda inexistente. |
 | Saída / reverse / danger exit | Ausente | `evaluateLateFlip` só avalia parte do sinal e não executa ciclo de posição. Danger exit não existe no robô. |
 | OMS e user WebSocket | Código live implementado; ops aberto | User WS autenticado, heartbeat CLOB, reconciliação por ordem e detecção de órfãs; validação real prolongada ainda pendente. |
@@ -62,12 +66,12 @@ Ficam fora deste ciclo:
 
 ### Próximos passos (ordem)
 
-1. **Commit + redeploy** do endurecimento live (working tree 1.10.0) em https://robot.fracta.online.
-2. **Deploy da engine** (`Dockerfile.engine` / `:3201`) no Giovanna, separada da UI.
-3. **Plugin MIDAS Carry V1** no robot (`btc-champion-v1` + paridade sintética vs GLS do lab).
-4. **Shadow MIDAS** + **soak Engine Ready** (≥7d) no Giovanna.
-5. **Micro-live MIDAS** com canary cap (após gates reais P3–P5).
-6. **P8** saídas live (late flip / reverse / danger) → depois **P9** canário contínuo.
+1. **Deploy e Engine Ready** (`Dockerfile.engine` / `:3201`) no Giovanna, separado da UI e validado com fixtures; não depende da MIDAS.
+2. **Approved Strategy Catalog** explícito com estados de aprovação, `marketScope` e configuração de instância.
+3. **Plugin MIDAS Carry V1** no robot (`midas-carry-v1` + preset champion do lab + paridade sintética vs GLS), sem alterar o core.
+4. **Supervisor multi-shadow/multi-mercado** + coordenador global de conta; shadow MIDAS/TFC e soak Engine Ready ≥7d podem avançar em paralelo.
+5. **Micro-live MIDAS** com canary cap, após gates reais P3–P5 e aprovação própria do plugin.
+6. **P8** saídas live por plugin → depois **P9** canário contínuo. BTC/ETH simultâneos e concorrência no mesmo mercado têm gates separados.
 
 ### Evidência já obtida
 
@@ -85,24 +89,27 @@ Os arquivos em `runs/` são evidência local e estão ignorados pelo Git. Result
 Polymarket/Gamma/RTDS
         │
         ▼
-adapters de mercado ──► snapshot/eventos normalizados ──► engine runtime
-        │                                                   │
-        │                                     strategy registry + instance
-        │                                                   │
-        └──────── watchdogs ◄──── trade intents ◄───────────┘
+adapters de mercado ──► market hub / snapshots por marketScope
                                       │
+approved catalog ─► deployment ─► strategy supervisor
+                                      │
+                         ┌────────────┴────────────┐
+                         ▼                         ▼
+                  instance BTC 5m          instance ETH 5m
+                         └────────────┬────────────┘
+                                      │ trade intents
                                       ▼
-                              risk engine global
+                         account risk coordinator
                                       │ aprovado
                                       ▼
-                             OMS + execution adapter
-                               │                  │
-                               ├── CLOB REST      └── user WebSocket
-                               ▼
-                  journal + reconciler + métricas + alertas
+                         OMS + execution adapter
+                           │                    │
+                           ├── CLOB REST        └── user WebSocket
+                           ▼
+              journal + reconciler + métricas + alertas
                                       │
                                       ▼
-                           API local / UI somente leitura
+                       API local / UI somente leitura
 ```
 
 ### Componentes e responsabilidades
@@ -111,10 +118,12 @@ adapters de mercado ──► snapshot/eventos normalizados ──► engine run
 |---|---|---|
 | `market` | Encontrar evento, tokens, PTB, início/fim e estado de negociação | Enviar ordens |
 | `feeds` | Manter book/spot normalizados, timestamps e saúde | Decidir estratégia |
-| `engine` | Ciclo de vida, scheduler, instâncias de estratégia e roteamento de eventos/intenções | Conhecer regras TFC ou chamar SDK diretamente |
-| `strategy registry` | Resolver `strategyId`, versão, preset e capabilities | Escolher estratégia implicitamente |
+| `engine` | Ciclo de vida de uma instância e roteamento de eventos/intenções | Conhecer regras TFC/MIDAS ou chamar SDK diretamente |
+| `approved catalog` | Allowlist de plugins, versões, capabilities e presets permitidos | Ativar plugin apenas porque está registrado |
+| `strategy deployment` | Declarar instância, `marketScope`, preset, modo e aprovação | Esconder troca de versão/preset |
+| `strategy supervisor` | Distribuir snapshots e supervisionar instâncias isoladas | Decidir sinal ou manter capital global só em memória local |
 | `strategy/*` | Transformar contexto normalizado em intenção determinística e estado serializável | Chamar SDK/API, ler `.env`, gravar arquivo ou controlar risco global |
-| `risk` | Aceitar/rejeitar intenção por limites e saúde | Inventar sinal |
+| `account risk coordinator` | Aceitar/rejeitar intenção por limites locais e globais da conta | Inventar sinal ou reservar o mesmo saldo duas vezes |
 | `oms` | Idempotência e estados de ordem/fill/cancel | Alterar parâmetros da estratégia |
 | `executor` | Traduzir intenção para GTC/FAK/FOK com cap explícito | Presumir fill pela resposta de POST |
 | `journal` | Registrar eventos append-only e checkpoints | Armazenar secrets |
@@ -123,7 +132,7 @@ adapters de mercado ──► snapshot/eventos normalizados ──► engine run
 
 ### Contrato de estratégia
 
-A engine não deve ter um `if (strategy === 'tfc')`. Ela carrega uma implementação registrada por configuração explícita, por exemplo `STRATEGY_ID=tfc-v7` e `STRATEGY_PRESET=btc-champion-v7`.
+A engine não deve ter um `if (strategy === 'tfc')`. O composition root mantém uma allowlist e o deployment seleciona plugin, preset e mercado explicitamente. `marketScope` pertence à instância (`btc-updown-5m`, `eth-updown-5m` etc.), deve constar em `manifest.supportedMarkets` e não pertence à lógica genérica do core.
 
 Contrato conceitual mínimo:
 
@@ -157,16 +166,18 @@ Regras do contrato:
 
 ### Fluxo de execução
 
-1. A engine faz preflight, recovery e carrega a estratégia/preset pelo registry.
-2. Market/feed adapters publicam snapshots normalizados.
-3. A engine entrega snapshot, posição e estado à estratégia.
-4. A estratégia devolve novo estado, diagnósticos e zero ou mais intenções; não envia ordens.
-5. Risk valida health, limites locais/globais, idempotência e compliance.
+1. A engine faz preflight e recovery da conta; o catálogo valida plugins/versões e o deployment declara instâncias aprovadas.
+2. Market/feed adapters publicam snapshots normalizados por `marketScope`.
+3. O supervisor entrega somente snapshots compatíveis, posição e estado a cada instância.
+4. Cada estratégia devolve novo estado, diagnósticos e zero ou mais intenções; não envia ordens.
+5. O account risk coordinator valida health, limites da instância/mercado/conta, idempotência e compliance.
 6. OMS/executor converte intenção aprovada em ordem e acompanha ACK, partial fill, fill, cancel ou estado desconhecido.
-7. User WS/REST geram eventos de execução; a engine atualiza posição/journal e os devolve à estratégia.
-8. Restart reconstrói engine e instância pelo journal antes de aceitar nova intenção.
+7. User WS/REST geram eventos de execução; a engine atribui por instância, atualiza posição/journal e devolve o evento ao plugin correto.
+8. Restart reconstrói conta, OMS e todas as instâncias pelo journal antes de aceitar nova intenção.
 
 Para adicionar outra estratégia, implementa-se esse contrato, seu preset/schema e os testes de conformidade. OMS, risk, feeds básicos, journal, recovery, deploy e observabilidade permanecem os mesmos. Se a nova estratégia exigir outro mercado ou dado, adiciona-se um adapter/capability reutilizável — não uma segunda engine.
+
+Disponibilidade e concorrência são decisões separadas. Vários plugins podem permanecer no catálogo; BTC 5m e ETH 5m podem rodar juntos como instâncias isoladas quando compartilham coordenação global da conta. Duas estratégias no mesmo mercado/evento exigem arbitragem de conflito/netting. Ver [ADR-002](./arquitetura/adr-002-strategy-catalog-supervision.md).
 
 Estados mínimos da engine:
 
@@ -191,6 +202,9 @@ Nenhuma fase live é aprovada enquanto estes invariantes não estiverem automati
 - Nenhuma nova ação tática abaixo de 4s. A única exceção é cancelamento protetivo de ordem viva.
 - Toda ordem tem notional máximo, cap de preço/slippage, token/evento esperados e chave de idempotência.
 - No máximo uma posição e uma intenção ativa por instância/evento no primeiro release; risk também limita exposição agregada entre estratégias.
+- Toda instância declara `marketScope`; ordem, posição, journal e checkpoint são atribuídos por `strategyInstanceId + marketId`.
+- Instâncias live na mesma conta, inclusive BTC 5m + ETH 5m, compartilham reserva atômica de saldo, exposição/perda global, rate limits e kill switch.
+- Processos live independentes não podem usar a mesma conta enquanto o coordenador global não for durável e comum a todos.
 - Limites configuráveis: notional por ordem/evento, exposição total, perda diária, ordens por minuto, falhas consecutivas e slippage realizado.
 - Fill parcial é posição real; nunca é tratado como falha total ou fill completo.
 - Heartbeat/cancel-on-disconnect para ordens resting e cancelamento no shutdown.
@@ -312,6 +326,7 @@ Gate de saída:
 - [x] restore preserva posição sem duplicar intenção de entrada indevida;
 - [x] limite global bloqueia segunda strategy quando a soma estoura.
 - [ ] restart real com ordem aberta, partial fill e posição existente reconciliado antes de `ARMED`.
+- [ ] coordenador global durável reserva capital sem corrida entre instâncias BTC/ETH antes de liberar multi-mercado live.
 
 Ver [arquitetura/risk-p4.md](./arquitetura/risk-p4.md).
 
@@ -345,11 +360,19 @@ Gate de saída (código / CI):
 - [ ] SLOs e alertas validados no Giovanna;
 - [x] engine aprovada sem depender de resultado, código ou comportamento da TFC.
 
+**Gate supervisor / multi-mercado live:**
+
+- [ ] catálogo e deployments registram versão, preset, `marketScope`, modo e aprovação;
+- [ ] BTC 5m + ETH 5m compartilham account risk/OMS/recovery sem misturar posição ou journal;
+- [ ] falha/kill por instância e kill global ensaiados;
+- [ ] nenhuma reserva dupla de saldo sob intenções concorrentes;
+- [ ] estratégias concorrentes no mesmo mercado continuam bloqueadas até existir arbitragem explícita.
+
 Ver [arquitetura/observability-p5.md](./arquitetura/observability-p5.md).
 
-### P6 — Plugin TFC V7 e paridade shadow
+### P6 — Plugins aprovados e paridade shadow
 
-**Status:** código concluído (2026-07-19); shadow ≥100 eventos **reais** ainda ops.
+**Status:** infraestrutura genérica e plugin TFC V7 concluídos; MIDAS ainda ausente. Cada combinação plugin + versão + preset percorre gate próprio.
 
 Entregáveis:
 
@@ -358,6 +381,9 @@ Entregáveis:
 - [x] entrada, late flip exit/reverse 8→4s e danger exit em [4s, 5s);
 - [x] paridade de volatilidade, `signedDistance`, preset e limites com o GLS (helpers + testes);
 - [x] paridade sintética ≥100 casos no CI; [ ] shadow ≥100 eventos reais (ops).
+- [ ] MIDAS Carry V1 implementada pelo mesmo contrato, sem alterar core/OMS/risk;
+- [ ] preset MIDAS `btc-champion-v1` (path `midas-carry-v1/presets/`) versionado e paridade sintética contra o `data-backtest`;
+- [ ] MIDAS shadow ≥100 eventos reais com mismatches explicados.
 
 Gate de saída:
 
@@ -365,13 +391,14 @@ Gate de saída:
 - [x] testes cobrem limites UP/DOWN, tempo, spread, OBI, odds sum e velocity;
 - [x] 0 decisão com feed stale;
 - [x] suíte genérica de conformidade passa para TFC V7;
-- [ ] mismatches de 100 eventos reais explicados (ops / Giovanna).
+- [ ] mismatches de 100 eventos reais explicados para cada plugin candidato (ops / Giovanna).
+- [ ] status `shadow-approved` registrado por versão + preset; aprovação de TFC não promove MIDAS nem vice-versa.
 
 Ver [arquitetura/tfc-v7-p6.md](./arquitetura/tfc-v7-p6.md).
 
-### P7 — Micro-live TFC de entrada
+### P7 — Micro-live de entrada por plugin
 
-**Status:** harness e proteções de código concluídos (2026-07-20); **campanha live bloqueada** até os gates reais de P3–P5.
+**Status:** harness TFC e proteções genéricas concluídos (2026-07-20); nenhuma estratégia tem campanha live aprovada. MIDAS precisa de composition/harness próprio ou parametrização do canário genérico.
 
 Entregáveis:
 
@@ -379,10 +406,11 @@ Entregáveis:
 - [x] ordem/fill/cancel via `createLiveTransport` (mock no CI; CLOB real com `--live`);
 - [x] relatório fee/slippage/órfã + paridade de intenção;
 - [x] limite de canário independente do budget de $10 (`CANARY_LIMITS` + risk).
+- [ ] canário recebe `strategyId`, versão, preset e `marketScope` aprovados sem bootstrap específico hard-coded;
 
 Gate de saída:
 
-- [ ] pelo menos 10 entradas micro-live em dias distintos;
+- [ ] pelo menos 10 entradas micro-live em dias distintos **por plugin + preset candidato**;
 - [x] pipeline reconciliável sem órfã/duplicidade/violação de cap (testes mock);
 - [ ] slippage/fee explicado em runs live reais;
 - [x] nenhuma promoção só por aceite da ordem (relatório exige fill/reconcile).
@@ -391,11 +419,11 @@ Gate de saída:
 
 Ver [arquitetura/micro-live-p7.md](./arquitetura/micro-live-p7.md).
 
-### P8 — Saídas TFC: late flip, reverse e danger exit
+### P8 — Saídas por plugin: exit, reverse e danger exit
 
 **Status:** ausente.
 
-O risk engine rejeita `REVERSE` em live com `LIVE_REVERSE_UNSUPPORTED` até esta fase implementar e validar a saga de duas pernas.
+O risk engine rejeita `REVERSE` em live com `LIVE_REVERSE_UNSUPPORTED` até esta fase implementar e validar a saga genérica de duas pernas. Regras de sinal continuam no plugin; execução, reconciliação e exposição residual pertencem à engine/OMS.
 
 Ordem de validação:
 
@@ -422,7 +450,7 @@ Promoção progressiva:
 2. canário com budget fixo mínimo e no máximo 1 evento por janela de controle;
 3. 25% do budget pretendido;
 4. 50%;
-5. budget V7 de $10 somente após revisão humana dos relatórios.
+5. budget aprovado do preset candidato somente após revisão humana dos relatórios.
 
 Gate de saída para cada degrau:
 
@@ -441,7 +469,8 @@ Escalar para $15–20 é uma decisão separada. O backtest mostrou eficiência a
 | Engine/contrato | schemas/conformidade | registry + journal | strategy fake/restart | mesmo pipeline, sink live |
 | Config/auth | parsing/redaction | derive + saldo + geoblock | startup fail-closed | smoke sem ordem |
 | Feed/book | normalização/gaps | reconnect/resync | ≥100 eventos | comparação com UI |
-| TFC V7 | gates e janelas | preset sync | paridade com GLS | intenção vs execução |
+| Plugin de estratégia | contrato, gates e janelas | catálogo + preset sync | paridade por versão/preset | intenção vs execução |
+| Supervisor | roteamento por scope | risk/OMS globais | BTC + ETH isolados | concorrência sem reserva dupla |
 | OMS | transições/idempotência | WS + REST + journal | falhas injetadas | partial/fill/cancel |
 | Risk | todos os bloqueios | kill switch/heartbeat | soak | limites mínimos |
 | Recovery | checkpoint/replay | restart/timeout | chaos controlado | ordem/posição existente |
@@ -452,6 +481,8 @@ O robô só pode ser chamado de produção quando:
 
 - P0–P9 tiverem gates aprovados e evidência versionada;
 - strategy version, preset e commit estiverem presentes em toda decisão;
+- catálogo registrar aprovação por plugin + versão + preset, sem ativação implícita;
+- instâncias multi-mercado compartilharem coordenação global da conta e preservarem isolamento por `strategyInstanceId + marketId`;
 - ordem e posição forem recuperáveis após restart;
 - user WS, REST e journal forem reconciliados;
 - limites de risco, geoblock, heartbeat e kill switch estiverem ativos;

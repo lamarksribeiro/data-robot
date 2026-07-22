@@ -1,7 +1,7 @@
 # TFC V7 P6 — plugin no contrato da engine
 
-Status: **implementado** (2026-07-19). Sem SDK/rede/ordens reais.  
-Ops: shadow ≥100 eventos reais no Giovanna permanece recomendado antes de P7; paridade sintética já coberta no CI.
+Status: **plugin TFC V7 implementado** (2026-07-19). Sem SDK/rede/ordens reais.  
+Ops: shadow ≥100 eventos reais no Giovanna permanece recomendado antes da **campanha** micro-live (P7 live), não antes do harness de código. Cada plugin/preset (ex.: MIDAS) tem gate próprio — aprovação TFC não promove MIDAS ([ADR-002](./adr-002-strategy-catalog-supervision.md)).
 
 ## Plugin
 

@@ -34,3 +34,14 @@ Status: **código endurecido** (2026-07-20). O canário executa preflight read-o
 Falhas injetadas (geoblock, health, notional, circuit, kill, exposição global) cobertas em `test/risk-p4.test.js`.
 
 Gate ops ainda aberto: restart real com ordem aberta/partial/posição e reconciliação antes de `ARMED`.
+
+## Multi-mercado na mesma conta
+
+BTC 5m e ETH 5m podem operar como instâncias distintas, mas não possuem saldos independentes. O `accountBook` atual prova agregação em memória/testes; antes de multi-mercado live, o coordenador da conta deve ser compartilhado e durável, com:
+
+- reserva atômica de saldo/exposição entre instâncias;
+- limites globais de perda, rate e ordens, além dos limites por `marketScope`;
+- kill global e kill por instância;
+- recovery conjunto antes de qualquer instância voltar a `ARMED`.
+
+Dois processos live com a mesma conta e risk apenas local são fail-closed. Ver [ADR-002](./adr-002-strategy-catalog-supervision.md).

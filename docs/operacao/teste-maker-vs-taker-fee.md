@@ -100,4 +100,4 @@ Compare os JSONs em `runs/fee-*.json`: `trader_side`, `expectedFeeUsd`, `balance
 
 - Hopper 3: `polymarket-fm/hopper-3-explicacao.md`
 - Fees backtest: `data-backtest/src/backtest/fees.js`
-- Validação TFC LEGO: [tfc-validacao-real.md](../tfc-validacao-real.md)
+- Validação TFC V7: [tfc-validacao-real.md](../tfc-validacao-real.md)

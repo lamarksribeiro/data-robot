@@ -1,4 +1,6 @@
-# Validação TFC V7 em conta real
+# Validação TFC V7 em conta real — baseline de plugin
+
+Este runbook aprova uma combinação específica de plugin TFC V7 + versão + preset. Ele não torna a engine dependente da TFC, não aprova MIDAS/ETH por herança e não autoriza outros plugins apenas por estarem no catálogo. Engine Ready é um gate separado; cada plugin candidato repete paridade, shadow, canary e evidência live aplicável.
 
 Runbook incremental para validar a **Terminal Favorite Carry V7 Danger Floor** no `data-robot` com exposição controlada. O roadmap, a arquitetura e os gates de promoção estão no [plano de desenvolvimento](./plano-desenvolvimento.md).
 
@@ -24,7 +26,7 @@ Este runbook valida a TFC V7, não define a arquitetura da engine. A implementa�
 
 Para outra estratégia, cria-se outro módulo aderente ao mesmo contrato e um runbook próprio de sinais/paridade. Auth, feeds reutilizáveis, risk global, OMS, executor, journal, recovery, observabilidade e deploy continuam sendo os mesmos.
 
-## Estratégia-alvo
+## Estratégia validada por este runbook
 
 O alvo é `src/tfc/preset-v7.js`, espelho de `data-backtest/labs/strategies/terminal/tfc/presets/btc-champion-v7.json`:
 
