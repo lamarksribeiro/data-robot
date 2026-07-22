@@ -358,12 +358,31 @@ export function createLiveTransport(opts) {
       }
       let heartbeatId = '';
       let busy = false;
+      const isInvalidHeartbeatId = (err) =>
+        /Invalid Heartbeat ID/i.test(String(err?.message ?? err ?? ''));
       const beat = async (failClosed = false) => {
         if (busy) return;
         busy = true;
         try {
-          const response = await client.postHeartbeat(heartbeatId);
-          heartbeatId = response?.heartbeat_id ?? heartbeatId;
+          try {
+            const response = await client.postHeartbeat(heartbeatId);
+            if (response?.error_msg && /Invalid Heartbeat ID/i.test(String(response.error_msg))) {
+              throw new Error(String(response.error_msg));
+            }
+            heartbeatId = response?.heartbeat_id ?? heartbeatId;
+          } catch (err) {
+            // ID stale após gap/rotação: reset e tenta 1x com sessão nova.
+            if (isInvalidHeartbeatId(err)) {
+              heartbeatId = '';
+              const response = await client.postHeartbeat('');
+              if (response?.error_msg && /Invalid Heartbeat ID/i.test(String(response.error_msg))) {
+                throw new Error(String(response.error_msg));
+              }
+              heartbeatId = response?.heartbeat_id ?? '';
+              return;
+            }
+            throw err;
+          }
         } catch (err) {
           if (typeof onFailure === 'function') onFailure(err);
           if (failClosed) throw err;

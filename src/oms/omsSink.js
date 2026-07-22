@@ -280,7 +280,16 @@ export function createOmsSink(opts = {}) {
       clobHeartbeatStop?.();
       transport.stopHeartbeat?.();
       if (userChannel?.connected) userChannel.disconnect();
+      executionListeners.clear();
+      criticalListeners.clear();
       started = false;
+    },
+
+    /** Para reusar o sink entre engines (ex.: rotação de mercado no micro-live). */
+    detachEngineListeners() {
+      executionListeners.clear();
+      criticalListeners.clear();
+      lastChannelError = null;
     },
   };
 

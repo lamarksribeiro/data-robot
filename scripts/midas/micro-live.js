@@ -207,11 +207,30 @@ async function main() {
                 clobFeed.subscribe(hub.event.upTokenId, hub.event.downTokenId);
                 subscribedMarketId = synced.marketId;
                 // Engine limpa: evita estado/posição shadow de slot anterior.
+                // Em live, reutiliza o sink (heartbeat CLOB + user WS) — dispose
+                // + startHeartbeat('') na rotação gerava Invalid Heartbeat ID fatal.
                 await engine.safeShutdown('midas-micro-market-rotate');
-                engine.sink.dispose?.();
-                engine = buildEngine();
-                await engine.sink.start();
-                engine.start();
+                const prevSink = engine.sink;
+                if (opts.live && prevSink) {
+                  prevSink.detachEngineListeners?.();
+                  engine = bootstrapMidasCanaryEngine({
+                    mode,
+                    liveEnabled: true,
+                    client,
+                    Side,
+                    OrderType,
+                    userChannel,
+                    riskOpts,
+                    preset,
+                    sink: prevSink,
+                  });
+                  engine.start();
+                } else {
+                  prevSink?.dispose?.();
+                  engine = buildEngine();
+                  await engine.sink.start();
+                  engine.start();
+                }
                 if (!opts.json) {
                   console.log(
                     `[event] ${hub.event.title} | PTB=${state.priceToBeat ?? 'pendente'} (rot=${hub.stats.rotations})`,
@@ -322,8 +341,13 @@ async function main() {
             }
             process.exit(0);
           } catch (err) {
-            clearInterval(timer);
-            reject(err);
+            if (placed) {
+              clearInterval(timer);
+              reject(err);
+              return;
+            }
+            // Rotação/heartbeat transitório: não mata o wait de ENTER.
+            console.error(`[midas:micro-live] tick: ${err.message}`);
           } finally {
             tickBusy = false;
           }

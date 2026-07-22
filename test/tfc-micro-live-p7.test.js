@@ -191,6 +191,23 @@ describe('live transport mock', () => {
     assert.equal(result.events[0].reason, 'NO_TOKEN_ID');
   });
 
+  it('heartbeat recupera Invalid Heartbeat ID com reset', async () => {
+    const seq = [];
+    let n = 0;
+    const client = {
+      async postHeartbeat(id = '') {
+        n += 1;
+        seq.push(id);
+        if (n === 1) throw new Error('Invalid Heartbeat ID');
+        return { heartbeat_id: 'after-reset' };
+      },
+    };
+    const transport = createLiveTransport({ client, Side, OrderType });
+    const stop = await transport.startHeartbeat(() => assert.fail('onFailure'), 60_000);
+    assert.deepEqual(seq, ['', '']);
+    stop();
+  });
+
   it('cancelOpenOrders no sink live mock', async () => {
     const client = createMockClobClient({ behavior: 'live' });
     const transport = createLiveTransport({ client, Side, OrderType });
