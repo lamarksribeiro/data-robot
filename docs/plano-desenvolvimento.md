@@ -4,7 +4,7 @@
 **Estado atual:** engine + UI no Giovanna; **ainda não** é robô autônomo. Canário deste ciclo = **só MIDAS $1**.  
 **URL oficial:** https://robot.fracta.online  
 **Pacote:** `data-robot` **1.10.0**  
-**Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / preset lab `btc-champion-v1`). Plugin **implementado** no robot (CI); **shadow ≥5 ENTER OK** (22/07); micro-live $1 ainda aberto.  
+**Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / preset lab `btc-champion-v1`). Plugin **implementado** no robot (CI); **shadow ≥5 ENTER OK** (22/07); **micro-live #1 fill OK** (22/07, cap $2); faltam micros #2–#3.  
 **Depois:** qualquer estratégia via o mesmo contrato (engine agnóstica). TFC V7 = helpers no código, fora do canário agora.
 
 Este é o roadmap canônico. O [runbook TFC](./tfc-validacao-real.md) é baseline histórico do plugin TFC — **não** define a trilha MIDAS deste ciclo.
@@ -73,9 +73,9 @@ FEITO:  engine Giovanna + drills (A1/A2)
         Shadow MIDAS ≥5 ENTER (22/07 Giovanna)
           → docs/operacao/evidencia-midas-shadow-2026-07-22.md
           │
-AGORA:  3) 1º micro-live MIDAS US$ 1  →  +2 micros
+AGORA:  4) micros #2 + #3 MIDAS (cap $2 / min notional $1)
           │
-META:   Produção canário = enter/hold $1 repetível (3 runs OK)
+META:   Produção canário = enter/hold repetível (3 runs OK)
           │
 DEPOIS: EXIT/danger live → só então subir budget / P9
           │
@@ -104,8 +104,8 @@ FUTURO: outras estratégias no mesmo contrato (TFC, Apex, …)
 |------:|------|--------|----------|
 | **1 — código ✓** | **B** | Plugin MIDAS + paridade CI + harness `midas:micro-live` | registry + ≥100 sintéticos + script (CI verde 22/07) |
 | **2 — ✓** | **C'** | Shadow MIDAS curto | ≥5 ENTER (22/07 Giovanna); [evidência](./operacao/evidencia-midas-shadow-2026-07-22.md) |
-| **3** | **E1** | 1º micro-live MIDAS $1 | fill/reconcile ou cancel limpo |
-| **4** | **E2** | +2 micros ($1) | 3 reconciliados, 0 órfã → **canário enter/hold** |
+| **3 — ✓** | **E1** | 1º micro-live MIDAS | fill/reconcile 22/07 ([evidência](./operacao/evidencia-midas-micro-live-2026-07-22.md)) |
+| **4** | **E2** | +2 micros (cap $2) | 3 reconciliados, 0 órfã → **canário enter/hold** |
 | **5** | **F'** | EXIT/danger live | antes de subir budget |
 | **6** | **G** | P9 + outras estratégias | depois do canário MIDAS estável |
 

@@ -68,4 +68,4 @@ Pendente para completar o gate operacional: soak contínuo ≥4h (ideal 24h). Ne
 - 5 ENTER em mercados BTC 5m distintos (~14:39Z–15:09Z); ver tabela completa na [evidência dedicada](./evidencia-midas-shadow-2026-07-22.md).
 - Overnight pré-fix: 1 ENTER / ~81 eventos — posição shadow não zerava na rotação; corrigido em `b1496ee`.
 - Artefatos: `/usr/src/app/runs/midas-shadow/LAST.done` e `sprint-20260722T143455Z.log`.
-- Próximo: 3× micro-live MIDAS $1 (ainda sem ordem real nesta evidência).
+- Micro-live #1 OK (22/07): [evidencia-midas-micro-live-2026-07-22.md](./evidencia-midas-micro-live-2026-07-22.md). Próximo: micros #2 e #3.
