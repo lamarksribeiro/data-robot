@@ -2,7 +2,7 @@
 
 Executor de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
 
-**Status:** pacote **1.10.0** — núcleo strategy-agnostic P0–P5 e proteções live implementados; TFC V7 fornece a referência P6/P7, ainda sem gate operacional aprovado. Não é produção autônoma. UI oficial: https://robot.fracta.online (Coolify Giovanna). **MIDAS Carry V1** é a próxima candidata (ainda só no `data-backtest`). **Trilha ágil:** engine `:3201` + drills → plugin MIDAS → shadow ≥20 → 3 micros ($1) → EXIT (P8); soak 7d / 10 dias só para P9.
+**Status:** pacote **1.10.0** — P0–P5 + TFC V7 + harness micro-live no código; UI em https://robot.fracta.online. Engine `:3201` implantada no Giovanna em `shadow + fixture`, sem domínio público, com smoke e drills aprovados em 22/07/2026. Plugin MIDAS ainda falta. **Próximo:** soak ≥4h em background + plugin MIDAS/OMS smoke TFC.
 
 Estratégias aprovadas devem ficar disponíveis em um catálogo explícito e ser selecionadas por configuração. Instâncias de mercados distintos — por exemplo BTC 5m e ETH 5m — podem coexistir na mesma conta, desde que compartilhem coordenação global e durável de saldo, risk, OMS e recovery. Concorrência de estratégias no mesmo mercado exige um gate adicional de conflito/netting.
 
