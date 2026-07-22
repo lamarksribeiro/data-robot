@@ -306,13 +306,21 @@ async function main() {
               console.log(mode === 'live' ? 'LIVE processado:' : 'DRY-RUN processado:');
               console.log(report);
             }
-            // Encerra feeds antes do resolve — WS/reconnects não devem segurar o event loop.
-            stopRtds?.();
-            stopRtds = null;
-            clobFeed?.stop();
-            clobFeed = null;
             clearInterval(timer);
-            resolve();
+            // CLI: sair imediatamente após o report — WS/OMS não podem segurar o process.
+            stopRtds?.();
+            clobFeed?.stop();
+            try {
+              await engine.safeShutdown('micro-live-done');
+            } catch {
+              /* ignore */
+            }
+            try {
+              engine.sink.dispose?.();
+            } catch {
+              /* ignore */
+            }
+            process.exit(0);
           } catch (err) {
             clearInterval(timer);
             reject(err);
