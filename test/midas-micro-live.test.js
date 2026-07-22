@@ -49,28 +49,26 @@ describe('MIDAS micro-live canary', () => {
     assert.equal(p.tierAskBudgetFactor, 1.5);
   });
 
-  it('dry-run canário: notional ≤ cap $1', async () => {
+  it('dry-run canário: notional ≤ cap $2', async () => {
     const engine = bootstrapMidasCanaryEngine({ mode: 'dry-run' });
     engine.start();
     await engine.ingestMarketSnapshot(snap(0.62));
     const sink = [...engine.journal].reverse().find((j) => j.type === 'sink');
     if (sink?.intent) {
       assert.ok(Number(sink.intent.budget) <= CANARY_LIMITS.maxCanaryBudget + 1e-9);
+      assert.ok(Number(sink.intent.budget) >= 1 - 1e-9);
     }
     await engine.safeShutdown('test');
   });
 
   it('risk canário bloqueia budget campeão $10/$15', () => {
     const engine = bootstrapMidasCanaryEngine({ mode: 'dry-run' });
-    const risk = engine.getStatus ? null : null;
-    void risk;
-    // Cap é injetado no bootstrap — notional de campeão estoura maxCanaryBudget
-    assert.equal(engine.canary.maxCanaryBudget, 1);
+    assert.equal(engine.canary.maxCanaryBudget, 2);
   });
 
   it('live mock exige client+flags; dry-run bootstrap ok', () => {
     const engine = bootstrapMidasCanaryEngine({ mode: 'dry-run' });
-    assert.equal(engine.canary.maxCanaryBudget, 1);
+    assert.equal(engine.canary.maxCanaryBudget, 2);
     assert.throws(
       () =>
         bootstrapMidasCanaryEngine({

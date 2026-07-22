@@ -10,6 +10,7 @@ import {
   evaluateEntryGates,
   evaluateLateFlipAction,
 } from '../tfc/evaluate.js';
+import { sizeCanaryBuy } from '../tfc/sizeCanaryBuy.js';
 
 export const TFC_V7_STRATEGY_ID = 'tfc-v7';
 export const TFC_V7_PRESET_ID = 'btc-champion-v7';
@@ -248,11 +249,16 @@ export function createTfcV7Strategy(opts = {}) {
           const tokenId =
             entry.fav === 'UP' ? identity.upTokenId ?? null : identity.downTokenId ?? null;
           const maxPrice = entry.ask + slippage;
-          const minShares = Math.max(1, Number(params.minShares ?? 1));
-          const budget = Number(params.entryBudget);
-          const sized = Number.isFinite(budget) && entry.ask > 0 ? Math.floor(budget / entry.ask) : 0;
-          const quantity = Math.max(minShares, sized);
-          const notional = quantity * maxPrice;
+          const orderType = params.entryOrderType ?? 'GTC';
+          const sized = sizeCanaryBuy({
+            ask: entry.ask,
+            maxPrice,
+            entryBudget: Number(params.entryBudget),
+            minShares: params.minShares ?? 1,
+            minNotional: orderType === 'FAK' || orderType === 'FOK' ? undefined : 0,
+          });
+          const quantity = sized.quantity;
+          const notional = sized.notional;
           intents.push({
             intentId: makeIntentId({
               strategyInstanceId: ctx.strategyInstanceId,
@@ -271,7 +277,7 @@ export function createTfcV7Strategy(opts = {}) {
             deadlineMs: ctx.clockMs + 5000,
             reason: 'entry_gates',
             presetId: TFC_V7_PRESET_ID,
-            orderType: params.entryOrderType ?? 'GTC',
+            orderType,
             tokenId,
           });
         }

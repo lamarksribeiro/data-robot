@@ -11,6 +11,7 @@ import {
   evaluateEntryGates,
   evaluateLateFlipAction,
 } from '../tfc/evaluate.js';
+import { sizeCanaryBuy } from '../tfc/sizeCanaryBuy.js';
 
 export const MIDAS_V1_STRATEGY_ID = 'midas-carry-v1';
 export const MIDAS_V1_PRESET_ID = 'btc-champion-v1';
@@ -261,15 +262,19 @@ export function createMidasV1Strategy(opts = {}) {
           const tokenId =
             entry.fav === 'UP' ? identity.upTokenId ?? null : identity.downTokenId ?? null;
           const maxPrice = entry.ask + slippage;
-          const minShares = Math.max(1, Number(params.minShares ?? 1));
           const entryBudgetUsed = resolveMidasEntryBudget(params, entry.ask);
           next.entryBudgetUsed = entryBudgetUsed;
-          const sized =
-            Number.isFinite(entryBudgetUsed) && entry.ask > 0
-              ? Math.floor(entryBudgetUsed / entry.ask)
-              : 0;
-          const quantity = Math.max(minShares, sized);
-          const notional = quantity * maxPrice;
+          const orderType = params.entryOrderType ?? 'GTC';
+          const sized = sizeCanaryBuy({
+            ask: entry.ask,
+            maxPrice,
+            entryBudget: entryBudgetUsed,
+            minShares: params.minShares ?? 1,
+            minNotional:
+              orderType === 'FAK' || orderType === 'FOK' ? undefined : 0,
+          });
+          const quantity = sized.quantity;
+          const notional = sized.notional;
           diagnostics.tier = {
             ask: entry.ask,
             entryBudgetUsed,

@@ -377,7 +377,9 @@ describe('micro-live report + parity', () => {
     const out = strategy.onSnapshot(ctx, state);
     const intent = out.intents[0];
     assert.equal(intent.kind, 'ENTER');
-    assert.equal(intent.quantity, 1);
+    assert.ok(intent.quantity >= 1);
+    assert.ok(Number(intent.budget) >= 1);
+    assert.ok(Number(intent.budget) <= CANARY_LIMITS.maxCanaryBudget + 1e-9);
     assert.deepEqual(compareIntentParity(intent, { ...intent }), { ok: true, mismatches: [] });
   });
 
