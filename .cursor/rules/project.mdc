@@ -5,7 +5,7 @@ alwaysApply: true
 
 # data-robot
 
-**Único app de produção com dinheiro real.** Node 22 ESM. UI estática `sirv` na porta **3200**. SDK: `@polymarket/clob-client-v2`. Produção: robot.fracta.online.
+**Único app que opera dinheiro real** (não confundir com P9 / produção autônoma). Node 22 ESM. UI estática `sirv` na porta **3200**. SDK: `@polymarket/clob-client-v2`. URL oficial: https://robot.fracta.online (Coolify Giovanna). Engine `:3201` ainda não é serviço separado.
 
 ## Segurança
 

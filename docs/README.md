@@ -8,17 +8,18 @@
 |-----------|----------|
 | [Plano de desenvolvimento](./plano-desenvolvimento.md) | Engine independente de estratégia, arquitetura-alvo, invariantes, roadmap P0–P9 e Definition of Done |
 | [ADR-001 — Engine ≠ estratégia](./arquitetura/adr-001-engine-strategy-separation.md) | Contrato de plugin; core não importa TFC/strategy |
+| [ADR-002 — Catálogo e supervisão](./arquitetura/adr-002-strategy-catalog-supervision.md) | Plugins aprovados, instâncias, multi-mercado BTC/ETH e coordenação global da conta |
 | [Engine P1](./arquitetura/engine-p1.md) | Kernel, sinks dry-run/shadow, fixtures e bootstrap |
 | [Market P2](./arquitetura/market-p2.md) | Snapshots, health, capabilities, hub e replay |
 | [OMS P3](./arquitetura/oms-p3.md) | Ordens, executor sim, journal, reconciler |
 | [Risk P4](./arquitetura/risk-p4.md) | Fail-closed, kill, circuit, checkpoint/restore |
 | [Observabilidade P5](./arquitetura/observability-p5.md) | Métricas, control HTTP, soak, fault injection; ops Engine Ready |
-| [TFC V7 P6](./arquitetura/tfc-v7-p6.md) | Plugin no contrato; ENTER/late flip/danger; paridade sintética |
-| [Micro-live P7](./arquitetura/micro-live-p7.md) | Canário via engine; live transport; relatório reconcile |
+| [TFC V7 P6](./arquitetura/tfc-v7-p6.md) | Plugin TFC no contrato; ENTER/late flip/danger; paridade sintética; MIDAS é gate separado |
+| [Micro-live P7](./arquitetura/micro-live-p7.md) | Canário via engine; harness TFC; campanha por plugin/preset; ACK≠fill |
 | [Schema de runs](./arquitetura/runs-schema.md) | Envelope versionado, sanitização e retenção de evidência |
 | [Deploy Giovanna](./operacao/deploy-giovanna.md) | Coolify Giovanna, URL oficial `robot.fracta.online`, smoke CLOB, próximos passos |
 | [Ambientes](./operacao/ambientes.md) | local / shadow / canary / production |
-| [Validação TFC V7 em conta real](./tfc-validacao-real.md) | Runbook F0–F7, evidência exigida e gates de promoção |
+| [Validação TFC V7 em conta real](./tfc-validacao-real.md) | Baseline específico do plugin TFC; não promove outros plugins por herança |
 
 ## Polymarket / CLOB
 

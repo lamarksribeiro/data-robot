@@ -118,5 +118,5 @@ Antes do canário, repetir pelo menos `--repeat=30` no servidor em horário de m
 
 ## Relacionado
 
-- [Validação TFC LEGO](../tfc-validacao-real.md) — fase F2
+- [Validação TFC V7](../tfc-validacao-real.md) — fase F2
 - [Configuração `.env`](../polymarket-configuracao-env.md)

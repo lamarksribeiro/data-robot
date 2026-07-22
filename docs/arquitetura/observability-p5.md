@@ -53,6 +53,8 @@ Container da engine: `Dockerfile.engine` (CMD `scripts/engine-serve.js`). Live e
 | Soak curto (fixtures) | ✓ `engine:soak` | Soak ≥7 dias sem divergência |
 | Aprovação sem depender de TFC | ✓ (fixtures) | — |
 
+Engine Ready aprova a infraestrutura de uma instância e independe do plugin. Supervisor/multi-mercado possui gate adicional: health e métricas por instância/`marketScope`, visão agregada da conta, isolamento de falha, reserva concorrente sem duplicidade e recovery conjunto. Ver [ADR-002](./adr-002-strategy-catalog-supervision.md).
+
 Ver checklist no [plano P5](../plano-desenvolvimento.md#p5--resiliência-observabilidade-deploy-e-gate-engine-ready).
 
 Comando operacional planejado:

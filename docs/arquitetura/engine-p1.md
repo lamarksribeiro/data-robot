@@ -48,6 +48,19 @@ console.log(engine.getStatus());
 
 Trocar para `fixture-spread-wide` não altera o core — só `strategyId` + preset.
 
+## Catálogo e instâncias
+
+O registry pode conter vários plugins, mas o processo atual resolve uma única instância por `strategyId`. Isso já permite disponibilizar e selecionar estratégias sem alterar o core; ainda não é um supervisor multi-instância.
+
+Evolução aprovada no [ADR-002](./adr-002-strategy-catalog-supervision.md):
+
+1. catálogo explícito de plugins aprovados;
+2. múltiplas instâncias shadow com estado/métricas isolados;
+3. BTC 5m, ETH 5m e outros escopos live simultâneos somente sob OMS, account risk e recovery globais e duráveis;
+4. estratégias concorrentes no mesmo mercado apenas após política de conflito/netting.
+
+Portar ou promover uma estratégia não é requisito para o gate Engine Ready da engine.
+
 ## Evolução P2+
 
 Adapters de mercado, watchdogs e replay já alimentam o mesmo `ingestSnapshot`. Evidência operacional e promoção continuam nos gates P3–P9 do roadmap.

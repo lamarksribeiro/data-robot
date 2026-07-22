@@ -49,9 +49,19 @@ npm run test:fee -- --mode=taker --live --size=5
 npm run test:fee -- --mode=maker --live --size=5 --wait=120
 ```
 
+## Engine / control plane (P5)
+
+```bash
+npm run engine:serve          # control HTTP :3201 (default shadow + fixture)
+npm run engine:soak           # soak curto com fixtures
+npm run engine:soak -- --duration-hours=1 --interval-ms=1000
+```
+
+Live exige `ENGINE_MODE=live` **e** `ENGINE_LIVE_ENABLED=1`. Fora de localhost, `ENGINE_OPS_TOKEN` é obrigatório. Ver [../docs/arquitetura/observability-p5.md](../docs/arquitetura/observability-p5.md) e [../docs/operacao/deploy-giovanna.md](../docs/operacao/deploy-giovanna.md).
+
 ## TFC V7 — validação incremental
 
-Ver [../docs/tfc-validacao-real.md](../docs/tfc-validacao-real.md). `micro-entry` é legado; somente `micro-live` passa pelo pipeline válido de promoção.
+Ver [../docs/tfc-validacao-real.md](../docs/tfc-validacao-real.md). `micro-entry` é legado; somente `micro-live` passa pelo pipeline válido de promoção. MIDAS ainda não tem harness no robot.
 
 | Script | npm | Descrição |
 |--------|-----|-----------|

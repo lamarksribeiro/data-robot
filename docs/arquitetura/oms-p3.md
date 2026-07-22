@@ -47,3 +47,5 @@ oms2.restoreFromJournal(entries);
 - provar heartbeat/cancel remoto durante desconexão e shutdown;
 - reconciliar restart com ordem aberta, partial fill e posição existente;
 - zero ordem remota sem intent/journal local.
+
+Multi-instância / multi-mercado live na mesma conta exige OMS e journal atribuídos por `strategyInstanceId + marketId` sob coordenador global — ver [ADR-002](./adr-002-strategy-catalog-supervision.md).

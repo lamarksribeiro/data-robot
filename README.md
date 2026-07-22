@@ -2,7 +2,9 @@
 
 Executor de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
 
-**Status:** núcleo P0–P7 e proteções live implementados; gates operacionais P3–P7 ainda abertos. Não é produção autônoma. UI oficial: https://robot.fracta.online (Coolify Giovanna). Estratégia-alvo inicial: **MIDAS Carry V1** (ainda só no `data-backtest`). Próximos passos: engine `:3201` no Giovanna → plugin MIDAS + paridade → shadow/soak → micro-live canário → saídas (P8).
+**Status:** pacote **1.10.0** — núcleo strategy-agnostic P0–P5 e proteções live implementados; TFC V7 fornece a referência P6/P7, ainda sem gate operacional aprovado. Não é produção autônoma. UI oficial: https://robot.fracta.online (Coolify Giovanna). **MIDAS Carry V1** (`midas-carry-v1` / preset lab `btc-champion-v1`) é a próxima candidata à promoção e ainda existe só no `data-backtest`. O deploy e o gate Engine Ready da engine `:3201` não dependem da MIDAS.
+
+Estratégias aprovadas devem ficar disponíveis em um catálogo explícito e ser selecionadas por configuração. Instâncias de mercados distintos — por exemplo BTC 5m e ETH 5m — podem coexistir na mesma conta, desde que compartilhem coordenação global e durável de saldo, risk, OMS e recovery. Concorrência de estratégias no mesmo mercado exige um gate adicional de conflito/netting.
 
 Substitui o `polymarket-robot` como base do novo desenvolvimento.
 
@@ -42,12 +44,13 @@ npm run ci
 
 - [Plano de desenvolvimento](./docs/plano-desenvolvimento.md) — arquitetura-alvo, P0–P9, DoD
 - [ADR-001 engine ≠ estratégia](./docs/arquitetura/adr-001-engine-strategy-separation.md)
+- [ADR-002 catálogo + supervisão](./docs/arquitetura/adr-002-strategy-catalog-supervision.md)
 - [Observabilidade P5](./docs/arquitetura/observability-p5.md) — control plane / Engine Ready
 - [TFC V7 P6](./docs/arquitetura/tfc-v7-p6.md) — plugin no contrato
 - [Micro-live P7](./docs/arquitetura/micro-live-p7.md) — canário via engine
 - [Deploy Giovanna](./docs/operacao/deploy-giovanna.md) — Coolify + `robot.fracta.online`
 - [Ambientes](./docs/operacao/ambientes.md) — local / shadow / canary / production
-- [Validação TFC V7](./docs/tfc-validacao-real.md) — runbook (baseline; alvo live = MIDAS)
+- [Validação TFC V7](./docs/tfc-validacao-real.md) — runbook baseline do plugin TFC (não promove MIDAS por herança)
 - [docs/](./docs/) — índice completo
 
 ## Estrutura
