@@ -87,7 +87,19 @@ export {
   TFC_V7_PRESET_ID,
   mergeTfcV7Preset,
 } from './strategy/tfcV7.js';
+export {
+  createMidasV1Strategy,
+  MIDAS_V1_STRATEGY_ID,
+  MIDAS_V1_PRESET_ID,
+  mergeMidasV1Preset,
+} from './strategy/midasV1.js';
+export {
+  MIDAS_V1,
+  canaryMidasPreset,
+  resolveMidasEntryBudget,
+} from './tfc/preset-midas.js';
 export { defaultPresetFor } from './composition/presets.js';
 export { bootstrapTfcCanaryEngine } from './composition/tfcCanary.js';
+export { bootstrapMidasCanaryEngine } from './composition/midasCanary.js';
 export { createLiveTransport, createMockClobClient } from './executor/liveTransport.js';
 export { buildMicroLiveReport, compareIntentParity } from './oms/microLiveReport.js';

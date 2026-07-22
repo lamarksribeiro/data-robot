@@ -2,7 +2,7 @@
 
 Executor de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
 
-**Status:** pacote **1.10.0** — P0–P5 + TFC V7 + harness micro-live no código; UI em https://robot.fracta.online. Engine `:3201` implantada no Giovanna em `shadow + fixture`, sem domínio público, com smoke e drills aprovados em 22/07/2026. Plugin MIDAS ainda falta. **Próximo:** soak ≥4h em background + plugin MIDAS/OMS smoke TFC.
+**Status:** 1.10.0 — engine + UI no Giovanna (A1/A2 ✓). **Plugin MIDAS Carry V1 no código** (`midas:micro-live`). **Seguir:** shadow ≥5 → 3× micro $1 enter/hold → EXIT antes de subir budget.
 
 Estratégias aprovadas devem ficar disponíveis em um catálogo explícito e ser selecionadas por configuração. Instâncias de mercados distintos — por exemplo BTC 5m e ETH 5m — podem coexistir na mesma conta, desde que compartilhem coordenação global e durável de saldo, risk, OMS e recovery. Concorrência de estratégias no mesmo mercado exige um gate adicional de conflito/netting.
 
@@ -35,6 +35,7 @@ npm run ci
 | `npm run lint` / `npm test` / `npm run ci` | Qualidade local / CI |
 | `npm run engine:serve` | Engine contínua + snapshots (`fixture` por default) + control HTTP (`:3201`) |
 | `npm run engine:soak` | Soak com fixtures; suporta `--duration-hours` e `--interval-ms` |
+| `npm run midas:micro-live` | Canário MIDAS via engine (`--live` para real) |
 | `npm run tfc:watch` | Gates TFC V7 observe-only |
 | `npm run tfc:micro-entry` | Legado: dry-run/micro CLOB direto (não usar p/ promoção) |
 | `npm run tfc:micro-live` | P7: micro-entrada via engine (`--live` para real) |
