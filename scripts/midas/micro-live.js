@@ -263,10 +263,24 @@ async function main() {
             const snapshot = captured.snapshot;
             if (!opts.json && nowMs - lastHbMs > 10_000) {
               lastHbMs = nowMs;
+              const secs = snapshot.secsLeft;
+              let gateInfo = '';
+              if (secs != null && secs < 35) {
+                const entry = engine.getStatus()?.diagnostics?.entry;
+                if (entry?.gates) {
+                  const failed = Object.entries(entry.gates)
+                    .filter(([, g]) => !g?.pass)
+                    .map(([k, g]) => `${k}:${g.detail ?? 'fail'}`)
+                    .join('|');
+                  gateInfo = ` entry=${entry.ok ? 1 : 0} fav=${entry.fav ?? '-'} ask=${entry.ask ?? '-'} fail=${failed || '-'}`;
+                } else if (engine.getStatus()?.diagnostics?.skip) {
+                  gateInfo = ` skip=${engine.getStatus().diagnostics.skip}`;
+                }
+              }
               console.log(
-                `[hb] τ=${snapshot.secsLeft?.toFixed?.(1) ?? '?'}s ptb=${state.priceToBeat ?? '?'} ` +
+                `[hb] τ=${secs?.toFixed?.(1) ?? '?'}s ptb=${state.priceToBeat ?? '?'} ` +
                   `btc=${snapshot.btc ?? '?'} eligible=${captured.eligible ? 1 : 0} ` +
-                  `rot=${hub.stats.rotations} reasons=${(captured.reasons ?? []).join(',') || '-'}`,
+                  `rot=${hub.stats.rotations} reasons=${(captured.reasons ?? []).join(',') || '-'}${gateInfo}`,
               );
             }
 
