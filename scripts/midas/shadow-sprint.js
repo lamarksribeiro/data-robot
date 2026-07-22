@@ -44,6 +44,17 @@ function failGates(gates) {
     .join(' ');
 }
 
+function createShadowEngine() {
+  const engine = bootstrapEngine({
+    strategyId: MIDAS_V1_STRATEGY_ID,
+    mode: 'shadow',
+    preset: MIDAS_V1,
+    strategyInstanceId: 'midas-shadow-sprint',
+  });
+  engine.start();
+  return engine;
+}
+
 async function main() {
   const opts = parseArgs(process.argv);
   const state = createMarketState();
@@ -63,13 +74,7 @@ async function main() {
   const history = [];
 
   try {
-    engine = bootstrapEngine({
-      strategyId: MIDAS_V1_STRATEGY_ID,
-      mode: 'shadow',
-      preset: MIDAS_V1,
-      strategyInstanceId: 'midas-shadow-sprint',
-    });
-    engine.start();
+    engine = createShadowEngine();
 
     if (!opts.json) {
       console.log(
@@ -99,6 +104,12 @@ async function main() {
 
             if (event.conditionId !== currentEventId) {
               currentEventId = event.conditionId;
+              // Sprint conta 1 ENTER/mercado: posição shadow do evento anterior
+              // não pode bloquear o próximo (plugin só ENTER com qty=0).
+              if (engine) {
+                await engine.safeShutdown('midas-shadow-market-rotate');
+                engine = createShadowEngine();
+              }
               state.priceToBeat = await fetchPriceToBeat(event.eventStart, event.eventEnd);
               lastPtbRetryMs = Date.now();
               history.length = 0;
