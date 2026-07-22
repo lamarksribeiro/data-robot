@@ -56,33 +56,36 @@ Ficam fora deste ciclo:
 | Gates de entrada | Feito (P6 TFC) | `evaluateEntryGates` + late flip + danger exit no plugin TFC; MIDAS reusa + tier. |
 | Preset de produção | MIDAS pendente no robot | Lab MIDAS: `midas-carry-v1/presets/btc-champion-v1.json`. Robot ainda alinha `watch`/`micro-entry` ao `btc-champion-v7`. |
 | Entrada real | Feito (P7 código TFC) | `tfc:micro-live` via engine + canary cap; campanha live bloqueada até P3–P5; MIDAS harness ainda inexistente. |
-| Saída / reverse / danger exit | Ausente | `evaluateLateFlip` só avalia parte do sinal e não executa ciclo de posição. Danger exit não existe no robô. |
+| Saída / reverse / danger exit | Sinais no plugin TFC; execução live ausente | Plugin já emite late flip / danger EXIT. P8 = ciclo live reconciliado. `REVERSE` live bloqueado até saga. |
 | OMS e user WebSocket | Código live implementado; ops aberto | User WS autenticado, heartbeat CLOB, reconciliação por ordem e detecção de órfãs; validação real prolongada ainda pendente. |
 | Risco e kill switch | Código endurecido; ops aberto | Preflight live obrigatório, deadlines, caps, kill/circuit e `REVERSE` bloqueado até P8. |
-| Persistência / recovery | Código endurecido; ops aberto | Checkpoint atômico, restore de strategy/OMS/risk e reconciliação antes do start; falta ensaio real com ordem/posição existentes. |
+| Persistência / recovery | Código + drill shadow aprovados | Volume persistente no Giovanna; 2 restarts e restart pós-kill preservaram checkpoint e posição shadow. Ensaio com ordem/posição real permanece para o OMS smoke. |
 | Observabilidade | Código endurecido; ops aberto | Readiness depende de feed/recovery/user WS; métricas ausentes reprovam SLO; calibragem Giovanna pendente. |
 | Testes e CI | Feito | `npm run ci` (lint + architecture + testes); sem rede/ordens reais. |
-| Deploy | UI oficial no ar | https://robot.fracta.online no Coolify Giovanna; engine `:3201` ainda não é serviço separado; **Engine Ready ágil** (horas + drills) pendente — soak longo só para P9. |
+| Deploy | UI + engine no ar | UI em https://robot.fracta.online; engine `:3201` separada, interna, `running:healthy` em `shadow + fixture`. Falta soak ≥4h; soak longo só para P9. |
 
-### Próximos passos — trilha ágil
+### Próximos passos — trilha ágil (revisada)
 
-Objetivo: chegar a evidência live útil em **dias**, não semanas. Segurança fica no **cap canário ($1)**, fail-closed e reconciliação — não em calendário longo.
+Objetivo: evidência live em **dias**. Segurança = **cap $1** + fail-closed + reconcile — não calendário longo.
 
-| Fase | O quê | Critério mínimo (ágil) | Tempo típico |
-|------|--------|------------------------|--------------|
-| **A** | Engine `:3201` no Giovanna + smoke | **Runner local concluído**; falta deploy, `/health` `/ready`, 1 restart + 1 kill + restore limpo no Giovanna | meio dia |
-| **B** | Plugin MIDAS + paridade CI | plugin + ≥100 casos sintéticos vs GLS (já no CI) | 1–2 dias de código |
-| **C** | Shadow sprint MIDAS | **≥20 eventos** reais com mismatches explicados (janela terminal) | ~1 sessão de mercado (BTC 5m) |
-| **D** | OMS live smoke | 1 ordem teste create/cancel **ou** 1 micro-live dry→live reconciliado; User WS/REST ok | horas |
-| **E** | Micro-live wave-1 MIDAS | **3** entradas reconciliadas (cap $1), sem órfã; dias distintos **não** exigidos nesta wave | 1–3 dias |
-| **F** | P8 mínimo (EXIT) | sair posição live sem reverse; reverse continua bloqueado | após E estável |
-| **G** | Ampliar | 10 micros + shadow 100 + soak longo | só para canário contínuo / P9 |
+Já pronto no código (não refazer): P0–P5, TFC V7, `tfc:micro-live`, `Dockerfile.engine`, UI em produção.
 
-**Em paralelo:** A∥B. C pode começar assim que B e A existirem. Catálogo ADR-002 e supervisor multi-mercado **não** bloqueiam A–E (um processo, uma instância).
+| # | Fase | O quê | Depende de | Critério ágil |
+|---|------|--------|------------|---------------|
+| 1 | **A1 — concluída** | App Coolify `data-robot-engine` (`Dockerfile.engine`, `:3201`, `ENGINE_SNAPSHOT_SOURCE=fixture`) | — | container `running:healthy` |
+| 2 | **A2 — concluída** | Smoke + drills no Giovanna | A1 | `/health` `/ready`; 2 restarts; 1 kill; restore limpo, 0 órfã |
+| 3 | **B** ∥ | Plugin MIDAS + paridade CI | — (∥ A) | plugin + ≥100 sintéticos |
+| 4 | **D** | OMS live smoke **via TFC** (harness já existe) | A2 | 1 create/cancel **ou** 1 `tfc:micro-live --live` reconciliado |
+| 5 | **C** | Shadow sprint MIDAS | A1 + B | ≥20 eventos, mismatches explicados |
+| 6 | **E** | Micro-live wave-1 MIDAS | A2 + B + D + C | **3** entradas $1 reconciliadas, sem órfã |
+| 7 | **F** | P8 EXIT mínimo | E estável | saída live; REVERSE continua bloqueado |
+| 8 | **G** | Ampliar → P9 | F | 10 micros, shadow 100, soak ≥7d, catálogo/ETH |
 
-**O que deixa de ser bloqueio para o primeiro live:** soak ≥7d, shadow ≥100, 10 micros em dias distintos, catálogo completo, ETH 5m.
+Soak ≥4h: roda **em background após A2**; **não** bloqueia B/D/C.
 
-**O que permanece obrigatório antes de dinheiro:** preflight, canary cap, ACK≠fill, cancel/finally, zero promoção só por aceite do POST.
+**Adiar sem risco:** catálogo ADR-002 completo, supervisor multi-mercado, ETH 5m, REVERSE, soak 7d, shadow 100, 10 dias de micro.
+
+**Obrigatório antes de dinheiro:** preflight, canary cap, ACK≠fill, cancel/finally, zero promoção só por ACK do POST.
 
 ### Evidência já obtida
 
@@ -365,10 +368,10 @@ Gate de saída (código / CI):
 
 **Gate Engine Ready ágil — ops, suficiente para micro-live canário ($1):**
 
-- [ ] engine `:3201` no Giovanna com `/health` e `/ready` OK;
+- [x] engine `:3201` no Giovanna com `/health` e `/ready` OK;
 - [ ] soak contínuo **≥4h** (ideal 24h) com fixtures **ou** shadow, sem divergência não resolvida;
-- [ ] drills no mesmo dia: ≥2 restarts, 1 kill switch, restore de checkpoint, cancel de resting se houver;
-- [ ] zero órfã e zero violação de risco nos drills;
+- [x] drills no mesmo dia: ≥2 restarts, 1 kill switch e restore de checkpoint; não havia resting para cancelar;
+- [x] zero órfã e zero violação de risco nos drills;
 - [x] engine aprovada sem depender de resultado, código ou comportamento da TFC/MIDAS.
 
 **Gate Engine Ready longo — só para P9 / operação contínua:**
