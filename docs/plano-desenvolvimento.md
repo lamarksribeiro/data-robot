@@ -4,7 +4,7 @@
 **Estado atual:** engine + UI no Giovanna; **ainda não** é robô autônomo. Canário deste ciclo = **só MIDAS $1**.  
 **URL oficial:** https://robot.fracta.online  
 **Pacote:** `data-robot` **1.10.0**  
-**Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / preset lab `btc-champion-v1`). Plugin **implementado** no robot (CI); shadow/micro-live ops ainda abertos.  
+**Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / preset lab `btc-champion-v1`). Plugin **implementado** no robot (CI); **shadow ≥5 ENTER OK** (22/07); micro-live $1 ainda aberto.  
 **Depois:** qualquer estratégia via o mesmo contrato (engine agnóstica). TFC V7 = helpers no código, fora do canário agora.
 
 Este é o roadmap canônico. O [runbook TFC](./tfc-validacao-real.md) é baseline histórico do plugin TFC — **não** define a trilha MIDAS deste ciclo.
@@ -70,10 +70,10 @@ Ficam fora deste ciclo:
 ```text
 FEITO:  engine Giovanna + drills (A1/A2)
         plugin MIDAS + CI + midas:micro-live (B código)
+        Shadow MIDAS ≥5 ENTER (22/07 Giovanna)
+          → docs/operacao/evidencia-midas-shadow-2026-07-22.md
           │
-AGORA:  2) Shadow MIDAS curto (≥5 sinais ENTER)
-          │
-        3) 1º micro-live MIDAS US$ 1  →  +2 micros
+AGORA:  3) 1º micro-live MIDAS US$ 1  →  +2 micros
           │
 META:   Produção canário = enter/hold $1 repetível (3 runs OK)
           │
@@ -85,7 +85,7 @@ FUTURO: outras estratégias no mesmo contrato (TFC, Apex, …)
 | # | Fazer | Não fazer ainda |
 |---|--------|-----------------|
 | ✓ | Plugin `midas-carry-v1` + paridade ≥100 + `midas:micro-live` | Smoke/canário TFC |
-| 2 | Shadow ≥5 ENTER | Exigir shadow 100 / 7 dias |
+| ✓ | Shadow ≥5 ENTER (22/07) | Exigir shadow 100 / 7 dias |
 | 3 | 3 micros $1 reconciliados | UI dashboard, login real |
 | 4 | EXIT live antes de subir $ | REVERSE, ETH, catálogo ADR-002 completo |
 
@@ -103,7 +103,7 @@ FUTURO: outras estratégias no mesmo contrato (TFC, Apex, …)
 | Ordem | Fase | O quê | Critério |
 |------:|------|--------|----------|
 | **1 — código ✓** | **B** | Plugin MIDAS + paridade CI + harness `midas:micro-live` | registry + ≥100 sintéticos + script (CI verde 22/07) |
-| **2** | **C'** | Shadow MIDAS curto | ≥5 ENTER na janela 30→5s, mismatches explicados |
+| **2 — ✓** | **C'** | Shadow MIDAS curto | ≥5 ENTER (22/07 Giovanna); [evidência](./operacao/evidencia-midas-shadow-2026-07-22.md) |
 | **3** | **E1** | 1º micro-live MIDAS $1 | fill/reconcile ou cancel limpo |
 | **4** | **E2** | +2 micros ($1) | 3 reconciliados, 0 órfã → **canário enter/hold** |
 | **5** | **F'** | EXIT/danger live | antes de subir budget |

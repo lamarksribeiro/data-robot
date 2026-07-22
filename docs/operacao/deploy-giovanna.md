@@ -36,8 +36,8 @@ Baseline latência (20/07/2026, 3×): mediana total **~380 ms** (ping 56 / creat
 ## Notas
 
 - UI e engine são containers separados: UI sirv `:3200`; engine long-lived `:3201`.
-- Engine sem FQDN público, acessível apenas na rede/host do Coolify; app `running:healthy` no commit `84c02ed`.
-- Checkpoints persistem no volume `rx06uazamupj1w98pvl2b1d9-engine-runs`, montado em `/usr/src/app/runs`.
+- Engine sem FQDN público, acessível apenas na rede/host do Coolify; app `running:healthy` (commits MIDAS no `main`, ex. `b1496ee`).
+- Checkpoints e logs de shadow MIDAS persistem no volume `rx06uazamupj1w98pvl2b1d9-engine-runs`, montado em `/usr/src/app/runs` (inclui `runs/midas-shadow/`).
 - Secrets: env no Coolify (não commitar `.env`).
 - Engine Ready usa fixtures e **não** depende de TFC nem MIDAS ([ADR-002](../arquitetura/adr-002-strategy-catalog-supervision.md)).
 
@@ -45,8 +45,9 @@ Baseline latência (20/07/2026, 3×): mediana total **~380 ms** (ping 56 / creat
 
 Detalhe: [plano §3](../plano-desenvolvimento.md#o-que-vamos-seguir-sequência-definitiva-deste-ciclo).
 
-**Feito:** A1/A2 + **plugin MIDAS no código** (`npm run midas:micro-live`).  
-**Seguir:** shadow ≥5 → 3 micros $1 enter/hold → EXIT depois.  
+**Feito:** A1/A2 + plugin MIDAS + CI + **shadow ≥5 ENTER** (22/07).  
+Evidência: [evidencia-midas-shadow-2026-07-22.md](./evidencia-midas-shadow-2026-07-22.md).  
+**Seguir:** 3 micros $1 enter/hold → EXIT depois.  
 **Não seguir agora:** smoke TFC, UI, soak 7d.
 
 ## Evidência Engine Ready ágil — 22/07/2026
@@ -60,3 +61,11 @@ Detalhe: [plano §3](../plano-desenvolvimento.md#o-que-vamos-seguir-sequência-d
 - checkpoints cresceram de 4 para 32 arquivos no mesmo volume durante os drills.
 
 Pendente para completar o gate operacional: soak contínuo ≥4h (ideal 24h). Nenhuma ordem real foi enviada nesta etapa.
+
+## Evidência MIDAS shadow sprint — 22/07/2026
+
+- **PASS** `ok=true`, `count=5`, `timedOut=false` (poll 50 ms, Giovanna).
+- 5 ENTER em mercados BTC 5m distintos (~14:39Z–15:09Z); ver tabela completa na [evidência dedicada](./evidencia-midas-shadow-2026-07-22.md).
+- Overnight pré-fix: 1 ENTER / ~81 eventos — posição shadow não zerava na rotação; corrigido em `b1496ee`.
+- Artefatos: `/usr/src/app/runs/midas-shadow/LAST.done` e `sprint-20260722T143455Z.log`.
+- Próximo: 3× micro-live MIDAS $1 (ainda sem ordem real nesta evidência).
