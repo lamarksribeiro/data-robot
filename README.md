@@ -51,6 +51,7 @@ npm run ci
 - [TFC V7 P6](./docs/arquitetura/tfc-v7-p6.md) — plugin no contrato
 - [Micro-live P7](./docs/arquitetura/micro-live-p7.md) — canário via engine
 - [Deploy Giovanna](./docs/operacao/deploy-giovanna.md) — Coolify + `robot.fracta.online`
+- [Evidência MIDAS shadow 22/07](./docs/operacao/evidencia-midas-shadow-2026-07-22.md) — gate ≥5 ENTER (PASS)
 - [Ambientes](./docs/operacao/ambientes.md) — local / shadow / canary / production
 - [Validação TFC V7](./docs/tfc-validacao-real.md) — runbook baseline do plugin TFC (não promove MIDAS por herança)
 - [docs/](./docs/) — índice completo
