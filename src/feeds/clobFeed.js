@@ -11,6 +11,7 @@ export function createClobFeed(state) {
   let pingTimer = null;
   let reconnectTimer = null;
   let subscribedTokens = [];
+  let stopped = false;
 
   const rawBids = { up: new Map(), down: new Map() };
   const rawAsks = { up: new Map(), down: new Map() };
@@ -46,7 +47,7 @@ export function createClobFeed(state) {
   }
 
   function connect() {
-    if (ws) return;
+    if (stopped || ws) return;
     const socket = new WebSocket(config.clobWsUrl);
     ws = socket;
 
@@ -72,7 +73,7 @@ export function createClobFeed(state) {
     socket.onclose = () => {
       state.wsClobConnected = false;
       cleanup();
-      reconnectTimer = setTimeout(connect, 2000);
+      if (!stopped) reconnectTimer = setTimeout(connect, 2000);
     };
 
     socket.onerror = () => {};
@@ -124,6 +125,7 @@ export function createClobFeed(state) {
       sendSubscribe();
     },
     stop() {
+      stopped = true;
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
       if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
       if (ws) {

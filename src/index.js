@@ -45,6 +45,11 @@ export {
 } from './market/capabilities.js';
 export { createMarketHub } from './market/hub.js';
 export {
+  createSnapshotSource,
+  createFixtureSnapshotSource,
+  createBtc5mSnapshotSource,
+} from './market/snapshotSources.js';
+export {
   canonicalize,
   createReplayRecorder,
   loadReplayJsonl,

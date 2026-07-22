@@ -1,6 +1,6 @@
 /**
  * Aplicação da engine (processo separado da UI).
- * Roda fixtures em shadow por default — sem TFC, sem CLOB real.
+ * SnapshotSource opcional alimenta o runtime continuamente.
  */
 
 import { bootstrapEngine } from '../composition/bootstrap.js';
@@ -29,6 +29,7 @@ export function createEngineApp(opts = {}) {
   const alerts = opts.alerts ?? createAlertHub();
   const backup = opts.journalBackup ?? createJournalBackup({ dir: opts.backupDir });
   const sink = opts.sink ?? createOmsSink({ mode, clock: opts.clock });
+  const snapshotSource = opts.snapshotSource ?? null;
 
   const engine = bootstrapEngine({
     strategyId,
@@ -47,6 +48,10 @@ export function createEngineApp(opts = {}) {
   let lastFeedsOk = false;
   let recoveryOk = opts.restoreOnStart !== true;
   let autoCheckpointTimer = null;
+  let started = false;
+  let sourceStatus = snapshotSource
+    ? { kind: snapshotSource.kind ?? 'custom', running: false, ok: false, reason: 'NOT_STARTED' }
+    : { kind: 'manual', running: false, ok: null, reason: null };
 
   function status() {
     return engine.getStatus();
@@ -61,10 +66,10 @@ export function createEngineApp(opts = {}) {
         : Date.now() - sink.userChannel.lastHeartbeatMs;
     // órfã: open sem intentId (não deve ocorrer) ou UNKNOWN não reconciliado
     const unknowns = (sink.oms?.listOrders?.() ?? []).filter((o) => o.state === 'UNKNOWN');
-    return buildHealthReport({
+    const report = buildHealthReport({
       engineStatus: st,
       mode,
-      feedsOk: lastFeedsOk,
+      feedsOk: snapshotSource ? lastFeedsOk && sourceStatus.ok === true : lastFeedsOk,
       recoveryOk,
       userChannelOk:
         mode !== 'live' ||
@@ -75,6 +80,7 @@ export function createEngineApp(opts = {}) {
       openOrders: open.length,
       availability: ticks > 0 ? eligibleTicks / ticks : null,
     });
+    return { ...report, snapshotSource: { ...sourceStatus } };
   }
 
   function metricsSnap() {
@@ -82,6 +88,7 @@ export function createEngineApp(opts = {}) {
     metrics.gauge('exposure_qty', st.position?.qty ?? 0);
     metrics.gauge('realized_pnl', st.position?.realizedPnl ?? 0);
     metrics.gauge('open_orders', sink.oms?.openOrders?.().length ?? 0);
+    metrics.gauge('snapshot_source_ok', sourceStatus.ok === true ? 1 : 0);
     metrics.gauge(
       'risk_violations',
       Object.values(st.riskMetrics ?? {}).reduce((sum, value) => sum + (Number(value) || 0), 0),
@@ -89,21 +96,24 @@ export function createEngineApp(opts = {}) {
     return metrics.snapshot();
   }
 
-  async function ingestSynthetic(snapshot) {
+  async function ingest(snapshot, useMarketGate) {
     const t0 = performance.now();
     ticks += 1;
-    lastFeedsOk = snapshot.feeds?.healthy === true;
-    const result = await engine.ingestSnapshot(snapshot);
+    lastFeedsOk = (snapshot.health?.ok ?? snapshot.feeds?.healthy) === true;
+    const result = useMarketGate
+      ? await engine.ingestMarketSnapshot(snapshot)
+      : await engine.ingestSnapshot(snapshot);
     metrics.observe('ingest_ms', performance.now() - t0);
     metrics.observe('decision_ms', performance.now() - t0);
     metrics.inc('snapshots_total');
-    if (!result.skipped) {
+    if (result?.skipped !== true) {
       eligibleTicks += 1;
       metrics.inc('snapshots_processed');
     } else {
       metrics.inc('snapshots_skipped');
     }
-    if (result.intentCount) metrics.inc('intents_emitted', result.intentCount);
+    const decisionResult = useMarketGate ? result?.result : result;
+    if (decisionResult?.intentCount) metrics.inc('intents_emitted', decisionResult.intentCount);
 
     const h = health();
     const m = metricsSnap();
@@ -114,6 +124,36 @@ export function createEngineApp(opts = {}) {
       slos: opts.slos ?? DEFAULT_SLOS,
     });
     return result;
+  }
+
+  async function ingestSynthetic(snapshot) {
+    return ingest(snapshot, false);
+  }
+
+  async function ingestMarketSnapshot(snapshot) {
+    return ingest(snapshot, true);
+  }
+
+  function updateSourceStatus(next = {}) {
+    const previousKey = `${sourceStatus.ok}:${sourceStatus.reason}`;
+    sourceStatus = { ...sourceStatus, ...next };
+    const nextKey = `${sourceStatus.ok}:${sourceStatus.reason}`;
+    if (previousKey !== nextKey) {
+      logger.info('snapshot_source_status', {
+        kind: sourceStatus.kind,
+        ok: sourceStatus.ok,
+        reason: sourceStatus.reason,
+        marketId: sourceStatus.marketId ?? null,
+      });
+    }
+  }
+
+  function noteSourceError(error) {
+    metrics.inc('snapshot_source_errors');
+    logger.error('snapshot_source_error', {
+      kind: sourceStatus.kind,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   function checkpoint() {
@@ -158,11 +198,16 @@ export function createEngineApp(opts = {}) {
     status,
     metricsSnap,
     ingestSynthetic,
+    ingestMarketSnapshot,
+    get snapshotSourceStatus() {
+      return { ...sourceStatus };
+    },
     checkpoint,
     rollback,
     evaluateSlos: () => evaluateSlos(metricsSnap(), health(), opts.slos ?? DEFAULT_SLOS),
 
     async start() {
+      if (started) return status();
       if (opts.restoreOnStart === true) {
         const latest = backup.latestCheckpoint?.();
         if (latest) {
@@ -184,7 +229,29 @@ export function createEngineApp(opts = {}) {
         recoveryOk = true;
       }
       engine.start();
+      started = true;
       logger.info('engine_started', { strategyId, mode, state: engine.state });
+      if (snapshotSource) {
+        try {
+          await snapshotSource.start({
+            onSnapshot: ingestMarketSnapshot,
+            onStatus: updateSourceStatus,
+            onError: noteSourceError,
+          });
+        } catch (error) {
+          updateSourceStatus({ running: false, ok: false, reason: 'START_FAILED' });
+          noteSourceError(error);
+          try {
+            await snapshotSource.stop?.();
+          } catch {
+            /* best effort depois de start parcial */
+          }
+          await engine.safeShutdown('snapshot-source-start-failed');
+          sink.dispose?.();
+          started = false;
+          throw error;
+        }
+      }
       if (opts.serveHttp !== false) {
         await httpServer.start();
         logger.info('control_listen', { host: httpServer.host, port: httpServer.port });
@@ -198,9 +265,17 @@ export function createEngineApp(opts = {}) {
     },
 
     async stop() {
+      if (!started) return;
       if (autoCheckpointTimer) {
         clearInterval(autoCheckpointTimer);
         autoCheckpointTimer = null;
+      }
+      if (snapshotSource) {
+        try {
+          await snapshotSource.stop();
+        } catch (error) {
+          noteSourceError(error);
+        }
       }
       await engine.safeShutdown('app-stop');
       if (opts.persistOnStop === true || opts.restoreOnStart === true) checkpoint();
@@ -212,6 +287,7 @@ export function createEngineApp(opts = {}) {
         }
       }
       sink.dispose?.();
+      started = false;
       logger.info('engine_stopped');
     },
   };

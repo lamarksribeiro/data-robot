@@ -1,7 +1,9 @@
 # Micro-live P7 — entrada canário via engine
 
 Status: **harness TFC e proteções genéricas implementados** (2026-07-20). CI sem rede/ordens reais.  
-**Campanha live:** nenhuma estratégia aprovada. Bloqueada pelos gates operacionais de User WS / recovery / Engine Ready; depois, ≥10 entradas em dias distintos **por plugin + preset**. MIDAS ainda não tem composition/harness próprio.
+**Campanha live:** nenhuma estratégia aprovada.
+**Trilha ágil:** Engine Ready ágil (horas + drills) + shadow sprint ≥20 + **3** micros reconciliados (cap $1).
+**Promoção P9:** ≥10 micros em dias distintos + shadow 100 + soak longo. MIDAS ainda não tem composition/harness próprio.
 
 ## Pipeline (referência TFC)
 
@@ -43,10 +45,14 @@ Reason code: `CANARY_BUDGET_EXCEEDED`. Tier MIDAS do lab ($15/$20) **não** elev
 
 `buildMicroLiveReport` exige timeline intenção → eventos → posição; marca `orphan` se ACK sem fill/cancel. O POST nunca gera fill artificial: FAK parcial/total vem de User WS ou REST.
 
-## Gate ops (ainda aberto)
+## Gate ops
 
-- [ ] 10 micro-entradas em dias distintos **por plugin + preset candidato**
-- [ ] 100% reconciliadas, sem órfã/duplicidade/violação de cap
+**Wave-1 (ágil):**
+- [ ] 3 micro-entradas reconciliadas (cap canário) por plugin + preset
+- [ ] sem órfã/duplicidade/violação de cap; fee/slippage registrados
+
+**Promoção (canário contínuo / P9):**
+- [ ] 10 micro-entradas em dias distintos
 - [ ] Slippage/fee explicados; sem promoção só por aceite da ordem
 
-Ver [plano P7](../plano-desenvolvimento.md#p7--micro-live-de-entrada-por-plugin).
+Ver [plano — trilha ágil](../plano-desenvolvimento.md#próximos-passos--trilha-ágil).

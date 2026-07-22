@@ -57,7 +57,7 @@ npm run engine:soak           # soak curto com fixtures
 npm run engine:soak -- --duration-hours=1 --interval-ms=1000
 ```
 
-Live exige `ENGINE_MODE=live` **e** `ENGINE_LIVE_ENABLED=1`. Fora de localhost, `ENGINE_OPS_TOKEN` é obrigatório. Ver [../docs/arquitetura/observability-p5.md](../docs/arquitetura/observability-p5.md) e [../docs/operacao/deploy-giovanna.md](../docs/operacao/deploy-giovanna.md).
+`ENGINE_SNAPSHOT_SOURCE=fixture` roda determinístico e sem rede. `ENGINE_SNAPSHOT_SOURCE=btc5m` ativa descoberta/rotação do evento, PTB, RTDS e CLOB continuamente. Live exige `ENGINE_MODE=live`, `ENGINE_LIVE_ENABLED=1` **e** source `btc5m`. Fora de localhost, `ENGINE_OPS_TOKEN` é obrigatório. Ver [../docs/arquitetura/observability-p5.md](../docs/arquitetura/observability-p5.md) e [../docs/operacao/deploy-giovanna.md](../docs/operacao/deploy-giovanna.md).
 
 ## TFC V7 — validação incremental
 

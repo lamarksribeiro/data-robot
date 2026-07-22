@@ -8,9 +8,10 @@ export function startRtdsFeed(state) {
   let ws = null;
   let pingTimer = null;
   let reconnectTimer = null;
+  let stopped = false;
 
   function connect() {
-    if (ws) return;
+    if (stopped || ws) return;
     const socket = new WebSocket(config.rtdsWsUrl);
     ws = socket;
 
@@ -39,7 +40,7 @@ export function startRtdsFeed(state) {
     socket.onclose = () => {
       state.wsRtdsConnected = false;
       cleanup();
-      reconnectTimer = setTimeout(connect, 2000);
+      if (!stopped) reconnectTimer = setTimeout(connect, 2000);
     };
 
     socket.onerror = () => {};
@@ -53,6 +54,7 @@ export function startRtdsFeed(state) {
   connect();
 
   return () => {
+    stopped = true;
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
     if (ws) {

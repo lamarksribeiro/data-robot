@@ -126,6 +126,19 @@ describe('eligibility', () => {
     });
     assert.equal(gate.eligible, true);
   });
+
+  it('rejeita acceptingOrders ausente em modo fail-closed', () => {
+    const nowMs = 1_700_000_000_000;
+    const snapshot = buildMarketSnapshot({
+      state: freshState(nowMs),
+      event: sampleEvent(nowMs),
+      nowMs,
+    });
+    delete snapshot.acceptingOrders;
+    const result = evaluateSnapshotEligibility(snapshot);
+    assert.equal(result.eligible, false);
+    assert.ok(result.reasons.includes('NOT_ACCEPTING_ORDERS'));
+  });
 });
 
 describe('capabilities', () => {

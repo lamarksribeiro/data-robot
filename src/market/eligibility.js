@@ -19,6 +19,12 @@ export function evaluateSnapshotEligibility(snapshot, opts = {}) {
   const limits = opts.healthLimits ?? STALENESS;
 
   if (!snapshot?.marketId) reasons.push('NO_MARKET_ID');
+  if (snapshot?.btc == null || !Number.isFinite(Number(snapshot.btc))) {
+    reasons.push('NO_REFERENCE_PRICE');
+  }
+  if (snapshot?.priceToBeat == null || !Number.isFinite(Number(snapshot.priceToBeat))) {
+    reasons.push('NO_PRICE_TO_BEAT');
+  }
 
   if (opts.expectedMarketId && snapshot.marketId !== opts.expectedMarketId) {
     reasons.push('MARKET_ID_MISMATCH');
@@ -41,7 +47,7 @@ export function evaluateSnapshotEligibility(snapshot, opts = {}) {
   const clock = evaluateClockSkew(snapshot.nowMs, snapshot.serverNowMs ?? null, limits.clockSkewMaxMs);
   if (!clock.ok) reasons.push(clock.reason);
 
-  if (opts.requireAcceptingOrders !== false && snapshot.acceptingOrders === false) {
+  if (opts.requireAcceptingOrders !== false && snapshot.acceptingOrders !== true) {
     reasons.push('NOT_ACCEPTING_ORDERS');
   }
 

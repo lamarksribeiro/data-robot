@@ -1,7 +1,7 @@
 # TFC V7 P6 — plugin no contrato da engine
 
 Status: **plugin TFC V7 implementado** (2026-07-19). Sem SDK/rede/ordens reais.  
-Ops: shadow ≥100 eventos reais no Giovanna permanece recomendado antes da **campanha** micro-live (P7 live), não antes do harness de código. Cada plugin/preset (ex.: MIDAS) tem gate próprio — aprovação TFC não promove MIDAS ([ADR-002](./adr-002-strategy-catalog-supervision.md)).
+Ops: shadow sprint ≥20 eventos reais no Giovanna libera wave-1 micro-live; ≥100 permanece para P9. Cada plugin/preset (ex.: MIDAS) tem gate próprio — aprovação TFC não promove MIDAS ([ADR-002](./adr-002-strategy-catalog-supervision.md)).
 
 ## Plugin
 
@@ -46,6 +46,7 @@ await engine.ingestSnapshot(snapshot);
 - [x] Conformidade + testes de limites (tempo, spread, OBI, odds, velocity, danger, floor)
 - [x] Paridade sintética ≥100 casos (diferença de intenção = 0)
 - [x] 0 decisão com feed stale
-- [ ] Shadow ≥100 eventos reais no kernel (ops / Giovanna) — recomendado antes de P7
+- [ ] Shadow sprint ≥20 eventos reais (ágil / wave-1)
+- [ ] Shadow ≥100 eventos reais (promoção P9)
 
 Ver [plano P6](../plano-desenvolvimento.md).

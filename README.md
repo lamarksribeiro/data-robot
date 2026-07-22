@@ -2,7 +2,7 @@
 
 Executor de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
 
-**Status:** pacote **1.10.0** — núcleo strategy-agnostic P0–P5 e proteções live implementados; TFC V7 fornece a referência P6/P7, ainda sem gate operacional aprovado. Não é produção autônoma. UI oficial: https://robot.fracta.online (Coolify Giovanna). **MIDAS Carry V1** (`midas-carry-v1` / preset lab `btc-champion-v1`) é a próxima candidata à promoção e ainda existe só no `data-backtest`. O deploy e o gate Engine Ready da engine `:3201` não dependem da MIDAS.
+**Status:** pacote **1.10.0** — núcleo strategy-agnostic P0–P5 e proteções live implementados; TFC V7 fornece a referência P6/P7, ainda sem gate operacional aprovado. Não é produção autônoma. UI oficial: https://robot.fracta.online (Coolify Giovanna). **MIDAS Carry V1** é a próxima candidata (ainda só no `data-backtest`). **Trilha ágil:** engine `:3201` + drills → plugin MIDAS → shadow ≥20 → 3 micros ($1) → EXIT (P8); soak 7d / 10 dias só para P9.
 
 Estratégias aprovadas devem ficar disponíveis em um catálogo explícito e ser selecionadas por configuração. Instâncias de mercados distintos — por exemplo BTC 5m e ETH 5m — podem coexistir na mesma conta, desde que compartilhem coordenação global e durável de saldo, risk, OMS e recovery. Concorrência de estratégias no mesmo mercado exige um gate adicional de conflito/netting.
 
@@ -33,7 +33,7 @@ npm run ci
 | `npm run test:connection` | Smoke test CLOB + saldo + perfil Gamma |
 | `npm run test:order -- --live --wait 15` | Ordem teste UP (**exige --live**) |
 | `npm run lint` / `npm test` / `npm run ci` | Qualidade local / CI |
-| `npm run engine:serve` | Processo da engine + control HTTP (`:3201`) |
+| `npm run engine:serve` | Engine contínua + snapshots (`fixture` por default) + control HTTP (`:3201`) |
 | `npm run engine:soak` | Soak com fixtures; suporta `--duration-hours` e `--interval-ms` |
 | `npm run tfc:watch` | Gates TFC V7 observe-only |
 | `npm run tfc:micro-entry` | Legado: dry-run/micro CLOB direto (não usar p/ promoção) |

@@ -39,12 +39,16 @@ Baseline latência (20/07/2026, 3×): mediana total **~380 ms** (ping 56 / creat
 - Secrets: env no Coolify (não commitar `.env`).
 - Engine Ready usa fixtures e **não** depende de TFC nem MIDAS ([ADR-002](../arquitetura/adr-002-strategy-catalog-supervision.md)).
 
-## Próximos passos (ops + produto)
+## Próximos passos — trilha ágil
 
-1. Confirmar que o deploy Coolify da UI está no `main` **1.10.0** (redeploy se o container estiver atrasado).
-2. Subir serviço da **engine** (`Dockerfile.engine`, `:3201`) no Giovanna, separado da UI; soak/Engine Ready com fixtures.
-3. Implementar **catálogo/deployments** explícitos e supervisor (estados de aprovação, `marketScope`) — [ADR-002](../arquitetura/adr-002-strategy-catalog-supervision.md).
-4. Portar **MIDAS Carry V1** como plugin (`strategyId: midas-carry-v1`, preset lab `labs/strategies/terminal/midas-carry-v1/presets/btc-champion-v1.json`), sem alterar o core.
-5. Shadow MIDAS/TFC; adapter/plugin ETH 5m só se aprovado. BTC+ETH live na mesma conta exigem account risk/OMS/recovery globais.
-6. Soak Engine Ready ≥7d; só então micro-live com cap canário **por** plugin/preset.
-7. P8 (saídas live genéricas) antes de canário contínuo / P9.
+Detalhe e critérios: [plano §3](../plano-desenvolvimento.md#próximos-passos--trilha-ágil).
+
+1. Confirmar UI no `main` **1.10.0** (redeploy se atrasada).
+2. **Fase A:** subir engine `:3201` + smoke + drills (restart/kill) no mesmo dia — **não** esperar 7 dias.
+3. **Fase B (∥ A):** portar plugin **MIDAS** + paridade CI.
+4. **Fase C:** shadow sprint ≥20 eventos MIDAS (1 sessão BTC 5m).
+5. **Fase D–E:** OMS smoke + **3** micro-lives canário ($1) reconciliados.
+6. **Fase F:** P8 EXIT mínimo; reverse depois.
+7. Ampliar (10 micros, shadow 100, soak ≥7d) só para **P9 / canário contínuo**.
+
+Catálogo ADR-002 e ETH 5m **não** bloqueiam A–E.
