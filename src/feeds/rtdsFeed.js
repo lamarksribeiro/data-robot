@@ -40,7 +40,7 @@ export function startRtdsFeed(state) {
     socket.onclose = () => {
       state.wsRtdsConnected = false;
       cleanup();
-      if (!stopped) reconnectTimer = setTimeout(connect, 2000);
+      if (!stopped) reconnectTimer = setTimeout(connect, 500);
     };
 
     socket.onerror = () => {};

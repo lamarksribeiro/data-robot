@@ -2,6 +2,7 @@ import { WebSocket } from 'ws';
 import config from '../config.js';
 
 const DEPTH = 10;
+const RECONNECT_MS = 500;
 
 /**
  * @param {ReturnType<import('./marketState.js').createMarketState>} state
@@ -10,6 +11,7 @@ export function createClobFeed(state) {
   let ws = null;
   let pingTimer = null;
   let reconnectTimer = null;
+  let seedTimer = null;
   let subscribedTokens = [];
   let stopped = false;
 
@@ -73,7 +75,7 @@ export function createClobFeed(state) {
     socket.onclose = () => {
       state.wsClobConnected = false;
       cleanup();
-      if (!stopped) reconnectTimer = setTimeout(connect, 2000);
+      if (!stopped) reconnectTimer = setTimeout(connect, RECONNECT_MS);
     };
 
     socket.onerror = () => {};
@@ -84,6 +86,38 @@ export function createClobFeed(state) {
     ws = null;
   }
 
+  async function seedSideFromRest(side, tokenId) {
+    if (!tokenId || stopped) return;
+    try {
+      const res = await fetch(`${config.clobHttpUrl}/book?token_id=${encodeURIComponent(tokenId)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      rebuild(side, data.bids || [], data.asks || []);
+    } catch {
+      /* ignore — WS continua como fonte primária */
+    }
+  }
+
+  async function seedBooksFromRest() {
+    await Promise.all([
+      seedSideFromRest('up', state.upTokenId),
+      seedSideFromRest('down', state.downTokenId),
+    ]);
+  }
+
+  function scheduleSeed() {
+    if (seedTimer) clearTimeout(seedTimer);
+    // Seed imediato + reforço curto (WS às vezes atrasa o book snapshot).
+    void seedBooksFromRest();
+    seedTimer = setTimeout(() => {
+      if (stopped) return;
+      const empty =
+        (state.up.bestAsk == null && state.up.bestBid == null) ||
+        (state.down.bestAsk == null && state.down.bestBid == null);
+      if (empty) void seedBooksFromRest();
+    }, 750);
+  }
+
   function sendSubscribe() {
     if (!subscribedTokens.length || !ws || ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify({
@@ -91,6 +125,7 @@ export function createClobFeed(state) {
       operation: 'subscribe',
       custom_feature_enabled: true,
     }));
+    scheduleSeed();
   }
 
   function processMessage(data) {
@@ -122,12 +157,17 @@ export function createClobFeed(state) {
       subscribedTokens = [upTokenId, downTokenId];
       rawBids.up.clear(); rawBids.down.clear();
       rawAsks.up.clear(); rawAsks.down.clear();
+      state.up = { bestBid: null, bestAsk: null, bids: [], asks: [] };
+      state.down = { bestBid: null, bestAsk: null, bids: [], asks: [] };
       sendSubscribe();
+      // Se WS ainda não abriu, seed REST já deixa book acionável.
+      scheduleSeed();
     },
     stop() {
       stopped = true;
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
       if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+      if (seedTimer) { clearTimeout(seedTimer); seedTimer = null; }
       if (ws) {
         const s = ws;
         ws = null;
