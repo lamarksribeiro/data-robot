@@ -3,7 +3,7 @@
 | Ambiente | Dinheiro real | Papel | Como roda hoje |
 |----------|---------------|-------|----------------|
 | **local** | Só com `--live` explícito | Dev, latência VPN, dry-run | PC + `.env` |
-| **shadow** | Não | Mesmo pipeline da engine; sink de execução simulado | Código disponível; campanha ≥100 eventos reais pendente |
+| **shadow** | Não | Mesmo pipeline da engine; sink simulado | Código OK; **sprint ágil ≥20** eventos libera wave-1; ≥100 só para P9 |
 | **canary** | Sim, budget mínimo | Micro-live / degraus de promoção | Harness disponível; campanha bloqueada pelos gates P3–P5 |
 | **production** | Sim, budget aprovado | Operação limitada pós P9 | UI: https://robot.fracta.online (Giovanna); engine `:3201` ainda não deployada |
 

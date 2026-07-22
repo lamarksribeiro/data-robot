@@ -90,7 +90,8 @@ Registrar por snapshot:
 
 Critérios mínimos:
 
-- pelo menos 100 eventos em shadow;
+- **ágil (libera wave-1):** ≥20 eventos em shadow com mismatches explicados;
+- **promoção P9:** ≥100 eventos em shadow;
 - 0 snapshot decisório com RTDS >2s ou CLOB >3s;
 - 0 divergência não explicada de evento/PTB/token;
 - intenção idêntica à do replay do backtest para o mesmo trace.
@@ -154,7 +155,8 @@ O canário usa FAK, cap de preço e quantidade mínima de uma share. A resposta 
 
 Critérios:
 
-- 10 entradas micro-live em dias distintos;
+- **wave-1 (ágil):** ≥3 entradas micro-live reconciliadas (cap canário);
+- **promoção:** ≥10 entradas em dias distintos antes de canário contínuo;
 - 100% com timeline intenção → ordem → trade/cancel → posição;
 - nenhuma duplicidade, ordem órfã ou violação de cap;
 - replay do mesmo evento gera a mesma intenção;
@@ -212,18 +214,19 @@ Validar antes do canário:
 - limites de ordem, evento, dia, exposição e falhas consecutivas;
 - health, readiness, armed/live e halted como estados distintos.
 
-Critério: soak shadow ≥7 dias, zero divergência não resolvida e rollback/restart ensaiados.
+Critério **ágil** (libera micro-live $1): Engine Ready ágil — soak ≥4h (ideal 24h) **ou** drills no mesmo dia (≥2 restarts, kill, restore) sem divergência.
+Critério **longo** (P9): soak ≥7 dias + SLOs calibrados. Ver [trilha ágil](./plano-desenvolvimento.md#próximos-passos--trilha-ágil).
 
 ## F7 — Canário e promoção
 
 Escada:
 
-1. budget mínimo fixo;
+1. budget mínimo fixo (wave-1 após Engine Ready ágil);
 2. 25% do budget pretendido;
 3. 50%;
-4. $10 do preset V7.
+4. $10 do preset aprovado.
 
-Cada degrau exige 50 eventos ou 7 dias, o que for maior, sem violação de risco, ordem órfã ou posição divergente. Aumento para $15–20 é uma decisão posterior baseada em dados live e drawdown, não uma consequência automática do backtest.
+Wave-1 não exige 7 dias. Cada degrau **P9** exige 50 eventos **ou** 7 dias (o que for maior), sem violação de risco, ordem órfã ou posição divergente. Aumento para $15–20 é uma decisão posterior baseada em dados live e drawdown, não uma consequência automática do backtest.
 
 ## Cruzamento API, user WS e UI
 

@@ -92,8 +92,10 @@ export function createMarketHub(opts = {}) {
         expected = { marketId: null, upTokenId: null, downTokenId: null };
         return { ok: false, reason: 'NO_ACTIVE_EVENT' };
       }
+      const previousMarketId = expected.marketId;
       const rotation = bindEvent(next);
-      if (next.eventStart && next.eventEnd) {
+      const marketChanged = previousMarketId !== expected.marketId;
+      if (next.eventStart && next.eventEnd && (marketChanged || state.priceToBeat == null)) {
         state.priceToBeat = await fetchPtb(next.eventStart, next.eventEnd);
       }
       return { ok: true, ...rotation, event: next, priceToBeat: state.priceToBeat };

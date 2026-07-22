@@ -1,7 +1,7 @@
 # Observabilidade P5 — control plane e Engine Ready (código)
 
 Status: **código endurecido** (2026-07-20). CI sem rede/ordens reais.
-**Ops pendente:** soak ≥7 dias e validação de SLOs/alertas no Giovanna (gate Engine Ready completo).
+**Ops pendente:** Engine Ready **ágil** no Giovanna (horas + drills). Soak ≥7 dias ficou para P9 / operação contínua.
 
 ## Separação de processos
 
@@ -11,7 +11,7 @@ Status: **código endurecido** (2026-07-20). CI sem rede/ordens reais.
 | Engine + control HTTP | 3201 | `npm run engine:serve` |
 | Soak (sem HTTP) | — | `npm run engine:soak` |
 
-Container da engine: `Dockerfile.engine` (CMD `scripts/engine-serve.js`). Live exige `ENGINE_MODE=live` **e** `ENGINE_LIVE_ENABLED=1`.
+Container da engine: `Dockerfile.engine` (CMD `scripts/engine-serve.js`). O runner usa `ENGINE_SNAPSHOT_SOURCE=fixture` em smoke/soak e `btc5m` para Gamma + RTDS + CLOB. Live exige `ENGINE_MODE=live`, `ENGINE_LIVE_ENABLED=1` **e** source `btc5m`.
 
 ## Módulos
 
@@ -43,6 +43,8 @@ Container da engine: `Dockerfile.engine` (CMD `scripts/engine-serve.js`). Live e
 - `GET /metrics` — snapshot de métricas  
 - `POST /control/kill` — exige `x-ops-token` se `ENGINE_OPS_TOKEN` estiver setado  
 
+`/health` inclui o estado de `snapshotSource`; `/ready` só abre depois de snapshot elegível e fecha quando fonte/feed deixam de estar aptos.
+
 ## Gate Engine Ready
 
 | Item | Código / CI | Ops |
@@ -50,7 +52,7 @@ Container da engine: `Dockerfile.engine` (CMD `scripts/engine-serve.js`). Live e
 | Métricas, logs, alertas, SLOs | ✓ | Calibrar no Giovanna |
 | Health/readiness + processo separado | ✓ | Deploy Coolify |
 | Fault injection (401/429/503, WS, kill) | ✓ testes | Ensaiar em staging |
-| Soak curto (fixtures) | ✓ `engine:soak` | Soak ≥7 dias sem divergência |
+| Soak curto (fixtures) | ✓ `engine:soak` | Ágil: ≥4h (ideal 24h) + drills; longo ≥7d só P9 |
 | Aprovação sem depender de TFC | ✓ (fixtures) | — |
 
 Engine Ready aprova a infraestrutura de uma instância e independe do plugin. Supervisor/multi-mercado possui gate adicional: health e métricas por instância/`marketScope`, visão agregada da conta, isolamento de falha, reserva concorrente sem duplicidade e recovery conjunto. Ver [ADR-002](./adr-002-strategy-catalog-supervision.md).
