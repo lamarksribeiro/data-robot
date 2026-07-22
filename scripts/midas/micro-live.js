@@ -306,6 +306,11 @@ async function main() {
               console.log(mode === 'live' ? 'LIVE processado:' : 'DRY-RUN processado:');
               console.log(report);
             }
+            // Encerra feeds antes do resolve — WS/reconnects não devem segurar o event loop.
+            stopRtds?.();
+            stopRtds = null;
+            clobFeed?.stop();
+            clobFeed = null;
             clearInterval(timer);
             resolve();
           } catch (err) {
@@ -325,11 +330,21 @@ async function main() {
       process.exitCode = 2;
     }
   } finally {
-    if (engine) await engine.safeShutdown('micro-live-finally');
+    try {
+      if (engine) await engine.safeShutdown('micro-live-finally');
+    } catch (err) {
+      console.error(`[midas:micro-live] shutdown: ${err.message}`);
+    }
     stopRtds?.();
     clobFeed?.stop();
-    engine?.sink.dispose?.();
+    try {
+      engine?.sink.dispose?.();
+    } catch {
+      /* ignore */
+    }
   }
+
+  process.exit(Number(process.exitCode ?? (placed ? 0 : 1)));
 }
 
 main().catch((err) => {
