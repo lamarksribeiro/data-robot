@@ -2,7 +2,7 @@
 
 Executor de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
 
-**Status:** 1.10.0 — engine + UI no Giovanna (A1/A2 ✓). **Plugin MIDAS Carry V1 no código** (`midas:micro-live`). **Seguir:** shadow ≥5 → 3× micro $1 enter/hold → EXIT antes de subir budget.
+**Status:** 1.10.0 — engine + UI no Giovanna (A1/A2 ✓). Plugin MIDAS + **shadow ≥5 ENTER ✓** (22/07). **Seguir:** 3× micro $1 enter/hold → EXIT antes de subir budget.
 
 Estratégias aprovadas devem ficar disponíveis em um catálogo explícito e ser selecionadas por configuração. Instâncias de mercados distintos — por exemplo BTC 5m e ETH 5m — podem coexistir na mesma conta, desde que compartilhem coordenação global e durável de saldo, risk, OMS e recovery. Concorrência de estratégias no mesmo mercado exige um gate adicional de conflito/netting.
 
@@ -36,6 +36,7 @@ npm run ci
 | `npm run engine:serve` | Engine contínua + snapshots (`fixture` por default) + control HTTP (`:3201`) |
 | `npm run engine:soak` | Soak com fixtures; suporta `--duration-hours` e `--interval-ms` |
 | `npm run midas:micro-live` | Canário MIDAS via engine (`--live` para real) |
+| `npm run midas:shadow-sprint` | Shadow ≥N ENTER (feeds reais, sem CLOB) |
 | `npm run tfc:watch` | Gates TFC V7 observe-only |
 | `npm run tfc:micro-entry` | Legado: dry-run/micro CLOB direto (não usar p/ promoção) |
 | `npm run tfc:micro-live` | P7: micro-entrada via engine (`--live` para real) |
