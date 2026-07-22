@@ -2,9 +2,10 @@
 /**
  * Shadow sprint MIDAS — feeds reais, sink shadow (sem ordem CLOB).
  * Meta ágil: ≥5 intenções ENTER na janela terminal.
+ * Poll agressivo (default 50ms) para não perder a janela 5–30s.
  *
  *   npm run midas:shadow-sprint
- *   npm run midas:shadow-sprint -- --target=5 --timeout=900
+ *   npm run midas:shadow-sprint -- --target=5 --timeout=1800 --interval=50
  */
 
 import 'dotenv/config';
@@ -17,6 +18,7 @@ import { buildMarketSnapshot } from '../../src/market/normalize.js';
 import { bootstrapEngine } from '../../src/composition/bootstrap.js';
 import { MIDAS_V1_STRATEGY_ID } from '../../src/strategy/midasV1.js';
 import { MIDAS_V1 } from '../../src/tfc/preset-midas.js';
+import { evaluateEntryGates } from '../../src/tfc/evaluate.js';
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -29,8 +31,17 @@ function parseArgs(argv) {
   return {
     target: Math.max(1, parseInt(valueOf('--target') ?? '5', 10) || 5),
     timeoutSec: Math.max(30, parseInt(valueOf('--timeout') ?? '900', 10) || 900),
+    /** Poll loop — default 50ms (velocidade máxima prática no Node). */
+    intervalMs: Math.max(20, parseInt(valueOf('--interval') ?? '50', 10) || 50),
     json: args.includes('--json'),
   };
+}
+
+function failGates(gates) {
+  return Object.entries(gates || {})
+    .filter(([, g]) => !g.pass)
+    .map(([k, g]) => `${k}:${g.detail ?? 'fail'}`)
+    .join(' ');
 }
 
 async function main() {
@@ -46,7 +57,10 @@ async function main() {
   let lastEventFetchMs = 0;
   let lastPtbRetryMs = 0;
   let lastGateLogMs = 0;
+  let lastHeartbeatMs = 0;
   let event = null;
+  let tickBusy = false;
+  const history = [];
 
   try {
     engine = bootstrapEngine({
@@ -58,121 +72,150 @@ async function main() {
     engine.start();
 
     if (!opts.json) {
-      console.log(`=== MIDAS shadow sprint (target=${opts.target}, timeout=${opts.timeoutSec}s) ===`);
+      console.log(
+        `=== MIDAS shadow sprint (target=${opts.target}, timeout=${opts.timeoutSec}s, interval=${opts.intervalMs}ms) ===`,
+      );
     }
 
     const deadline = Date.now() + opts.timeoutSec * 1000;
 
     await new Promise((resolve, reject) => {
-      const timer = setInterval(async () => {
-        try {
-          if (enters.length >= opts.target || Date.now() >= deadline) {
-            clearInterval(timer);
-            resolve();
-            return;
-          }
-
-          if (Date.now() - lastEventFetchMs > 2000 || !event) {
-            event = await findActiveBtc5mEvent();
-            lastEventFetchMs = Date.now();
-          }
-          if (!event) return;
-
-          if (event.conditionId !== currentEventId) {
-            currentEventId = event.conditionId;
-            state.priceToBeat = await fetchPriceToBeat(event.eventStart, event.eventEnd);
-            lastPtbRetryMs = Date.now();
-            stopRtds?.();
-            clobFeed?.stop();
-            stopRtds = startRtdsFeed(state);
-            clobFeed = createClobFeed(state);
-            clobFeed.subscribe(event.upTokenId, event.downTokenId);
-            if (!opts.json) {
-              console.log(`[event] ${event.title} | PTB=${state.priceToBeat ?? 'pendente'}`);
-            }
-          }
-
-          // PTB costuma chegar segundos após o open do slot — retentar até obter.
-          if (
-            state.priceToBeat == null &&
-            event.eventStart &&
-            event.eventEnd &&
-            Date.now() - lastPtbRetryMs > 5000
-          ) {
-            lastPtbRetryMs = Date.now();
-            const ptb = await fetchPriceToBeat(event.eventStart, event.eventEnd);
-            if (ptb != null) {
-              state.priceToBeat = ptb;
-              if (!opts.json) console.log(`[ptb] ${ptb}`);
-            }
-          }
-
-          const nowMs = Date.now();
-          const snapshot = buildMarketSnapshot({ state, event, nowMs });
-          await engine.ingestMarketSnapshot(snapshot);
-
-          // Diagnóstico na janela terminal quando ainda sem ENTER neste mercado.
-          const marketKey = snapshot.marketId;
-          const inTerminal =
-            Number.isFinite(snapshot.secsLeft) &&
-            snapshot.secsLeft >= MIDAS_V1.minSecondsLeft &&
-            snapshot.secsLeft < MIDAS_V1.maxSecondsLeft;
-          if (
-            !opts.json &&
-            inTerminal &&
-            !seenMarkets.has(marketKey) &&
-            Date.now() - lastGateLogMs > 5000
-          ) {
-            lastGateLogMs = Date.now();
-            console.log(
-              `[wait] τ=${snapshot.secsLeft?.toFixed?.(1)}s ptb=${state.priceToBeat ?? '?'} btc=${snapshot.btc ?? '?'} ` +
-                `upAsk=${snapshot.book?.up?.bestAsk ?? '?'} dnAsk=${snapshot.book?.down?.bestAsk ?? '?'} ` +
-                `feeds=${snapshot.feeds?.healthy !== false ? 'ok' : 'bad'}`,
-            );
-          }
-
-          for (const row of engine.journal) {
-            if (row.type !== 'sink' || row.intent?.kind !== 'ENTER') continue;
-            const id = row.intentId ?? row.intent?.intentId;
-            if (!id || seenIntentIds.has(id)) continue;
-            // No máximo 1 ENTER contado por mercado/evento
-            const marketKey = row.intent.marketId ?? snapshot.marketId;
-            if (seenMarkets.has(marketKey)) continue;
-            seenIntentIds.add(id);
-            seenMarkets.add(marketKey);
-            const rec = {
-              n: enters.length + 1,
-              intentId: id,
-              side: row.intent.side,
-              quantity: row.intent.quantity,
-              budget: row.intent.budget,
-              reason: row.intent.reason,
-              secsLeft: snapshot.secsLeft,
-              ask:
-                row.intent.side === 'DOWN'
-                  ? snapshot.book?.down?.bestAsk
-                  : snapshot.book?.up?.bestAsk,
-              event: event.title,
-              marketId: marketKey,
-              at: new Date(nowMs).toISOString(),
-            };
-            enters.push(rec);
-            if (!opts.json) {
-              console.log(
-                `[ENTER ${rec.n}/${opts.target}] ${rec.side} qty=${rec.quantity} ask=${rec.ask} τ=${rec.secsLeft?.toFixed?.(1) ?? rec.secsLeft}s | ${rec.event}`,
-              );
-            }
-            if (enters.length >= opts.target) {
+      const timer = setInterval(() => {
+        if (tickBusy) return;
+        tickBusy = true;
+        (async () => {
+          try {
+            if (enters.length >= opts.target || Date.now() >= deadline) {
               clearInterval(timer);
               resolve();
               return;
             }
+
+            if (Date.now() - lastEventFetchMs > 1000 || !event) {
+              event = await findActiveBtc5mEvent();
+              lastEventFetchMs = Date.now();
+            }
+            if (!event) return;
+
+            if (event.conditionId !== currentEventId) {
+              currentEventId = event.conditionId;
+              state.priceToBeat = await fetchPriceToBeat(event.eventStart, event.eventEnd);
+              lastPtbRetryMs = Date.now();
+              history.length = 0;
+              stopRtds?.();
+              clobFeed?.stop();
+              stopRtds = startRtdsFeed(state);
+              clobFeed = createClobFeed(state);
+              clobFeed.subscribe(event.upTokenId, event.downTokenId);
+              if (!opts.json) {
+                console.log(`[event] ${event.title} | PTB=${state.priceToBeat ?? 'pendente'}`);
+              }
+            }
+
+            // PTB costuma chegar segundos após o open — retentar rápido.
+            if (
+              state.priceToBeat == null &&
+              event.eventStart &&
+              event.eventEnd &&
+              Date.now() - lastPtbRetryMs > 2000
+            ) {
+              lastPtbRetryMs = Date.now();
+              const ptb = await fetchPriceToBeat(event.eventStart, event.eventEnd);
+              if (ptb != null) {
+                state.priceToBeat = ptb;
+                if (!opts.json) console.log(`[ptb] ${ptb}`);
+              }
+            }
+
+            const nowMs = Date.now();
+            const snapshot = buildMarketSnapshot({ state, event, nowMs });
+            if (Number.isFinite(snapshot.btc)) {
+              history.push({ ts: nowMs, btc: snapshot.btc });
+              if (history.length > 600) history.splice(0, history.length - 600);
+            }
+            await engine.ingestMarketSnapshot(snapshot);
+
+            const marketKey = snapshot.marketId;
+            const secsLeft = snapshot.secsLeft;
+            const inTerminal =
+              Number.isFinite(secsLeft) &&
+              secsLeft >= MIDAS_V1.minSecondsLeft &&
+              secsLeft < MIDAS_V1.maxSecondsLeft;
+            const approaching =
+              Number.isFinite(secsLeft) && secsLeft < 45 && secsLeft >= MIDAS_V1.maxSecondsLeft;
+
+            // Heartbeat fora da janela (a cada 10s) — não ficar cego.
+            if (!opts.json && !inTerminal && Date.now() - lastHeartbeatMs > 10_000) {
+              lastHeartbeatMs = Date.now();
+              console.log(
+                `[hb] enters=${enters.length}/${opts.target} τ=${secsLeft?.toFixed?.(1) ?? '?'}s ` +
+                  `ptb=${state.priceToBeat ?? '?'} btc=${snapshot.btc ?? '?'} ` +
+                  `rtds=${snapshot.feeds?.rtdsConnected ? 1 : 0} clob=${snapshot.feeds?.clobConnected ? 1 : 0} ` +
+                  `healthy=${snapshot.feeds?.healthy !== false ? 1 : 0}`,
+              );
+            }
+
+            // Na aproximação / janela: log de gates a cada 1s.
+            if (
+              !opts.json &&
+              (inTerminal || approaching) &&
+              !seenMarkets.has(marketKey) &&
+              Date.now() - lastGateLogMs > 1000
+            ) {
+              lastGateLogMs = Date.now();
+              const evalResult = evaluateEntryGates(snapshot, MIDAS_V1, history);
+              const fails = failGates(evalResult.gates);
+              console.log(
+                `[${inTerminal ? 'term' : 'near'}] τ=${secsLeft?.toFixed?.(1)}s fav=${evalResult.fav ?? '-'} ` +
+                  `ask=${evalResult.ask ?? '?'} dist=${evalResult.dist?.toFixed?.(1) ?? '?'} ` +
+                  `ok=${evalResult.ok ? 1 : 0} ${fails || 'all-pass'}`,
+              );
+            }
+
+            for (const row of engine.journal) {
+              if (row.type !== 'sink' || row.intent?.kind !== 'ENTER') continue;
+              const id = row.intentId ?? row.intent?.intentId;
+              if (!id || seenIntentIds.has(id)) continue;
+              const mk = row.intent.marketId ?? snapshot.marketId;
+              if (seenMarkets.has(mk)) continue;
+              seenIntentIds.add(id);
+              seenMarkets.add(mk);
+              const rec = {
+                n: enters.length + 1,
+                intentId: id,
+                side: row.intent.side,
+                quantity: row.intent.quantity,
+                budget: row.intent.budget,
+                reason: row.intent.reason,
+                secsLeft,
+                ask:
+                  row.intent.side === 'DOWN'
+                    ? snapshot.book?.down?.bestAsk
+                    : snapshot.book?.up?.bestAsk,
+                event: event.title,
+                marketId: mk,
+                at: new Date(nowMs).toISOString(),
+              };
+              enters.push(rec);
+              if (!opts.json) {
+                console.log(
+                  `[ENTER ${rec.n}/${opts.target}] ${rec.side} qty=${rec.quantity} ask=${rec.ask} τ=${secsLeft?.toFixed?.(1) ?? secsLeft}s | ${rec.event}`,
+                );
+              }
+              if (enters.length >= opts.target) {
+                clearInterval(timer);
+                resolve();
+                return;
+              }
+            }
+          } catch (err) {
+            clearInterval(timer);
+            reject(err);
+          } finally {
+            tickBusy = false;
           }
-        } catch (err) {
-          clearInterval(timer);
-          reject(err);
-        }
-      }, 500);
+        })();
+      }, opts.intervalMs);
     });
 
     const report = {
@@ -181,6 +224,7 @@ async function main() {
       mode: 'shadow',
       target: opts.target,
       count: enters.length,
+      intervalMs: opts.intervalMs,
       enters,
       timedOut: enters.length < opts.target,
     };
