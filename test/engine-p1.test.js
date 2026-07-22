@@ -96,9 +96,14 @@ describe('conformance fixtures', () => {
 });
 
 describe('registry + bootstrap', () => {
-  it('lista fixtures + tfc-v7', () => {
+  it('lista fixtures + tfc-v7 + midas', () => {
     const ids = createDefaultRegistry().list().map((m) => m.id).sort();
-    assert.deepEqual(ids, ['fixture-price-cross', 'fixture-spread-wide', 'tfc-v7']);
+    assert.deepEqual(ids, [
+      'fixture-price-cross',
+      'fixture-spread-wide',
+      'midas-carry-v1',
+      'tfc-v7',
+    ]);
   });
 });
 

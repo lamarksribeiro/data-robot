@@ -12,16 +12,18 @@ import { ingestFilteredSnapshot } from '../market/ingest.js';
 import { createPriceCrossStrategy } from '../strategy/fixtures/priceCross.js';
 import { createSpreadWideStrategy } from '../strategy/fixtures/spreadWide.js';
 import { createTfcV7Strategy } from '../strategy/tfcV7.js';
+import { createMidasV1Strategy } from '../strategy/midasV1.js';
 import { defaultPresetFor } from './presets.js';
 
 /**
- * Registry com fixtures (P1) + TFC V7 (P6).
+ * Registry com fixtures (P1) + TFC V7 (P6) + MIDAS Carry V1.
  */
 export function createDefaultRegistry() {
   const registry = new StrategyRegistry();
   registry.register(createPriceCrossStrategy());
   registry.register(createSpreadWideStrategy());
   registry.register(createTfcV7Strategy());
+  registry.register(createMidasV1Strategy());
   return registry;
 }
 

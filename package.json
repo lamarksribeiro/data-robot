@@ -21,6 +21,7 @@
     "tfc:latency:compare": "node scripts/tfc/compare-latency.js",
     "tfc:micro-entry": "node scripts/tfc/micro-entry.js",
     "tfc:micro-live": "node scripts/tfc/micro-live.js",
+    "midas:micro-live": "node scripts/midas/micro-live.js",
     "lint": "node scripts/lint-check.js",
     "test": "node scripts/run-tests.js",
     "ci": "npm run lint && npm run check:architecture && npm test",

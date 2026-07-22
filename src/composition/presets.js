@@ -4,6 +4,8 @@
 
 import { TFC_V7 } from '../tfc/preset-v7.js';
 import { TFC_V7_STRATEGY_ID } from '../strategy/tfcV7.js';
+import { MIDAS_V1 } from '../tfc/preset-midas.js';
+import { MIDAS_V1_STRATEGY_ID } from '../strategy/midasV1.js';
 
 /**
  * @param {string} strategyId
@@ -15,6 +17,9 @@ export function defaultPresetFor(strategyId, override = {}) {
   );
   if (strategyId === TFC_V7_STRATEGY_ID) {
     return { ...TFC_V7, ...clean };
+  }
+  if (strategyId === MIDAS_V1_STRATEGY_ID) {
+    return { ...MIDAS_V1, ...clean };
   }
   if (strategyId === 'fixture-spread-wide') {
     return { minSpread: 0.01, quantity: 3, budget: 1, ...clean };

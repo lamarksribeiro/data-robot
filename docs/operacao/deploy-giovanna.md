@@ -41,17 +41,13 @@ Baseline latência (20/07/2026, 3×): mediana total **~380 ms** (ping 56 / creat
 - Secrets: env no Coolify (não commitar `.env`).
 - Engine Ready usa fixtures e **não** depende de TFC nem MIDAS ([ADR-002](../arquitetura/adr-002-strategy-catalog-supervision.md)).
 
-## Próximos passos — trilha ágil (revisada)
+## Próximos passos — sequência definitiva (só MIDAS)
 
-Detalhe: [plano §3](../plano-desenvolvimento.md#próximos-passos--trilha-ágil-revisada).
+Detalhe: [plano §3](../plano-desenvolvimento.md#o-que-vamos-seguir-sequência-definitiva-deste-ciclo).
 
-1. **A1 concluída (22/07):** app Coolify `data-robot-engine`, `Dockerfile.engine`, porta 3201, `shadow + fixture`; UI não alterada.
-2. **A2 concluída (22/07):** `/health` e `/ready` OK; 2 restarts + kill + restart final; posição shadow e checkpoints restaurados; 0 órfã/violação.
-3. **B ∥:** portar plugin MIDAS + paridade CI (enquanto A).
-4. **D:** OMS smoke com harness **TFC** já existente (`tfc:micro-live` ou create/cancel) — não espera MIDAS.
-5. **C → E:** shadow MIDAS ≥20 → 3 micros MIDAS $1.
-6. **F:** EXIT live; reverse depois.
-7. **G / P9:** 10 micros, shadow 100, soak ≥7d, catálogo/ETH.
+**Feito:** A1/A2 + **plugin MIDAS no código** (`npm run midas:micro-live`).  
+**Seguir:** shadow ≥5 → 3 micros $1 enter/hold → EXIT depois.  
+**Não seguir agora:** smoke TFC, UI, soak 7d.
 
 ## Evidência Engine Ready ágil — 22/07/2026
 
