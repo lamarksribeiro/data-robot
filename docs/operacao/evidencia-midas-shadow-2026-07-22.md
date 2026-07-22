@@ -98,7 +98,7 @@ Isso é comportamento do champion, não falha de infra.
 ## Próximo gate
 
 1. ~~Shadow ≥5 ENTER~~ **feito 22/07**
-2. **3×** `midas:micro-live -- --live` cap **$1** (ENTER → fill reconciliado → hold até resolução)
+2. **3×** `midas:micro-live -- --live` — **#1 OK** ([evidência micro](./evidencia-midas-micro-live-2026-07-22.md)); faltam #2–#3
 3. EXIT/danger live antes de subir budget / P9
 
 Nenhuma ordem real foi enviada nesta evidência de shadow.
