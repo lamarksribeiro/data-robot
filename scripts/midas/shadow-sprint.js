@@ -128,7 +128,13 @@ async function main() {
             }
 
             const nowMs = Date.now();
-            const snapshot = buildMarketSnapshot({ state, event, nowMs });
+            // Shadow: não descartar book quieto com stale 2–3s (mercado noturno é rarefeito).
+            const snapshot = buildMarketSnapshot({
+              state,
+              event,
+              nowMs,
+              healthLimits: { rtdsMaxLagMs: 8_000, clobMaxLagMs: 15_000, clockSkewMaxMs: 5_000 },
+            });
             if (Number.isFinite(snapshot.btc)) {
               history.push({ ts: nowMs, btc: snapshot.btc });
               if (history.length > 600) history.splice(0, history.length - 600);
@@ -143,6 +149,7 @@ async function main() {
               secsLeft < MIDAS_V1.maxSecondsLeft;
             const approaching =
               Number.isFinite(secsLeft) && secsLeft < 45 && secsLeft >= MIDAS_V1.maxSecondsLeft;
+            const healthReasons = (snapshot.health?.reasons ?? []).join(',') || '-';
 
             // Heartbeat fora da janela (a cada 10s) — não ficar cego.
             if (!opts.json && !inTerminal && Date.now() - lastHeartbeatMs > 10_000) {
@@ -151,7 +158,7 @@ async function main() {
                 `[hb] enters=${enters.length}/${opts.target} τ=${secsLeft?.toFixed?.(1) ?? '?'}s ` +
                   `ptb=${state.priceToBeat ?? '?'} btc=${snapshot.btc ?? '?'} ` +
                   `rtds=${snapshot.feeds?.rtdsConnected ? 1 : 0} clob=${snapshot.feeds?.clobConnected ? 1 : 0} ` +
-                  `healthy=${snapshot.feeds?.healthy !== false ? 1 : 0}`,
+                  `healthy=${snapshot.feeds?.healthy !== false ? 1 : 0} reasons=${healthReasons}`,
               );
             }
 
