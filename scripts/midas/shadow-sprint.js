@@ -44,6 +44,8 @@ async function main() {
   const seenMarkets = new Set();
   let currentEventId = null;
   let lastEventFetchMs = 0;
+  let lastPtbRetryMs = 0;
+  let lastGateLogMs = 0;
   let event = null;
 
   try {
@@ -79,19 +81,55 @@ async function main() {
           if (event.conditionId !== currentEventId) {
             currentEventId = event.conditionId;
             state.priceToBeat = await fetchPriceToBeat(event.eventStart, event.eventEnd);
+            lastPtbRetryMs = Date.now();
             stopRtds?.();
             clobFeed?.stop();
             stopRtds = startRtdsFeed(state);
             clobFeed = createClobFeed(state);
             clobFeed.subscribe(event.upTokenId, event.downTokenId);
             if (!opts.json) {
-              console.log(`[event] ${event.title} | PTB=${state.priceToBeat}`);
+              console.log(`[event] ${event.title} | PTB=${state.priceToBeat ?? 'pendente'}`);
+            }
+          }
+
+          // PTB costuma chegar segundos após o open do slot — retentar até obter.
+          if (
+            state.priceToBeat == null &&
+            event.eventStart &&
+            event.eventEnd &&
+            Date.now() - lastPtbRetryMs > 5000
+          ) {
+            lastPtbRetryMs = Date.now();
+            const ptb = await fetchPriceToBeat(event.eventStart, event.eventEnd);
+            if (ptb != null) {
+              state.priceToBeat = ptb;
+              if (!opts.json) console.log(`[ptb] ${ptb}`);
             }
           }
 
           const nowMs = Date.now();
           const snapshot = buildMarketSnapshot({ state, event, nowMs });
           await engine.ingestMarketSnapshot(snapshot);
+
+          // Diagnóstico na janela terminal quando ainda sem ENTER neste mercado.
+          const marketKey = snapshot.marketId;
+          const inTerminal =
+            Number.isFinite(snapshot.secsLeft) &&
+            snapshot.secsLeft >= MIDAS_V1.minSecondsLeft &&
+            snapshot.secsLeft < MIDAS_V1.maxSecondsLeft;
+          if (
+            !opts.json &&
+            inTerminal &&
+            !seenMarkets.has(marketKey) &&
+            Date.now() - lastGateLogMs > 5000
+          ) {
+            lastGateLogMs = Date.now();
+            console.log(
+              `[wait] τ=${snapshot.secsLeft?.toFixed?.(1)}s ptb=${state.priceToBeat ?? '?'} btc=${snapshot.btc ?? '?'} ` +
+                `upAsk=${snapshot.book?.up?.bestAsk ?? '?'} dnAsk=${snapshot.book?.down?.bestAsk ?? '?'} ` +
+                `feeds=${snapshot.feeds?.healthy !== false ? 'ok' : 'bad'}`,
+            );
+          }
 
           for (const row of engine.journal) {
             if (row.type !== 'sink' || row.intent?.kind !== 'ENTER') continue;
