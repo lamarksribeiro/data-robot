@@ -106,8 +106,7 @@ FUTURO: outras estratégias no mesmo contrato (TFC, Apex, …)
 | **2 — ✓** | **C'** | Shadow MIDAS curto | ≥5 ENTER (22/07 Giovanna); [evidência](./operacao/evidencia-midas-shadow-2026-07-22.md) |
 | **3 — ✓** | **E1** | 1º micro-live MIDAS | fill/reconcile 22/07 ([evidência](./operacao/evidencia-midas-micro-live-2026-07-22.md)) |
 | **4 — ✓** | **E2** | +2 micros (cap $2) | 3 reconciliados 22/07 ([evidência](./operacao/evidencia-midas-micro-live-2026-07-22.md)) |
-| **5** | **F** | EXIT live (danger/late-flip) | micro controlado |
-| **5** | **F'** | EXIT/danger live | antes de subir budget |
+| **5** | **F** | EXIT live (danger/late-flip) | micro controlado, antes de subir budget |
 | **6** | **G** | P9 + outras estratégias | depois do canário MIDAS estável |
 
 **Obrigatório em qualquer live MIDAS:** preflight, canary **$1**, ACK≠fill, User WS/REST, cancel/finally, kill.
