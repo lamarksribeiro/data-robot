@@ -5,7 +5,7 @@
 **Painel:** https://coolify.giovannarosito.com  
 **Projeto:** GoldenLens / production  
 **UI oficial:** https://robot.fracta.online  
-**Versão de referência no `main`:** `package.json` **1.11.0** (Control Plane P9 v1)
+**Versão de referência no `main`:** `package.json` **1.11.0** (Control Plane P9 v1, commit operacional `b39b737`)
 
 O host de deploy continua sendo o servidor **Giovanna** (Coolify). O domínio público oficial é `robot.fracta.online` (Cloudflare → Giovanna). O hostname legado `robot.giovannarosito.com` **não** é mais usado.
 
@@ -35,8 +35,10 @@ Baseline latência (20/07/2026, 3×): mediana total **~380 ms** (ping 56 / creat
 
 ## Notas
 
-- UI e engine são containers separados: UI sirv `:3200`; engine long-lived `:3201`.
-- Engine sem FQDN público, acessível apenas na rede/host do Coolify; app `running:healthy` (commits MIDAS no `main`, ex. `b1496ee`).
+- UI e engine são containers separados: UI autenticada `:3200`; engine long-lived `:3201`.
+- Engine sem FQDN público, acessível pelo alias privado `data-robot-engine`; UI usa `http://data-robot-engine:3201`.
+- Em 23/07, ambos os apps foram implantados no commit `b39b737`, `running:healthy`.
+- Engine atual: MIDAS BTC 5m em `shadow`, `ENGINE_START_ARMED=0`, estado operacional inicial `DISARMED`.
 - Checkpoints e logs de shadow MIDAS persistem no volume `rx06uazamupj1w98pvl2b1d9-engine-runs`, montado em `/usr/src/app/runs` (inclui `runs/midas-shadow/`).
 - Secrets: env no Coolify (não commitar `.env`).
 - Engine Ready usa fixtures e **não** depende de TFC nem MIDAS ([ADR-002](../arquitetura/adr-002-strategy-catalog-supervision.md)).
@@ -47,8 +49,11 @@ Detalhe: [plano §3](../plano-desenvolvimento.md#o-que-vamos-seguir-sequência-d
 
 **Feito:** A1/A2 + plugin MIDAS + CI + **shadow ≥5 ENTER** (22/07).  
 Evidência: [evidencia-midas-shadow-2026-07-22.md](./evidencia-midas-shadow-2026-07-22.md).  
-**Seguir:** deployment P9 shadow MIDAS → campanha supervisionada com hard cap $2.
-**Não seguir agora:** smoke TFC, UI, soak 7d.
+**Feito em 23/07:** deployment P9 shadow MIDAS + painel autenticado + lifecycle/OMS ops + audit.
+**Seguir:** campanha shadow supervisionada e coleta contínua de evidência; live permanece bloqueado.
+**Não seguir agora:** smoke TFC, live autônomo, ETH live ou aumento de budget.
+
+Evidência: [Control Plane P9 — 23/07/2026](./evidencia-control-plane-p9-2026-07-23.md).
 
 ## Evidência Engine Ready ágil — 22/07/2026
 

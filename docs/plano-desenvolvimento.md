@@ -1,10 +1,10 @@
 # Plano de desenvolvimento — Data Robot
 
 **Revisado em:** 23/07/2026
-**Estado atual:** Control Plane P9 v1 implementado e em validação/deploy no Giovanna. Canário deste ciclo = **só MIDAS, notional marketable e hard cap $2**.
+**Estado atual:** Control Plane P9 v1 publicado e validado no Giovanna. Canário deste ciclo = **só MIDAS, notional marketable e hard cap $2**.
 **URL oficial:** https://robot.fracta.online  
 **Pacote:** `data-robot` **1.11.0**
-**Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / `btc-champion-v1`). Plugin, shadow ≥5, 3 micro-live e `danger_exit` live concluídos em 22/07. P9 está pronto para deploy controlado; late-flip live e janela longa ainda exigem evidência real.
+**Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / `btc-champion-v1`). Plugin, shadow ≥5, 3 micro-live e `danger_exit` live concluídos em 22/07. P9 está publicado em shadow/desarmado; late-flip live e janela longa ainda exigem evidência real.
 **Depois:** qualquer estratégia via o mesmo contrato (engine agnóstica). TFC V7 = helpers no código, fora do canário agora.
 
 Este é o roadmap canônico. O [runbook TFC](./tfc-validacao-real.md) é baseline histórico do plugin TFC — **não** define a trilha MIDAS deste ciclo.
@@ -32,7 +32,7 @@ Ficam fora deste ciclo:
 1. **Agora o teste/canário é só MIDAS; a engine continua strategy-agnostic.** O plugin MIDAS está no registry do robot e aprovado no catálogo para canário BTC 5m. Disponibilidade no catálogo não ativa execução; cada processo seleciona um `strategyId`.
 2. **V7 substitui V6 como baseline de execução.** A V6 Hybrid depende de stop-buy sintético. A validação do backtest concluiu que esse mecanismo pode disparar na zona abaixo de 4s, onde o book e a latência não sustentam execução fiel.
 3. **F4 não implementará hedge stop da V6.** A sequência correta é late flip exit/reverse da V7/MIDAS e, depois, danger exit no piso de 4s.
-4. **Engine contínua já está no Giovanna (A1/A2).** `data-robot-engine` `:3201` em shadow/fixture passou drills e soak ≥4h. Falta substituir o deployment fixture pelo estágio shadow MIDAS P9 e, depois, live controlado.
+4. **Engine contínua e Control Plane P9 estão no Giovanna.** `data-robot-engine` `:3201` está em shadow MIDAS, desarmada, e passou health, lifecycle, OMS ops, kill/restart e recovery. O próximo estágio é a campanha shadow contínua; live continua bloqueado.
 5. **A UI estática não é o robô.** `npm start` serve somente `public/`. URL oficial da UI: https://robot.fracta.online. A engine deve ser um processo separado (`:3201`), sem secrets no frontend.
 6. **A latência média/mediana não basta.** Promoção exige p95/p99 por operação, visibilidade da ordem, taxa de erro e comportamento sob timeout.
 7. **REST imediato não é confirmação suficiente.** O canal WebSocket autenticado de usuário deve ser a fonte primária de eventos de ordem/trade; REST será usado para reconciliação.
@@ -63,7 +63,7 @@ Ficam fora deste ciclo:
 | Persistência / recovery | Código + drill shadow aprovados | Volume persistente no Giovanna; 2 restarts e restart pós-kill preservaram checkpoint e posição shadow. Ensaio com ordem/posição real permanece para o OMS smoke. |
 | Observabilidade | Código endurecido; ops aberto | Readiness depende de feed/recovery/user WS; métricas ausentes reprovam SLO; calibragem Giovanna pendente. |
 | Testes e CI | Feito | `npm run ci` (lint + architecture + testes); sem rede/ordens reais. |
-| Deploy | UI + engine no ar; atualização em curso | UI oficial em https://robot.fracta.online; publicar o painel P9 e validar o salto privado UI→Engine. O canário live permanece desarmado até aprovação humana. |
+| Deploy | P9 publicado e validado | UI oficial em https://robot.fracta.online; salto privado UI→Engine, login, health, lifecycle, OMS ops, kill/restart e recovery validados. O canário live permanece desarmado até aprovação humana. |
 
 ### O que vamos seguir (sequência definitiva deste ciclo)
 
@@ -73,7 +73,10 @@ FEITO:  engine Giovanna + drills (A1/A2)
         Shadow MIDAS ≥5 ENTER (22/07 Giovanna)
           → docs/operacao/evidencia-midas-shadow-2026-07-22.md
           │
-AGORA:  6) publicar/validar P9 + dashboard UI (canário contínuo / budget mínimo)
+        P9 + dashboard UI publicados e validados (23/07)
+          → docs/operacao/evidencia-control-plane-p9-2026-07-23.md
+          │
+AGORA:  campanha shadow contínua supervisionada
           │
 META:   Produção canário limitada com supervisão
           │
@@ -487,7 +490,7 @@ Gate de saída:
 
 ### P9 — Canário e produção limitada
 
-**Status:** Control Plane v1 implementado: runner fail-closed, catálogo, cap/janela persistentes, audit JSONL, login real, lifecycle, operações OMS e dashboard. Aguardando validação do deploy e campanha shadow/live supervisionada.
+**Status:** Control Plane v1 publicado e validado: runner fail-closed, catálogo, cap/janela persistentes, audit JSONL, login real, lifecycle, operações OMS e dashboard. Aguardando campanha shadow supervisionada; promoção live permanece bloqueada até aprovação humana e evidência dos gates.
 
 Promoção progressiva:
 

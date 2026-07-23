@@ -17,6 +17,7 @@
 | [TFC V7 P6](./arquitetura/tfc-v7-p6.md) | Plugin TFC no contrato; ENTER/late flip/danger; paridade sintética; MIDAS é gate separado |
 | [Micro-live P7](./arquitetura/micro-live-p7.md) | Canário via engine; harness TFC; campanha por plugin/preset; ACK≠fill |
 | [Canário contínuo P9](./operacao/p9-canario-continuo.md) | Runner MIDAS, catálogo, dashboard, deploy e gates reais |
+| [Evidência Control Plane P9 — 23/07](./operacao/evidencia-control-plane-p9-2026-07-23.md) | Deploy, login, lifecycle, OMS ops, kill/recovery e estado final shadow |
 | [Schema de runs](./arquitetura/runs-schema.md) | Envelope versionado, sanitização e retenção de evidência |
 | [Deploy Giovanna](./operacao/deploy-giovanna.md) | Coolify Giovanna, URL oficial `robot.fracta.online`, smoke CLOB, próximos passos |
 | [Ambientes](./operacao/ambientes.md) | local / shadow / canary / production |
