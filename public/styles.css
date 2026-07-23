@@ -2,18 +2,21 @@
   --bg-0: #050811;
   --bg-1: rgba(13, 20, 38, 0.45);
   --bg-2: rgba(23, 33, 56, 0.6);
-  --bg-3: rgba(28, 38, 56, 0.74);
   --bg-hover: rgba(16, 185, 129, 0.15);
   --border: rgba(16, 185, 129, 0.2);
   --border-strong: rgba(16, 185, 129, 0.45);
+
   --text-0: #ffffff;
   --text-1: #f8fafc;
   --text-2: #cbd5e1;
   --text-3: #64748b;
-  --accent: #10b981;
-  --accent-strong: #059669;
+
+  --accent: #10b981; /* Verde de Lucro (Cyber Monkey) */
+  --accent-strong: #059669; /* Verde Esmeralda */
   --accent-soft: rgba(16, 185, 129, 0.08);
   --accent-glow: rgba(16, 185, 129, 0.35);
+
+  --bg-3: rgba(28, 38, 56, 0.74);
   --ok: #10b981;
   --ok-soft: rgba(16, 185, 129, 0.1);
   --warn: #f59e0b;
@@ -22,30 +25,39 @@
   --err-soft: rgba(239, 68, 68, 0.1);
   --idle: #64748b;
   --idle-soft: rgba(100, 116, 139, 0.1);
+
   --radius: 12px;
   --radius-sm: 8px;
   --radius-lg: 16px;
   --radius-pill: 999px;
-  --shadow-1: 0 4px 20px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 10px 30px rgba(0, 0, 0, 0.6);
   --sidebar-w: 240px;
   --topbar-h: 60px;
+
+  --shadow-1: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 10px 30px rgba(0, 0, 0, 0.6);
+
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --font-sans: 'Plus Jakarta Sans', sans-serif;
 }
 
-*, *::before, *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-html, body { margin: 0; padding: 0; height: 100%; min-height: 100%; }
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
 body {
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.5;
   color: var(--text-1);
-  background:
-    radial-gradient(circle at 50% 12%, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 12% 82%, rgba(5, 150, 105, 0.03) 0%, transparent 40%),
-    #050811;
+  background: radial-gradient(circle at 50% 12%, rgba(16, 185, 129, 0.08) 0%, transparent 50%),
+              radial-gradient(circle at 12% 82%, rgba(5, 150, 105, 0.03) 0%, transparent 40%),
+              #050811;
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -67,21 +79,25 @@ button { font-family: inherit; }
 a { color: inherit; text-decoration: none; }
 .hidden { display: none !important; }
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: rgba(5, 8, 17, 0.3); }
-::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.16); border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.34); }
+.login__error {
+  min-height: 18px;
+  margin: 0;
+  padding: 10px 12px;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
 
-/* ——— Login (design original Cyber Monkey) ——— */
 .login {
   position: relative;
   width: min(420px, calc(100vw - 32px));
   background: rgba(8, 12, 24, 0.82);
   border: 1px solid rgba(16, 185, 129, 0.28);
   border-radius: var(--radius-lg);
-  box-shadow:
-    0 25px 50px -12px rgba(0, 0, 0, 0.8),
-    0 0 40px rgba(16, 185, 129, 0.08);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8),
+              0 0 40px rgba(16, 185, 129, 0.08);
   padding: 40px 36px;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -105,7 +121,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .login__subtitle {
-  margin: 6px 0 0;
+  margin: 6px 0 0 0;
   font-size: 11px;
   color: var(--text-3);
   text-transform: uppercase;
@@ -113,6 +129,7 @@ a { color: inherit; text-decoration: none; }
   font-weight: 700;
 }
 
+/* Formulário e Inputs */
 .form {
   display: flex;
   flex-direction: column;
@@ -138,6 +155,21 @@ a { color: inherit; text-decoration: none; }
 .field:focus-within .field__label {
   color: var(--accent);
   text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.input-container {
+  position: relative;
+  width: 100%;
+}
+
+.input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  opacity: 0.75;
+  pointer-events: none;
 }
 
 .field__input {
@@ -166,23 +198,36 @@ a { color: inherit; text-decoration: none; }
 
 .field__input:focus {
   border-color: #34d399;
-  box-shadow:
-    0 0 16px rgba(16, 185, 129, 0.28),
-    inset 0 1px 2px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.28),
+              inset 0 1px 2px rgba(0, 0, 0, 0.6);
   background: rgba(5, 8, 17, 0.95);
 }
 
-.login__error {
-  min-height: 18px;
-  margin: 0;
-  padding: 10px 12px;
-  color: #f87171;
-  background: var(--err-soft);
-  border: 1px solid rgba(239, 68, 68, 0.25);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
+/* Mostrar/esconder senha */
+.password-container .field__input {
+  padding-right: 42px;
 }
 
+.password-toggle {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 0;
+  color: var(--text-3);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
+  outline: none;
+}
+
+.password-toggle:hover {
+  color: var(--text-0);
+}
+
+/* Botão de Login */
 .login .btn {
   display: inline-flex;
   align-items: center;
@@ -203,7 +248,7 @@ a { color: inherit; text-decoration: none; }
   color: #050811;
 }
 
-.login .btn--primary:hover:not(:disabled) {
+.login .btn--primary:hover {
   background: linear-gradient(135deg, #34d399, #059669);
   border-color: #059669;
   box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
@@ -211,7 +256,7 @@ a { color: inherit; text-decoration: none; }
   transform: translateY(-1.5px);
 }
 
-.login .btn--primary:active:not(:disabled) {
+.login .btn--primary:active {
   transform: translateY(0);
 }
 
@@ -220,6 +265,38 @@ a { color: inherit; text-decoration: none; }
   opacity: 0.55;
   transform: none;
   box-shadow: none;
+}
+
+/* Console HUD Box */
+.console-box {
+  background: #03050b;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: #94a3b8;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+}
+
+.console-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.c-accent { color: #10b981; }
+.c-ok { color: #10b981; }
+.c-warn { color: #f59e0b; }
+
+.c-blink {
+  animation: consoleBlink 1.4s infinite;
+}
+
+@keyframes consoleBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
 }
 
 /* ——— Dashboard / app shell ——— */

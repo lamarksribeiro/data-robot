@@ -3,39 +3,52 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Data Robot · Operações</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.11.2">
-  <link rel="apple-touch-icon" href="/favicon.svg?v=1.11.2">
+  <title>Login · Data Robot</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.11.3">
+  <link rel="apple-touch-icon" href="/favicon.svg?v=1.11.3">
+
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    rel="stylesheet"
-    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap"
-  >
-  <link rel="stylesheet" href="/styles.css?v=1.11.2">
-  <script src="/js/dashboard.js?v=1.11.2" defer></script>
-  <script src="/js/mascot.js?v=1.11.2" defer></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="/styles.css?v=1.11.3">
+
+  <!-- Scripts -->
+  <script src="/js/dashboard.js?v=1.11.3" defer></script>
+  <script src="/js/mascot.js?v=1.11.3" defer></script>
 </head>
 <body>
   <div class="login-wrapper">
-    <section class="login" id="login-view">
+    <!-- O mascote container é injetado dinamicamente aqui -->
+
+    <div class="login" id="login-view">
       <div class="login__header">
         <h1 class="login__title">Data Robot</h1>
         <p class="login__subtitle">Trading Algorítmico & Execução</p>
       </div>
+
       <form class="form" id="login-form" autocomplete="on" novalidate>
         <div class="field">
           <label class="field__label" for="username">Usuário</label>
-          <input class="field__input" type="text" id="username" name="username" autocomplete="username" placeholder="Digite seu usuário" required>
+          <input class="field__input" type="text" id="username" name="username" placeholder="Digite seu usuário" autocomplete="username" required>
         </div>
+
         <div class="field">
           <label class="field__label" for="password">Senha</label>
-          <input class="field__input" type="password" id="password" name="password" autocomplete="current-password" placeholder="Digite sua senha" required>
+          <input class="field__input" type="password" id="password" name="password" placeholder="Digite sua senha" autocomplete="current-password" required>
         </div>
+
         <p class="login__error hidden" id="login-message" role="alert"></p>
-        <button class="btn btn--primary" type="submit" id="btn-login">Entrar</button>
+
+        <button class="btn btn--primary" type="submit" id="btn-login">
+          Entrar
+        </button>
       </form>
-    </section>
+    </div>
   </div>
 
   <div class="app dashboard hidden" id="dashboard-view">
