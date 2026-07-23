@@ -82,7 +82,49 @@ describe('MIDAS micro-live canary', () => {
   it('package expõe midas:micro-live', () => {
     const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
     assert.equal(pkg.scripts['midas:micro-live'], 'node scripts/midas/micro-live.js');
+    assert.equal(pkg.scripts['midas:exit-live'], 'node scripts/midas/micro-live.js --wait-exit');
     assert.equal(hasLiveFlag(['node', 'x']), false);
     assert.equal(hasLiveFlag(['node', 'x', '--live']), true);
+  });
+
+  it('EXIT danger inclui tokenId e orderType FAK no canário', async () => {
+    const { createMidasV1Strategy } = await import('../src/strategy/midasV1.js');
+    const { buildStrategyContext } = await import('../src/engine/contract.js');
+    const { emptyPosition } = await import('../src/engine/schemas.js');
+    const strategy = createMidasV1Strategy();
+    const preset = canaryMidasPreset({ lateFlipReverseEnabled: false });
+    const nowMs = 1_700_000_000_000;
+    const snapshot = {
+      ...snap(0.62),
+      nowMs,
+      secsLeft: 4.5,
+      btc: 100.01,
+      priceToBeat: 100,
+      book: bookOk(0.62),
+    };
+    // força bid no lado da posição UP
+    snapshot.book.up.bestBid = 0.6;
+    const ctx = buildStrategyContext({
+      snapshot,
+      position: { marketId: snapshot.marketId, side: 'UP', qty: 2, avgPrice: 0.62, realizedPnl: 0 },
+      mode: 'shadow',
+      clockMs: nowMs,
+      preset,
+      strategyInstanceId: 'exit-tok',
+    });
+    const init = strategy.initialize(ctx, preset);
+    const history = [];
+    for (let i = 0; i < 12; i += 1) {
+      history.push({ ts: nowMs - (12 - i) * 400, btc: 100 + (i % 2 === 0 ? 0.5 : -0.5) });
+    }
+    // último ponto perto do PTB para |dist| pequeno
+    history.push({ ts: nowMs, btc: 100.01 });
+    snapshot.btc = 100.01;
+    const out = strategy.onSnapshot(ctx, { ...init.state, history, marketId: snapshot.marketId });
+    const exit = out.intents.find((i) => i.kind === 'EXIT');
+    assert.ok(exit, `esperava EXIT, intents=${JSON.stringify(out.intents)} diag=${JSON.stringify(out.diagnostics)}`);
+    assert.equal(exit.tokenId, 'up');
+    assert.equal(exit.orderType, 'FAK');
+    assert.ok(Number(exit.minPrice) >= 0.05);
   });
 });

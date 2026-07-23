@@ -9,6 +9,8 @@
  *   npm run midas:micro-live
  *   npm run midas:micro-live -- --timeout=900
  *   npm run midas:micro-live -- --live --timeout=900
+ *   npm run midas:exit-live -- --live --timeout=1800
+ *     (= micro-live --wait-exit: ENTER→fill→espera danger/late_flip EXIT)
  */
 
 import 'dotenv/config';
@@ -49,6 +51,7 @@ function parseArgs(argv) {
   return {
     live: hasLiveFlag(argv),
     cancel: args.includes('--cancel'),
+    waitExit: args.includes('--wait-exit'),
     json: args.includes('--json'),
     timeoutSec: Math.max(30, parseInt(valueOf('--timeout') ?? '900', 10) || 900),
     intervalMs: Math.max(50, parseInt(valueOf('--interval') ?? '100', 10) || 100),
@@ -85,13 +88,19 @@ async function main() {
   }
 
   const mode = opts.live ? 'live' : 'dry-run';
-  const preset = canaryMidasPreset();
+  // EXIT live: desliga REVERSE (ainda bloqueado em live) → late flip vira EXIT SELL.
+  const preset = canaryMidasPreset(
+    opts.waitExit ? { lateFlipReverseEnabled: false } : {},
+  );
   const state = createMarketState();
   const hub = createMarketHub({ state, healthLimits: WAIT_HEALTH });
   let engine = null;
   let stopRtds = null;
   let clobFeed = null;
-  let placed = false;
+  let enterDone = false;
+  let exitDone = false;
+  let enterSinkEntry = null;
+  let exitSinkEntry = null;
   let serverClockOffsetMs = null;
   let subscribedMarketId = null;
   let lastSyncMs = 0;
@@ -166,7 +175,9 @@ async function main() {
 
     const deadline = Date.now() + opts.timeoutSec * 1000;
     if (!opts.json) {
-      console.log(`=== MIDAS Carry V1 micro-live engine (${mode}) ===`);
+      console.log(
+        `=== MIDAS Carry V1 micro-live engine (${mode}${opts.waitExit ? ', wait-exit' : ''}) ===`,
+      );
       console.log(
         `Canary cap: $${engine.canary.maxCanaryBudget} | timeout=${opts.timeoutSec}s interval=${opts.intervalMs}ms`,
       );
@@ -179,7 +190,8 @@ async function main() {
         tickBusy = true;
         (async () => {
           try {
-            if (placed || Date.now() >= deadline) {
+            const holding = (engine.getStatus()?.position?.qty ?? 0) > 0;
+            if (exitDone || (!opts.waitExit && enterDone) || Date.now() >= deadline) {
               clearInterval(timer);
               resolve();
               return;
@@ -194,47 +206,49 @@ async function main() {
               (endMs != null && nowMs >= endMs);
 
             if (needSync) {
-              const synced = await hub.syncMarket(new Date(nowMs));
-              lastSyncMs = nowMs;
-              if (!synced.ok || !hub.event) {
-                if (!opts.json && nowMs - lastHbMs > 10_000) {
-                  lastHbMs = nowMs;
-                  console.log(`[hb] sem evento ativo (${synced.reason ?? 'NO_ACTIVE_EVENT'})`);
+              // Com posição aberta, não rotaciona mercado (precisa do mesmo token para EXIT).
+              if (holding || (opts.waitExit && enterDone)) {
+                lastSyncMs = nowMs;
+              } else {
+                const synced = await hub.syncMarket(new Date(nowMs));
+                lastSyncMs = nowMs;
+                if (!synced.ok || !hub.event) {
+                  if (!opts.json && nowMs - lastHbMs > 10_000) {
+                    lastHbMs = nowMs;
+                    console.log(`[hb] sem evento ativo (${synced.reason ?? 'NO_ACTIVE_EVENT'})`);
+                  }
+                  return;
                 }
-                return;
-              }
-              if (synced.rotated || synced.marketId !== subscribedMarketId) {
-                clobFeed.subscribe(hub.event.upTokenId, hub.event.downTokenId);
-                subscribedMarketId = synced.marketId;
-                // Engine limpa: evita estado/posição shadow de slot anterior.
-                // Em live, reutiliza o sink (heartbeat CLOB + user WS) — dispose
-                // + startHeartbeat('') na rotação gerava Invalid Heartbeat ID fatal.
-                await engine.safeShutdown('midas-micro-market-rotate');
-                const prevSink = engine.sink;
-                if (opts.live && prevSink) {
-                  prevSink.detachEngineListeners?.();
-                  engine = bootstrapMidasCanaryEngine({
-                    mode,
-                    liveEnabled: true,
-                    client,
-                    Side,
-                    OrderType,
-                    userChannel,
-                    riskOpts,
-                    preset,
-                    sink: prevSink,
-                  });
-                  engine.start();
-                } else {
-                  prevSink?.dispose?.();
-                  engine = buildEngine();
-                  await engine.sink.start();
-                  engine.start();
-                }
-                if (!opts.json) {
-                  console.log(
-                    `[event] ${hub.event.title} | PTB=${state.priceToBeat ?? 'pendente'} (rot=${hub.stats.rotations})`,
-                  );
+                if (synced.rotated || synced.marketId !== subscribedMarketId) {
+                  clobFeed.subscribe(hub.event.upTokenId, hub.event.downTokenId);
+                  subscribedMarketId = synced.marketId;
+                  await engine.safeShutdown('midas-micro-market-rotate');
+                  const prevSink = engine.sink;
+                  if (opts.live && prevSink) {
+                    prevSink.detachEngineListeners?.();
+                    engine = bootstrapMidasCanaryEngine({
+                      mode,
+                      liveEnabled: true,
+                      client,
+                      Side,
+                      OrderType,
+                      userChannel,
+                      riskOpts,
+                      preset,
+                      sink: prevSink,
+                    });
+                    engine.start();
+                  } else {
+                    prevSink?.dispose?.();
+                    engine = buildEngine();
+                    await engine.sink.start();
+                    engine.start();
+                  }
+                  if (!opts.json) {
+                    console.log(
+                      `[event] ${hub.event.title} | PTB=${state.priceToBeat ?? 'pendente'} (rot=${hub.stats.rotations})`,
+                    );
+                  }
                 }
               }
             }
@@ -287,80 +301,95 @@ async function main() {
             // Ingest mesmo se não elegível estrito — estratégia aplica seus gates.
             await engine.ingestMarketSnapshot(snapshot);
 
-            const sinkEntry = [...engine.journal]
-              .reverse()
-              .find((j) => j.type === 'sink' && j.intent?.kind === 'ENTER');
-            if (!sinkEntry) return;
+            if (!enterDone) {
+              const sinkEnter = [...engine.journal]
+                .reverse()
+                .find((j) => j.type === 'sink' && j.intent?.kind === 'ENTER');
+              if (!sinkEnter) return;
 
-            placed = true;
-            if (opts.live) {
-              await engine.sink.waitForFinal(sinkEntry.intentId, {
-                timeoutMs: Math.min(15_000, Math.max(1000, deadline - Date.now())),
+              enterSinkEntry = sinkEnter;
+              enterDone = true;
+              if (opts.live) {
+                await engine.sink.waitForFinal(sinkEnter.intentId, {
+                  timeoutMs: Math.min(15_000, Math.max(1000, deadline - Date.now())),
+                });
+              }
+              if (!opts.json) {
+                const pos = engine.getStatus().position;
+                console.log(
+                  `[enter] ${sinkEnter.intent.side} qty=${pos?.qty ?? '?'} ` +
+                    `accepted=${sinkEnter.accepted} reason=${sinkEnter.intent.reason}`,
+                );
+              }
+              const filledQty = engine.getStatus().position?.qty ?? 0;
+              if (opts.waitExit && filledQty <= 0) {
+                await finishReport({
+                  sinkEntry: sinkEnter,
+                  snapshot,
+                  phase: 'enter',
+                });
+                clearInterval(timer);
+                resolve();
+                return;
+              }
+              if (!opts.waitExit) {
+                await finishReport({
+                  sinkEntry: sinkEnter,
+                  snapshot,
+                  phase: 'enter',
+                });
+                clearInterval(timer);
+                resolve();
+              }
+              return;
+            }
+
+            if (opts.waitExit && !exitDone) {
+              const sinkExit = [...engine.journal]
+                .reverse()
+                .find((j) => j.type === 'sink' && j.intent?.kind === 'EXIT');
+              if (!sinkExit) {
+                const diag = engine.getStatus()?.diagnostics;
+                if (!opts.json && nowMs - lastHbMs > 10_000) {
+                  lastHbMs = nowMs;
+                  const danger = diag?.danger;
+                  const late = diag?.lateFlip;
+                  console.log(
+                    `[hb-exit] τ=${snapshot.secsLeft?.toFixed?.(1) ?? '?'}s ` +
+                      `pos=${engine.getStatus().position?.qty ?? 0} ` +
+                      `danger=${danger?.active ? 1 : 0} late=${late?.action ?? '-'} ` +
+                      `skip=${diag?.skip ?? '-'}`,
+                  );
+                }
+                return;
+              }
+
+              exitSinkEntry = sinkExit;
+              exitDone = true;
+              if (opts.live) {
+                await engine.sink.waitForFinal(sinkExit.intentId, {
+                  timeoutMs: Math.min(15_000, Math.max(1000, deadline - Date.now())),
+                });
+              }
+              await finishReport({
+                sinkEntry: sinkExit,
+                snapshot,
+                phase: 'exit',
+                enterSinkEntry,
               });
+              clearInterval(timer);
+              resolve();
             }
-
-            let canceled = false;
-            if (opts.live && opts.cancel) {
-              const result = await engine.sink.cancelOpenOrders('micro-live-cancel');
-              canceled = (result.canceled?.length ?? 0) > 0;
-            }
-
-            const riskEntry = [...engine.journal]
-              .reverse()
-              .find((j) => j.type === 'risk' && j.intentId === sinkEntry.intentId);
-            const replayIntent = replayEnterIntent(snapshot, preset);
-            const liveIntent = { intentId: sinkEntry.intentId, ...sinkEntry.intent };
-            const ask =
-              liveIntent.side === 'DOWN'
-                ? snapshot.book?.down?.bestAsk
-                : snapshot.book?.up?.bestAsk;
-            const events = engine.journal
-              .filter(
-                (row) => row.type === 'execution' && row.event?.intentId === sinkEntry.intentId,
-              )
-              .map((row) => row.event);
-            const report = buildMicroLiveReport({
-              intent: liveIntent,
-              events,
-              position: engine.getStatus().position,
-              askAtSignal: ask,
-              riskDecision: riskEntry?.decision,
-              canceled,
-            });
-            report.parity = compareIntentParity(liveIntent, replayIntent);
-            report.mode = mode;
-            report.event = hub.event?.title ?? null;
-            report.marketId = snapshot.marketId;
-            report.rotations = hub.stats.rotations;
-            report.canaryBudget = engine.canary.maxCanaryBudget;
-
-            if (opts.json) console.log(JSON.stringify(report, null, 2));
-            else {
-              console.log(mode === 'live' ? 'LIVE processado:' : 'DRY-RUN processado:');
-              console.log(report);
-            }
-            clearInterval(timer);
-            // CLI: sair imediatamente após o report — WS/OMS não podem segurar o process.
-            stopRtds?.();
-            clobFeed?.stop();
-            try {
-              await engine.safeShutdown('micro-live-done');
-            } catch {
-              /* ignore */
-            }
-            try {
-              engine.sink.dispose?.();
-            } catch {
-              /* ignore */
-            }
-            process.exit(0);
           } catch (err) {
-            if (placed) {
+            if (enterDone && opts.waitExit && !exitDone) {
+              console.error(`[midas:micro-live] tick: ${err.message}`);
+              return;
+            }
+            if (enterDone || exitDone) {
               clearInterval(timer);
               reject(err);
               return;
             }
-            // Rotação/heartbeat transitório: não mata o wait de ENTER.
             console.error(`[midas:micro-live] tick: ${err.message}`);
           } finally {
             tickBusy = false;
@@ -369,11 +398,90 @@ async function main() {
       }, opts.intervalMs);
     });
 
-    if (!placed && !opts.json) {
+    async function finishReport({ sinkEntry, snapshot, phase, enterSinkEntry: enterRef }) {
+      let canceled = false;
+      if (opts.live && opts.cancel) {
+        const result = await engine.sink.cancelOpenOrders('micro-live-cancel');
+        canceled = (result.canceled?.length ?? 0) > 0;
+      }
+
+      const riskEntry = [...engine.journal]
+        .reverse()
+        .find((j) => j.type === 'risk' && j.intentId === sinkEntry.intentId);
+      const liveIntent = { intentId: sinkEntry.intentId, ...sinkEntry.intent };
+      const bookSide =
+        liveIntent.side === 'DOWN' ? snapshot.book?.down : snapshot.book?.up;
+      const refPx =
+        liveIntent.kind === 'EXIT'
+          ? bookSide?.bestBid
+          : bookSide?.bestAsk;
+      const events = engine.journal
+        .filter(
+          (row) => row.type === 'execution' && row.event?.intentId === sinkEntry.intentId,
+        )
+        .map((row) => row.event);
+      const report = buildMicroLiveReport({
+        intent: liveIntent,
+        events,
+        position: engine.getStatus().position,
+        askAtSignal: refPx,
+        riskDecision: riskEntry?.decision,
+        canceled,
+      });
+      if (phase === 'enter') {
+        const replayIntent = replayEnterIntent(snapshot, preset);
+        report.parity = compareIntentParity(liveIntent, replayIntent);
+      } else {
+        report.parity = { ok: true, mismatches: [], note: 'exit-phase' };
+        if (enterRef) {
+          report.enterIntentId = enterRef.intentId;
+          report.enterSide = enterRef.intent?.side ?? null;
+        }
+      }
+      report.mode = mode;
+      report.phase = phase;
+      report.event = hub.event?.title ?? null;
+      report.marketId = snapshot.marketId;
+      report.rotations = hub.stats.rotations;
+      report.canaryBudget = engine.canary.maxCanaryBudget;
+      report.waitExit = opts.waitExit;
+
+      if (opts.json) console.log(JSON.stringify(report, null, 2));
+      else {
+        console.log(
+          mode === 'live'
+            ? `LIVE ${phase} processado:`
+            : `DRY-RUN ${phase} processado:`,
+        );
+        console.log(report);
+      }
+
+      stopRtds?.();
+      clobFeed?.stop();
+      try {
+        await engine.safeShutdown('micro-live-done');
+      } catch {
+        /* ignore */
+      }
+      try {
+        engine.sink.dispose?.();
+      } catch {
+        /* ignore */
+      }
+      process.exit(0);
+    }
+
+    if (!enterDone && !opts.json) {
       console.log(
         `Timeout ${opts.timeoutSec}s sem intenção ENTER (rotações=${hub.stats.rotations}).`,
       );
       process.exitCode = 2;
+    } else if (opts.waitExit && enterDone && !exitDone && !opts.json) {
+      console.log(
+        `Timeout ${opts.timeoutSec}s após ENTER sem EXIT (danger/late_flip). ` +
+          `pos=${engine?.getStatus()?.position?.qty ?? 0}`,
+      );
+      process.exitCode = 3;
     }
   } finally {
     try {
@@ -390,7 +498,7 @@ async function main() {
     }
   }
 
-  process.exit(Number(process.exitCode ?? (placed ? 0 : 1)));
+  process.exit(Number(process.exitCode ?? (enterDone ? 0 : 1)));
 }
 
 main().catch((err) => {

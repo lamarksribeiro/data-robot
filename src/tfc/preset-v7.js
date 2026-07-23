@@ -42,6 +42,7 @@ export const MICRO_TEST = {
   entryBudget: 0.10,
   minShares: 1,
   entryOrderType: 'FAK',
+  exitOrderType: 'FAK',
 };
 
 /**

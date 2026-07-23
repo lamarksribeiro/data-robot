@@ -22,6 +22,7 @@
     "tfc:micro-entry": "node scripts/tfc/micro-entry.js",
     "tfc:micro-live": "node scripts/tfc/micro-live.js",
     "midas:micro-live": "node scripts/midas/micro-live.js",
+    "midas:exit-live": "node scripts/midas/micro-live.js --wait-exit",
     "midas:shadow-sprint": "node scripts/midas/shadow-sprint.js",
     "lint": "node scripts/lint-check.js",
     "test": "node scripts/run-tests.js",
