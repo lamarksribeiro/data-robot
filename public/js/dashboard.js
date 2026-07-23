@@ -328,9 +328,16 @@ function renderGuide(status, health) {
 
   if (halted) {
     tone = 'err';
+    const haltReason = String(status.haltReason || health?.haltReason || '');
     title = 'Parado por emergência (HALTED)';
-    body = 'O robô não opera até a Engine ser reiniciada no Coolify.';
-    next = 'Peça reinício da Engine e depois Arme de novo.';
+    if (haltReason.includes('market-rotated') || haltReason.includes('position')) {
+      body =
+        'Mercado 5m fechou com posição ainda aberta no OMS. O lucro/perda já pode ter sido pago na Polymarket; a Engine ficou travada até settlement.';
+      next = 'Reinicie a Engine (deploy/restart). Se o mercado já resolveu, ela liquida sozinha e volta desarmada — aí Arme de novo.';
+    } else {
+      body = 'O robô não opera até a Engine ser reiniciada no Coolify.';
+      next = 'Peça reinício da Engine e depois Arme de novo.';
+    }
   } else if (!live) {
     tone = 'warn';
     title = 'Simulação (shadow)';

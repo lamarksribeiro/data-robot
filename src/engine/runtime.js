@@ -294,6 +294,60 @@ export function createEngine(opts) {
     return { state, haltReason, canceled };
   }
 
+  /**
+   * Settlement por expiração (binary $0/$1) — limpa posição sem ordem CLOB.
+   * @param {{ price: number, reason?: string, marketId?: string }} opts
+   */
+  function settlePosition(opts = {}) {
+    const price = Number(opts.price);
+    if (!Number.isFinite(price) || price < 0 || price > 1) {
+      throw new Error('settlePosition: price inválido');
+    }
+    if (!(position.qty > 0)) {
+      return { settled: false, reason: 'FLAT' };
+    }
+    const qty = position.qty;
+    const avg = position.avgPrice;
+    const side = position.side;
+    const marketId = position.marketId;
+    let pnlDelta = 0;
+    if (avg != null) pnlDelta = (price - avg) * qty;
+    if (pnlDelta !== 0 && typeof riskEngine.recordPnl === 'function') {
+      riskEngine.recordPnl(pnlDelta);
+    }
+    const realizedPnl = (position.realizedPnl ?? 0) + pnlDelta;
+    position = emptyPosition({ marketId: null, realizedPnl });
+    pendingIntents.clear();
+    haltReason = null;
+    if (state === 'HALTED' || state === 'POSITION_OPEN' || state === 'EXIT_PENDING') {
+      transition('ARMED', opts.reason ?? 'settlement');
+    }
+    if (typeof riskEngine.accountBook?.set === 'function') {
+      riskEngine.accountBook.set(strategyInstanceId, 0);
+    }
+    if (typeof sink.oms?.settlePosition === 'function') {
+      sink.oms.settlePosition({
+        strategyInstanceId,
+        price,
+        marketId: marketId ?? opts.marketId,
+        reason: opts.reason ?? 'settlement',
+      });
+    }
+    const result = {
+      settled: true,
+      side,
+      qty,
+      avgPrice: avg,
+      settlementPrice: price,
+      pnlDelta,
+      realizedPnl,
+      marketId,
+      reason: opts.reason ?? 'settlement',
+    };
+    journal.push({ type: 'settlement', ...result, tsMs: clock() });
+    return result;
+  }
+
   const api = {
     get state() {
       return state;
@@ -319,6 +373,7 @@ export function createEngine(opts) {
     get risk() {
       return riskEngine;
     },
+    settlePosition,
     getLastSnapshot() {
       return lastSnapshot ? structuredClone(lastSnapshot) : null;
     },

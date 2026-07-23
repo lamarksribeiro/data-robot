@@ -12,6 +12,7 @@ import { createAlertHub } from '../observability/alerts.js';
 import { evaluateSlos, DEFAULT_SLOS } from '../observability/slo.js';
 import { createJournalBackup } from '../observability/journalBackup.js';
 import { createExecutionAudit } from '../observability/executionAudit.js';
+import { resolveBinarySettlementPrice } from '../market/resolveBinarySettlement.js';
 import { buildHealthReport } from './health.js';
 import { createControlServer } from './httpServer.js';
 
@@ -359,15 +360,50 @@ export function createEngineApp(opts = {}) {
       engine.position.marketId &&
       snapshot.marketId !== engine.position.marketId
     ) {
-      const reason = 'market-rotated-with-position';
-      executionAudit.append('protective_halt', {
-        reason,
-        fromMarketId: engine.position.marketId,
-        toMarketId: snapshot.marketId,
-        position: engine.position,
+      const fromMarketId = engine.position.marketId;
+      const side = engine.position.side;
+      const resolution = await resolveBinarySettlementPrice(fromMarketId, side, {
+        fetchFn: opts.fetchFn,
       });
-      await engine.safeShutdown(reason);
-      return { skipped: true, reason: 'POSITION_REQUIRES_SETTLEMENT' };
+
+      if (resolution.ok) {
+        const settled = engine.settlePosition({
+          price: resolution.settlementPrice,
+          reason: 'binary_expiry_settlement',
+          marketId: fromMarketId,
+        });
+        executionAudit.append('position_settled', {
+          fromMarketId,
+          toMarketId: snapshot.marketId,
+          winner: resolution.winner,
+          ...settled,
+        });
+        // Após settlement: flat, mas sem novas entradas até o operador armar de novo.
+        engine.risk.setEntryEnabled(false);
+        operatorState = 'DISARMED';
+        operatorChangedAtMs = Date.now();
+        logger.info('position_settled_on_rotation', {
+          fromMarketId,
+          toMarketId: snapshot.marketId,
+          pnlDelta: settled.pnlDelta,
+          settlementPrice: resolution.settlementPrice,
+        });
+        // segue o ingest no mercado novo (flat)
+      } else {
+        if (engine.state === 'HALTED') {
+          return { skipped: true, reason: 'ALREADY_HALTED_PENDING_SETTLEMENT' };
+        }
+        const reason = 'market-rotated-with-position';
+        executionAudit.append('protective_halt', {
+          reason,
+          fromMarketId,
+          toMarketId: snapshot.marketId,
+          position: engine.position,
+          resolution,
+        });
+        await engine.safeShutdown(reason);
+        return { skipped: true, reason: 'POSITION_REQUIRES_SETTLEMENT' };
+      }
     }
     const t0 = performance.now();
     ticks += 1;

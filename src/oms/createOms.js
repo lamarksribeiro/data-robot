@@ -297,6 +297,42 @@ export function createOms(opts = {}) {
     return [...byIntent.values()].map((o) => publicOrder(o));
   }
 
+  /**
+   * Settlement binário ($0/$1) — zera posição no ledger sem ordem CLOB.
+   * @param {{ strategyInstanceId: string, price: number, marketId?: string, reason?: string }} opts
+   */
+  function settlePosition(opts = {}) {
+    const instanceId = opts.strategyInstanceId;
+    const price = Number(opts.price);
+    if (!instanceId) throw new Error('settlePosition: strategyInstanceId obrigatório');
+    if (!Number.isFinite(price) || price < 0 || price > 1) {
+      throw new Error('settlePosition: price inválido');
+    }
+    const before = positions.get(instanceId);
+    if (!(before.qty > 0)) {
+      return { settled: false, reason: 'FLAT', position: before };
+    }
+    const after = positions.applyFill({
+      strategyInstanceId: instanceId,
+      marketId: opts.marketId ?? before.marketId,
+      side: before.side,
+      qty: before.qty,
+      price,
+      kind: 'EXIT',
+    });
+    journal.append('settlement', {
+      strategyInstanceId: instanceId,
+      marketId: before.marketId,
+      side: before.side,
+      qty: before.qty,
+      avgPrice: before.avgPrice,
+      settlementPrice: price,
+      reason: opts.reason ?? 'settlement',
+      position: after,
+    });
+    return { settled: true, before, position: after };
+  }
+
   return {
     registerIntent,
     applyExchangeEvent,
@@ -310,6 +346,7 @@ export function createOms(opts = {}) {
     findOrderByExchangeId,
     openOrders,
     listOrders,
+    settlePosition,
     position: (instanceId) => positions.get(instanceId),
     accountExposure: () => positions.accountExposure(),
     journal,

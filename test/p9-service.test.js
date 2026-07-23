@@ -209,7 +209,7 @@ describe('isolamento de checkpoint', () => {
 });
 
 describe('proteção de rotação com posição live', () => {
-  it('reconcilia a entrada e entra em HALTED ao trocar de mercado sem settlement', async () => {
+  it('faz settlement via Gamma e desarma quando o mercado fecha', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p9-engine-'));
     cleanup.push(() => fs.rmSync(dir, { recursive: true, force: true }));
     const sink = {
@@ -232,6 +232,17 @@ describe('proteção de rotação com posição live', () => {
       cancelOpenOrders: async () => ({ canceled: [], failed: [] }),
       dispose: () => {},
     };
+    const fetchFn = async () => ({
+      ok: true,
+      json: async () => [{
+        closed: true,
+        markets: [{
+          closed: true,
+          outcomes: '["Up","Down"]',
+          outcomePrices: '["1","0"]',
+        }],
+      }],
+    });
     const app = createEngineApp({
       mode: 'live',
       liveEnabled: true,
@@ -240,6 +251,62 @@ describe('proteção de rotação com posição live', () => {
       preset: { threshold: 1, budget: 1, maxPrice: 0.5 },
       riskOpts: { preflightChecks: passingChecks() },
       sink,
+      fetchFn,
+      serveHttp: false,
+      backupDir: path.join(dir, 'backup'),
+      executionAuditDir: path.join(dir, 'audit'),
+      startArmed: true,
+    });
+    cleanup.push(() => app.stop());
+    await app.start();
+    await app.ingestSynthetic(fixtureSnapshot('market-a'));
+    assert.ok(app.engine.position.qty > 0);
+    const result = await app.ingestSynthetic(fixtureSnapshot('market-b'));
+    assert.notEqual(result?.reason, 'POSITION_REQUIRES_SETTLEMENT');
+    assert.equal(app.engine.position.qty, 0);
+    assert.notEqual(app.engine.state, 'HALTED');
+    assert.equal(app.status().operatorState, 'DISARMED');
+  });
+
+  it('entra em HALTED se Gamma não resolve o mercado antigo', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p9-engine-'));
+    cleanup.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const sink = {
+      userChannel: { connected: true, lastHeartbeatMs: Date.now() },
+      start: async () => ({ ok: true }),
+      assertReady: () => true,
+      reconcileAll: async () => ({ ok: true, unresolved: [], orphans: [] }),
+      submit: async (intent) => ({
+        accepted: true,
+        events: [{
+          eventId: `fill-${intent.intentId}`,
+          intentId: intent.intentId,
+          type: 'FILL',
+          side: intent.side,
+          qty: 2,
+          price: 0.5,
+          tsMs: Date.now(),
+        }],
+      }),
+      cancelOpenOrders: async () => ({ canceled: [], failed: [] }),
+      dispose: () => {},
+    };
+    const fetchFn = async () => ({
+      ok: true,
+      json: async () => [{
+        closed: false,
+        markets: [{ closed: false, outcomes: '["Up","Down"]', outcomePrices: '["0.5","0.5"]' }],
+      }],
+    });
+    const app = createEngineApp({
+      mode: 'live',
+      liveEnabled: true,
+      strategyId: 'fixture-price-cross',
+      strategyInstanceId: 'fixture:live',
+      preset: { threshold: 1, budget: 1, maxPrice: 0.5 },
+      riskOpts: { preflightChecks: passingChecks() },
+      sink,
+      fetchFn,
       serveHttp: false,
       backupDir: path.join(dir, 'backup'),
       executionAuditDir: path.join(dir, 'audit'),
