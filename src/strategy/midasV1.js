@@ -22,6 +22,32 @@ function mergePreset(preset = {}) {
   return { ...MIDAS_V1, ...preset };
 }
 
+function resolveTokenId(snapshot, side) {
+  const identity = snapshot?.identity ?? {};
+  if (side === 'UP') return identity.upTokenId ?? null;
+  if (side === 'DOWN') return identity.downTokenId ?? null;
+  return null;
+}
+
+/** Campos comuns de EXIT (tokenId + orderType + piso de preço). */
+function buildExitOrderFields(params, snapshot, side, bid) {
+  const orderType = params.exitOrderType ?? params.entryOrderType ?? 'GTC';
+  const floor = Number(params.stopMinBid ?? 0.05);
+  const slip = Number(params.entrySlippageMax ?? 0.02);
+  let minPrice = floor;
+  if (Number.isFinite(bid)) {
+    minPrice =
+      orderType === 'FAK' || orderType === 'FOK'
+        ? Math.max(floor, bid - (Number.isFinite(slip) ? slip : 0))
+        : Math.max(floor, bid);
+  }
+  return {
+    tokenId: resolveTokenId(snapshot, side),
+    orderType,
+    minPrice,
+  };
+}
+
 function appendHistory(history, snapshot) {
   const next = [...(history ?? [])];
   if (Number.isFinite(snapshot.btc) && Number.isFinite(snapshot.nowMs)) {
@@ -166,6 +192,12 @@ export function createMidasV1Strategy(opts = {}) {
         if (danger.active && !next.reversed) {
           next.seq = (next.seq ?? 0) + 1;
           next.lastIntentKind = 'EXIT';
+          const exitFields = buildExitOrderFields(
+            params,
+            snapshot,
+            ctx.position.side,
+            danger.bid,
+          );
           intents.push({
             intentId: makeIntentId({
               strategyInstanceId: ctx.strategyInstanceId,
@@ -180,10 +212,12 @@ export function createMidasV1Strategy(opts = {}) {
             budget: null,
             quantity: ctx.position.qty,
             maxPrice: null,
-            minPrice: params.stopMinBid ?? 0.05,
+            minPrice: exitFields.minPrice,
             deadlineMs: ctx.clockMs + 3000,
             reason: 'danger_exit',
             presetId: MIDAS_V1_PRESET_ID,
+            orderType: exitFields.orderType,
+            tokenId: exitFields.tokenId,
           });
           return { state: next, intents, diagnostics };
         }
@@ -214,6 +248,8 @@ export function createMidasV1Strategy(opts = {}) {
             deadlineMs: ctx.clockMs + 3000,
             reason: 'late_flip_reverse',
             presetId: MIDAS_V1_PRESET_ID,
+            tokenId: resolveTokenId(snapshot, late.oppSide),
+            orderType: params.exitOrderType ?? params.entryOrderType ?? 'GTC',
           });
           return { state: next, intents, diagnostics };
         }
@@ -221,6 +257,12 @@ export function createMidasV1Strategy(opts = {}) {
         if (late.action === 'EXIT') {
           next.seq = (next.seq ?? 0) + 1;
           next.lastIntentKind = 'EXIT';
+          const exitFields = buildExitOrderFields(
+            params,
+            snapshot,
+            ctx.position.side,
+            late.exitBid ?? late.bid,
+          );
           intents.push({
             intentId: makeIntentId({
               strategyInstanceId: ctx.strategyInstanceId,
@@ -235,10 +277,12 @@ export function createMidasV1Strategy(opts = {}) {
             budget: null,
             quantity: ctx.position.qty,
             maxPrice: null,
-            minPrice: params.stopMinBid ?? 0.05,
+            minPrice: exitFields.minPrice,
             deadlineMs: ctx.clockMs + 3000,
             reason: 'late_flip_exit',
             presetId: MIDAS_V1_PRESET_ID,
+            orderType: exitFields.orderType,
+            tokenId: exitFields.tokenId,
           });
           return { state: next, intents, diagnostics };
         }
