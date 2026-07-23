@@ -386,7 +386,19 @@ export function createBtc5mSnapshotSource(opts = {}) {
       if (loop.running) return;
       handlers = normalizeHandlers(nextHandlers);
       emitStatus({ running: true, ok: false, reason: 'STARTING' });
-      stopRtds = startRtds(state, { onUpdate: requestSnapshot });
+      stopRtds = startRtds(state, {
+        onUpdate: requestSnapshot,
+        onStaleReconnect: ({ reason, lagMs }) => {
+          emitStatus({
+            ok: false,
+            reason: reason ?? 'RTDS_STALE_RECONNECT',
+            eligible: false,
+            eligibilityReason: reason ?? 'RTDS_STALE_RECONNECT',
+            lastStaleReconnectAtMs: clock(),
+            lastStaleReconnectLagMs: lagMs ?? null,
+          });
+        },
+      });
       clob = makeClob(state, { onUpdate: requestSnapshot });
       await loop.start();
     },

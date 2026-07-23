@@ -96,7 +96,7 @@ describe('preflight fail-closed', () => {
 });
 
 describe('risk limits + audit', () => {
-  it('bloqueia deadline expirado e reverse live sem saga', () => {
+  it('bloqueia deadline expirado e reverse live sem allowLiveReverse', () => {
     const nowMs = 1000;
     const risk = createRiskEngine({ liveEnabled: true, clock: () => nowMs });
     const base = {
@@ -116,6 +116,38 @@ describe('risk limits + audit', () => {
         .reasonCode,
       RISK_REASON.LIVE_REVERSE_UNSUPPORTED,
     );
+  });
+
+  it('permite reverse live quando allowLiveReverse=true', () => {
+    const nowMs = 1000;
+    const risk = createRiskEngine({
+      liveEnabled: true,
+      allowLiveReverse: true,
+      clock: () => nowMs,
+      maxNotionalPerOrder: 5,
+      maxNotionalPerEvent: 5,
+    });
+    const decision = risk.evaluate(
+      {
+        intentId: 'reverse-ok',
+        kind: 'REVERSE',
+        side: 'DOWN',
+        marketId: 'm',
+        strategyInstanceId: 's',
+        budget: 2,
+        maxPrice: 0.5,
+        deadlineMs: nowMs + 1000,
+        reason: 'late_flip_reverse',
+      },
+      {
+        mode: 'live',
+        health: { ok: true },
+        position: { side: 'UP', qty: 2, avgPrice: 0.6, realizedPnl: 0 },
+        openIntents: [],
+        snapshot: { secsLeft: 6, feeds: { healthy: true } },
+      },
+    );
+    assert.equal(decision.allow, true);
   });
 
   it('bloqueia notional acima do limite com reason code', async () => {

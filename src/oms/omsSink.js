@@ -5,6 +5,7 @@ import { createExecutor, createTransportForMode } from '../executor/createExecut
 import { createUserChannel, normalizeUserMessage } from '../executor/userChannel.js';
 import { createReconciler } from './reconciler.js';
 import { isTerminal } from './states.js';
+import { executeReverseSaga } from './reverseSaga.js';
 
 export function createOmsSink(opts = {}) {
   const mode = opts.mode ?? 'shadow';
@@ -146,6 +147,22 @@ export function createOmsSink(opts = {}) {
 
     async submit(intent) {
       if (mode === 'live') api.assertReady();
+      if (intent?.kind === 'REVERSE') {
+        const result = await executeReverseSaga({
+          intent,
+          oms,
+          executeIntent: (leg) => executor.executeIntent(leg),
+          waitForFinal:
+            mode === 'live' ? (intentId, waitOpts) => api.waitForFinal(intentId, waitOpts) : undefined,
+          clock,
+          legTimeoutMs: opts.reverseLegTimeoutMs,
+        });
+        return {
+          accepted: result.accepted,
+          events: result.events,
+          deduped: result.deduped,
+        };
+      }
       const result = await executor.executeIntent(intent);
       return {
         accepted: result.accepted,

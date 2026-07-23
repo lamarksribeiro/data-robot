@@ -1,6 +1,6 @@
 /**
  * Presets MIDAS Carry V1 (data-backtest lab midas-carry-v1).
- * Núcleo = TFC V7 Danger Floor + envelope high-ask + tier de budget.
+ * Canário P9: Aggressive (dist 40, tier 2.0x) + sizing micro $2/$4.
  */
 
 import { CANARY_LIMITS as TFC_CANARY_LIMITS, MICRO_TEST } from './preset-v7.js';
@@ -29,6 +29,7 @@ export const MIDAS_V1 = {
   lateFlipReverseEnabled: true,
   lateFlipReverseMaxAsk: 0.95,
   lateFlipReverseMinAsk: 0.0,
+  lateFlipReverseBudgetFactor: 1.0,
   velocityLookbackSecs: 5,
   maxAdverseSpotChange: 8.0,
   minObi: 0.0,
@@ -59,10 +60,26 @@ export const MIDAS_ROBUST_V1 = {
   maxDistAbs: 30,
 };
 
+/** Espelho de labs/.../presets/btc-aggressive-v1.json (dist 40, tier 2.0x). */
+export const MIDAS_AGGRESSIVE_V1 = {
+  ...MIDAS_V1,
+  maxDistAbs: 40,
+  tierAskBudgetFactor: 2.0,
+};
+
 /**
- * Sizing micro conservador para wallet ~$34.
- * entry $2 / tier 1.5× teto $3 — sem hard cap abaixo do sizing.
+ * Sizing micro para Aggressive: entry $2 / tier 2.0× teto $4.
+ * Wallet ~$34 aguenta com folga (cap ~12%).
  */
+export const MICRO_AGGRESSIVE = Object.freeze({
+  entryBudget: 2,
+  maxEntryBudget: 4,
+  minShares: 1,
+  entryOrderType: 'FAK',
+  exitOrderType: 'FAK',
+});
+
+/** @deprecated Prefer MICRO_AGGRESSIVE — mantido para testes/docs legados. */
 export const MICRO_ROBUST = Object.freeze({
   entryBudget: 2,
   maxEntryBudget: 3,
@@ -72,12 +89,11 @@ export const MICRO_ROBUST = Object.freeze({
 });
 
 /**
- * Cap de canário MIDAS — alinhado a maxEntryBudget do micro robust.
- * Independente do CANARY_LIMITS TFC V7 ($2).
+ * Cap de canário MIDAS — alinhado a maxEntryBudget do micro aggressive.
  */
 export const CANARY_LIMITS = Object.freeze({
-  maxCanaryBudget: MICRO_ROBUST.maxEntryBudget,
-  preferredEntryBudget: MICRO_ROBUST.entryBudget,
+  maxCanaryBudget: MICRO_AGGRESSIVE.maxEntryBudget,
+  preferredEntryBudget: MICRO_AGGRESSIVE.entryBudget,
   maxSlippage: TFC_CANARY_LIMITS.maxSlippage,
 });
 
@@ -103,7 +119,7 @@ export function resolveMidasEntryBudget(params, ask) {
   return budget;
 }
 
-/** Preset efetivo para canário MIDAS (Robust + sizing micro $2/$3). */
+/** Preset efetivo para canário MIDAS (Aggressive + sizing micro $2/$4). */
 export function canaryMidasPreset(override = {}) {
-  return { ...MIDAS_ROBUST_V1, ...MICRO_ROBUST, ...override };
+  return { ...MIDAS_AGGRESSIVE_V1, ...MICRO_AGGRESSIVE, ...override };
 }

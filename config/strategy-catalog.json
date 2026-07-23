@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-23T07:00:00.000Z",
+  "updatedAt": "2026-07-23T09:20:00.000Z",
   "strategies": [
     {
       "strategyId": "midas-carry-v1",
       "version": "1.0.0",
-      "presetId": "btc-micro-robust-v1",
+      "presetId": "btc-micro-aggressive-v1",
       "marketScope": ["btc-updown-5m"],
       "approval": "canary-approved",
       "canary": {
-        "hardCapUsd": 3,
+        "hardCapUsd": 4,
         "maxEntriesPerControlWindow": 1,
         "controlWindowHours": 24,
-        "liveReverse": false
+        "liveReverse": true
       },
       "evidence": [
         "docs/operacao/evidencia-midas-shadow-2026-07-22.md",

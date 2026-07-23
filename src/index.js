@@ -101,7 +101,9 @@ export {
 export {
   MIDAS_V1,
   MIDAS_ROBUST_V1,
+  MIDAS_AGGRESSIVE_V1,
   MICRO_ROBUST,
+  MICRO_AGGRESSIVE,
   CANARY_LIMITS as MIDAS_CANARY_LIMITS,
   canaryMidasPreset,
   resolveMidasEntryBudget,

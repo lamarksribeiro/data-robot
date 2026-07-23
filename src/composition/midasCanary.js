@@ -65,7 +65,7 @@ export function bootstrapMidasCanaryEngine(opts = {}) {
     riskOpts: {
       ...(opts.riskOpts ?? {}),
       canaryMode: true,
-      allowLiveReverse: opts.riskOpts?.allowLiveReverse === true,
+      allowLiveReverse: opts.riskOpts?.allowLiveReverse !== false,
       maxCanaryBudget: cap,
       maxNotionalPerOrder: Math.min(cap, Number(opts.riskOpts?.maxNotionalPerOrder ?? cap)),
       maxNotionalPerEvent: Math.min(cap, Number(opts.riskOpts?.maxNotionalPerEvent ?? cap)),

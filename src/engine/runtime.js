@@ -108,12 +108,40 @@ export function createEngine(opts) {
     if (qty <= 0 || !side) return;
 
     const pending = event.intentId ? pendingIntents.get(event.intentId) : null;
-    const kind = pending?.kind ?? 'ENTER';
+    const kind = event.kind ?? pending?.kind ?? 'ENTER';
 
-    if (kind === 'ENTER' || kind === 'REVERSE') {
-      if (kind === 'REVERSE' && position.qty > 0 && position.side && position.side !== side) {
-        position = emptyPosition({ marketId: position.marketId });
+    if (kind === 'REVERSE') {
+      const exitQty = Number(event.exitQty) || position.qty;
+      const exitPrice = event.exitPrice != null ? Number(event.exitPrice) : null;
+      if (position.qty > 0 && exitPrice != null && position.avgPrice != null) {
+        const closeQty = Math.min(position.qty, exitQty > 0 ? exitQty : position.qty);
+        const pnlDelta = (exitPrice - position.avgPrice) * closeQty;
+        position.realizedPnl += pnlDelta;
+        if (pnlDelta !== 0 && typeof riskEngine.recordPnl === 'function') {
+          riskEngine.recordPnl(pnlDelta);
+        }
       }
+      position = emptyPosition({
+        marketId: lastSnapshot?.marketId ?? position.marketId,
+        realizedPnl: position.realizedPnl,
+      });
+      const prevQty = 0;
+      const prevAvg = price;
+      const newQty = prevQty + qty;
+      position = {
+        marketId: lastSnapshot?.marketId ?? position.marketId,
+        side,
+        qty: newQty,
+        avgPrice: price,
+        realizedPnl: position.realizedPnl,
+      };
+      if (state === 'ENTRY_PENDING' || state === 'REVERSE_PENDING' || state === 'ARMED') {
+        transition('POSITION_OPEN', event.type);
+      }
+      return;
+    }
+
+    if (kind === 'ENTER') {
       const prevQty = position.qty;
       const prevAvg = position.avgPrice ?? price;
       const newQty = prevQty + qty;

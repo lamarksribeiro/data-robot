@@ -17,19 +17,20 @@ import { buildStrategyContext } from '../src/engine/contract.js';
 import { emptyPosition } from '../src/engine/schemas.js';
 
 function baseBook(overrides = {}) {
+  const deep = (n) => Array.from({ length: 5 }, () => ({ size: n }));
   return {
     up: {
       bestBid: 0.6,
       bestAsk: 0.62,
-      bids: [{ size: 20 }, { size: 20 }, { size: 20 }, { size: 20 }, { size: 20 }],
-      asks: [{ size: 10 }, { size: 10 }, { size: 10 }, { size: 10 }, { size: 10 }],
+      bids: deep(100),
+      asks: deep(100),
       ...overrides.up,
     },
     down: {
       bestBid: 0.36,
       bestAsk: 0.4,
-      bids: [{ size: 10 }, { size: 10 }, { size: 10 }, { size: 10 }, { size: 10 }],
-      asks: [{ size: 10 }, { size: 10 }, { size: 10 }, { size: 10 }, { size: 10 }],
+      bids: deep(100),
+      asks: deep(100),
       ...overrides.down,
     },
   };
@@ -285,6 +286,7 @@ describe('paridade MIDAS V1 — 100 casos sintéticos', () => {
     for (let i = 0; i < 25; i++) {
       const dist = i * 2; // 0..48 vs maxDistAbs 40
       const ask = 0.55 + i * 0.02; // cruza 0.82 e 0.94
+      const deep = (n) => Array.from({ length: 5 }, () => ({ size: n }));
       cases.push({
         id: `gates-${i}`,
         snapshot: snap({
@@ -296,14 +298,14 @@ describe('paridade MIDAS V1 — 100 casos sintéticos', () => {
             up: {
               bestBid: Math.max(0.01, ask - 0.02),
               bestAsk: Math.min(0.99, ask),
-              bids: [{ size: 20 }],
-              asks: [{ size: 10 }],
+              bids: deep(100),
+              asks: deep(100),
             },
             down: {
               bestBid: 0.3,
               bestAsk: Math.min(0.99, Math.max(0.01, 1.02 - ask)),
-              bids: [{ size: 10 }],
-              asks: [{ size: 10 }],
+              bids: deep(100),
+              asks: deep(100),
             },
           }),
           marketId: `midas-gates-${i}`,

@@ -83,7 +83,7 @@ export async function prepareMidasCanaryRuntime(opts = {}) {
 
   return {
     sink,
-    preset: canaryMidasPreset({ lateFlipReverseEnabled: false, ...(opts.preset ?? {}) }),
+    preset: canaryMidasPreset({ ...(opts.preset ?? {}) }),
     riskOpts: {
       preflightChecks: preflightChecksFromResult(preflight),
       canaryMode: true,
@@ -93,7 +93,7 @@ export async function prepareMidasCanaryRuntime(opts = {}) {
       maxAccountExposure: positive(opts.maxAccountExposure, requestedCap),
       maxDailyLoss: positive(opts.maxDailyLoss, requestedCap),
       maxSlippage: CANARY_LIMITS.maxSlippage,
-      allowLiveReverse: false,
+      allowLiveReverse: opts.allowLiveReverse !== false,
       maxEntriesPerControlWindow: positive(opts.maxEntriesPerControlWindow, 1),
       controlWindowMs: positive(opts.controlWindowMs, 24 * 60 * 60 * 1000),
     },

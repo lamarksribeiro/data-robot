@@ -14,9 +14,19 @@ import {
 import { sizeCanaryBuy } from '../tfc/sizeCanaryBuy.js';
 
 export const MIDAS_V1_STRATEGY_ID = 'midas-carry-v1';
-export const MIDAS_V1_PRESET_ID = 'btc-micro-robust-v1';
+export const MIDAS_V1_PRESET_ID = 'btc-micro-aggressive-v1';
 
 const HISTORY_MAX = 600;
+
+/** Soma sizes dos asks do lado (paridade GLS minLiquidityRatio). */
+function askLiquidity(book, side, levels = 5) {
+  const asks = book?.[String(side).toLowerCase()]?.asks ?? [];
+  let sum = 0;
+  for (let i = 0; i < Math.min(levels, asks.length); i++) {
+    sum += Number(asks[i]?.size) || 0;
+  }
+  return sum;
+}
 
 function mergePreset(preset = {}) {
   return { ...MIDAS_V1, ...preset };
@@ -227,9 +237,12 @@ export function createMidasV1Strategy(opts = {}) {
         if (late.action === 'REVERSE') {
           next.seq = (next.seq ?? 0) + 1;
           next.lastIntentKind = 'REVERSE';
-          const reverseBudget = Number(
+          const factor = Number(params.lateFlipReverseBudgetFactor ?? 1);
+          const baseBudget = Number(
             next.entryBudgetUsed ?? resolveMidasEntryBudget(params, late.oppAsk),
           );
+          const reverseBudget =
+            baseBudget * (Number.isFinite(factor) && factor > 0 ? factor : 1);
           intents.push({
             intentId: makeIntentId({
               strategyInstanceId: ctx.strategyInstanceId,
@@ -249,6 +262,9 @@ export function createMidasV1Strategy(opts = {}) {
             reason: 'late_flip_reverse',
             presetId: MIDAS_V1_PRESET_ID,
             tokenId: resolveTokenId(snapshot, late.oppSide),
+            exitTokenId: resolveTokenId(snapshot, ctx.position.side),
+            exitSide: ctx.position.side,
+            exitQuantity: ctx.position.qty,
             orderType: params.exitOrderType ?? params.entryOrderType ?? 'GTC',
           });
           return { state: next, intents, diagnostics };
@@ -299,15 +315,12 @@ export function createMidasV1Strategy(opts = {}) {
           gates: entry.gates,
         };
         if (entry.ok && entry.fav && entry.ask != null) {
-          next.seq = (next.seq ?? 0) + 1;
-          next.lastIntentKind = 'ENTER';
           const slippage = Number(params.entrySlippageMax ?? 0.02);
           const identity = snapshot.identity ?? {};
           const tokenId =
             entry.fav === 'UP' ? identity.upTokenId ?? null : identity.downTokenId ?? null;
           const maxPrice = entry.ask + slippage;
           const entryBudgetUsed = resolveMidasEntryBudget(params, entry.ask);
-          next.entryBudgetUsed = entryBudgetUsed;
           const orderType = params.entryOrderType ?? 'GTC';
           const sized = sizeCanaryBuy({
             ask: entry.ask,
@@ -319,11 +332,29 @@ export function createMidasV1Strategy(opts = {}) {
           });
           const quantity = sized.quantity;
           const notional = sized.notional;
+          const minLiq = Number(params.minLiquidityRatio ?? 0);
+          const liq = askLiquidity(snapshot.book, entry.fav, params.obiLevels ?? 5);
+          const liqOk =
+            !Number.isFinite(minLiq) ||
+            minLiq <= 0 ||
+            !(quantity > 0) ||
+            liq >= quantity * minLiq;
           diagnostics.tier = {
             ask: entry.ask,
             entryBudgetUsed,
             tierApplied: entry.ask >= Number(params.tierAskThreshold),
           };
+          diagnostics.liquidity = { liq, quantity, minRatio: minLiq, ok: liqOk };
+          if (!liqOk) {
+            return {
+              state: next,
+              intents,
+              diagnostics: { ...diagnostics, skip: 'min_liquidity_ratio' },
+            };
+          }
+          next.seq = (next.seq ?? 0) + 1;
+          next.lastIntentKind = 'ENTER';
+          next.entryBudgetUsed = entryBudgetUsed;
           intents.push({
             intentId: makeIntentId({
               strategyInstanceId: ctx.strategyInstanceId,

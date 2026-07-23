@@ -97,9 +97,8 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
     console.error('[engine:serve] Recusa: MIDAS P9 exige ENGINE_SNAPSHOT_SOURCE=btc5m');
     process.exit(2);
   }
-  // Live: reverse off → late flip vira EXIT (REVERSE ainda sem saga P8).
-  // Shadow: reverse on como no Robust de lab.
-  preset = canaryMidasPreset(mode === 'live' ? { lateFlipReverseEnabled: false } : {});
+  // Live/shadow: Aggressive micro com reverse (saga SELL→BUY no OMS).
+  preset = canaryMidasPreset();
   const maxCanaryBudget = Number(
     process.env.ENGINE_CANARY_MAX_BUDGET || MIDAS_CANARY_HARD_CAP_USD,
   );
@@ -112,6 +111,7 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
         maxCanaryBudget,
         maxEntriesPerControlWindow: 1,
         controlWindowMs,
+        allowLiveReverse: true,
       });
       preset = runtime.preset;
       riskOpts = runtime.riskOpts;
@@ -127,7 +127,7 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
       maxNotionalPerEvent: maxCanaryBudget,
       maxEntriesPerControlWindow: 1,
       controlWindowMs,
-      allowLiveReverse: false,
+      allowLiveReverse: true,
     };
   }
 }

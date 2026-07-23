@@ -1,13 +1,14 @@
 # P9 — serviço MIDAS canário
 
-**Escopo:** BTC Up/Down 5m, `midas-carry-v1@1.0.0`, preset `btc-micro-robust-v1` (Robust dist 30 + sizing micro `$2`/`$3`), uma instância e uma entrada por janela de 24h. `REVERSE` live permanece bloqueado.
+**Escopo:** BTC Up/Down 5m, `midas-carry-v1@1.0.0`, preset `btc-micro-aggressive-v1` (Aggressive dist 40 + tier 2.0× + sizing micro `$2`/`$4`), uma instância e uma entrada por janela de 24h. **REVERSE live habilitado** via saga `SELL → reconcile → BUY`.
 
 ## O que foi implementado
 
 - runner long-lived no processo `engine:serve` com source BTC 5m;
 - preflight real fail-closed antes de iniciar o runtime live;
 - User WS + REST reconcile + heartbeat/cancel-on-disconnect;
-- hard cap de **$3** por ordem/evento (= `maxEntryBudget` do micro; tier 1.5× intacto) e uma entrada por janela, persistidos no checkpoint;
+- hard cap de **$4** por ordem/evento (= `maxEntryBudget` do micro Aggressive; tier 2.0× intacto) e uma entrada por janela, persistidos no checkpoint;
+- saga REVERSE: SELL da posição → flat → BUY no lado oposto (FAK);
 - catálogo versionado por strategy/version/preset/`marketScope`;
 - halt protetivo na rotação caso ainda exista posição sem settlement reconciliado;
 - audit JSONL e checkpoints fora de `/tmp`;
@@ -25,7 +26,7 @@ ENGINE_CANARY_MODE=1
 ENGINE_STRATEGY_ID=midas-carry-v1
 ENGINE_STRATEGY_INSTANCE_ID=midas-carry-v1:btc5m:primary
 ENGINE_SNAPSHOT_SOURCE=btc5m
-ENGINE_CANARY_MAX_BUDGET=3
+ENGINE_CANARY_MAX_BUDGET=4
 ENGINE_CONTROL_WINDOW_MS=86400000
 ENGINE_STATE_DIR=/data
 ENGINE_START_ARMED=0
@@ -48,6 +49,14 @@ ENGINE_CANARY_MODE=1
 Credenciais CLOB, `ENGINE_OPS_TOKEN` e demais secrets permanecem exclusivamente no serviço da Engine.
 Mesmo depois do processo iniciar saudável, live permanece `DISARMED` até o operador executar **Armar**. Esse comando refaz preflight live, readiness e reconciliação antes de liberar `ENTER`/`REVERSE`.
 
+## Capital (wallet ~US$ 34)
+
+| Item | Valor |
+|---|---|
+| ENTER base | $2 |
+| ENTER high-ask (tier 2.0×) | $4 |
+| Hard cap / daily loss | $4 (~12% da wallet) |
+| Reverse | sequencial — pico USDC no BUY ≈ $4, não $8 |
 ## Variáveis da UI
 
 ```env

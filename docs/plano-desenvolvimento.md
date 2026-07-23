@@ -1,10 +1,10 @@
 # Plano de desenvolvimento — Data Robot
 
 **Revisado em:** 23/07/2026
-**Estado atual:** Control Plane P9 v1 publicado e validado no Giovanna. Canário deste ciclo = **só MIDAS, notional marketable e hard cap $2**.
+**Estado atual:** Control Plane P9 v1. Canário = **MIDAS Aggressive micro**, hard cap **$4**, reverse live via saga SELL→BUY.
 **URL oficial:** https://robot.fracta.online  
-**Pacote:** `data-robot` **1.11.1**
-**Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / `btc-micro-robust-v1`). Plugin, shadow ≥5, 3 micro-live e `danger_exit` live concluídos em 22/07. P9 em shadow; canário redesenhado para Robust micro `$2`/`$3`.
+**Pacote:** `data-robot` **1.12.0**
+**Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / `btc-micro-aggressive-v1`). Plugin, shadow, micro-live, `danger_exit` e saga **REVERSE** SELL→BUY. Canário: Aggressive micro `$2`/`$4`, dist 40, tier 2.0×.
 **Depois:** qualquer estratégia via o mesmo contrato (engine agnóstica). TFC V7 = helpers no código, fora do canário agora.
 
 Este é o roadmap canônico. O [runbook TFC](./tfc-validacao-real.md) é baseline histórico do plugin TFC — **não** define a trilha MIDAS deste ciclo.
@@ -41,7 +41,7 @@ Ficam fora deste ciclo:
 10. **A engine vem antes e independe da estratégia.** Core, OMS, risk, persistência, recovery e observabilidade não podem importar MIDAS/TFC. Plugins aprovados entram por allowlist no composition root; disponibilidade não implica ativação live.
 11. **“Código concluído” não equivale a “gate live aprovado”.** P3–P7 distinguem explicitamente CI/simulação de evidência real no Giovanna.
 12. **POST de ordem é somente ACK.** Fill e preço executado vêm do user WS ou de reconciliação REST; FAK pode preencher parcialmente.
-13. **REVERSE permanece bloqueado em live.** A promoção exige saga persistida `SELL → reconcile → BUY`, não uma compra isolada do lado oposto.
+13. **REVERSE live usa saga `SELL → reconcile → BUY`.** Compra isolada do lado oposto continua proibida; o OMS executa as duas pernas em sequência.
 14. **Catálogo ≠ ativação; conta compartilhada ≠ estado isolado.** Todos os plugins aprovados podem ficar disponíveis. BTC 5m e ETH 5m podem operar simultaneamente como instâncias distintas, mas devem compartilhar coordenação global e durável de saldo, risk, OMS e recovery. Estratégias concorrentes no mesmo mercado permanecem bloqueadas sem arbitragem. Ver [ADR-002](./arquitetura/adr-002-strategy-catalog-supervision.md).
 
 ## 3. Diagnóstico do estado atual
@@ -55,9 +55,9 @@ Ficam fora deste ciclo:
 | Engine / contrato de estratégia | Feito (P1+P6 TFC + MIDAS) | Runtime + registry + fixtures + `tfc-v7` + **`midas-carry-v1`**. |
 | Catálogo / supervisão | Catálogo P9 básico feito | Aprovação por `strategyId`/versão/preset/`marketScope` bloqueia o deploy fail-closed. Supervisor multi-instância/global permanece futuro. |
 | Gates de entrada | Feito (P6 TFC) | `evaluateEntryGates` + late flip + danger exit no plugin TFC; MIDAS reusa + tier. |
-| Preset de produção | MIDAS canário versionado | `btc-micro-robust-v1` (Robust dist 30 + `$2`/`$3`); budget lab $10 permanece fora do canário. |
+| Preset de produção | MIDAS canário versionado | `btc-micro-aggressive-v1` (Aggressive dist 40 + tier 2.0× + `$2`/`$4`); budget lab $10/$20 permanece fora do canário. |
 | Entrada real | Wave-1 concluída | 3 entradas MIDAS reconciliadas, 0 órfã; composição long-lived P9 implementada. |
-| Saída / reverse / danger exit | P8 micro parcial | `danger_exit` real reconciliado; late-flip passa pipeline live simulado e ainda requer evidência real. `REVERSE` live bloqueado. |
+| Saída / reverse / danger exit | P8 saga no código | `danger_exit` real reconciliado; late-flip EXIT simulado; **REVERSE** via saga SELL→BUY (testes shadow); evidência CLOB reverse ainda recomendada antes de soak longo. |
 | OMS e user WebSocket | Código live implementado; ops aberto | User WS autenticado, heartbeat CLOB, reconciliação por ordem e detecção de órfãs; validação real prolongada ainda pendente. |
 | Risco e kill switch | Control Plane v1 feito; ops real aberto | Live inicia desarmado; arm refaz preflight/reconcile. Pause/stop bloqueiam entrada e preservam EXIT; cancel/flatten/rollback/kill são confirmados e auditados. |
 | Persistência / recovery | Código + drill shadow aprovados | Volume persistente no Giovanna; 2 restarts e restart pós-kill preservaram checkpoint e posição shadow. Ensaio com ordem/posição real permanece para o OMS smoke. |

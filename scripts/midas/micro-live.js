@@ -82,9 +82,10 @@ async function main() {
   }
 
   const mode = opts.live ? 'live' : 'dry-run';
-  // Live / wait-exit: desliga REVERSE (ainda sem saga P8) → late flip vira EXIT SELL.
+  // --wait-exit: força EXIT (danger/late_flip_exit) sem reverse, para evidência P8 exit.
+  // Default live/dry: reverse ligado (saga SELL→BUY).
   const preset = canaryMidasPreset(
-    opts.live || opts.waitExit ? { lateFlipReverseEnabled: false } : {},
+    opts.waitExit ? { lateFlipReverseEnabled: false } : {},
   );
   const state = createMarketState();
   const hub = createMarketHub({ state, healthLimits: BTC5M_STALENESS });
@@ -149,7 +150,10 @@ async function main() {
         throw new Error(`preflight live reprovado: ${failed}`);
       }
       serverClockOffsetMs = preflight.checks.clock.offsetMs;
-      riskOpts = { preflightChecks: preflightChecksFromResult(preflight) };
+      riskOpts = {
+        preflightChecks: preflightChecksFromResult(preflight),
+        allowLiveReverse: !opts.waitExit,
+      };
       // Sem filtro de mercado: sobrevive a rotação BTC 5m enquanto espera ENTER.
       userChannel = createUserChannel({
         kind: 'ws',

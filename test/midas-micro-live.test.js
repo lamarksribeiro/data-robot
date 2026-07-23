@@ -6,9 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { bootstrapMidasCanaryEngine } from '../src/composition/midasCanary.js';
 import {
   CANARY_LIMITS,
-  MIDAS_ROBUST_V1,
-  MIDAS_V1,
-  MICRO_ROBUST,
+  MIDAS_AGGRESSIVE_V1,
+  MICRO_AGGRESSIVE,
   canaryMidasPreset,
   resolveMidasEntryBudget,
 } from '../src/tfc/preset-midas.js';
@@ -50,25 +49,25 @@ function snap(ask = 0.62) {
 }
 
 describe('MIDAS micro-live canary', () => {
-  it('canaryMidasPreset = Robust + micro $2/$3', () => {
+  it('canaryMidasPreset = Aggressive + micro $2/$4', () => {
     const p = canaryMidasPreset();
-    assert.equal(p.maxDistAbs, 30);
-    assert.equal(p.entryBudget, MICRO_ROBUST.entryBudget);
-    assert.equal(p.maxEntryBudget, MICRO_ROBUST.maxEntryBudget);
-    assert.equal(p.maxAsk, MIDAS_ROBUST_V1.maxAsk);
-    assert.equal(p.tierAskBudgetFactor, 1.5);
+    assert.equal(p.maxDistAbs, 40);
+    assert.equal(p.entryBudget, MICRO_AGGRESSIVE.entryBudget);
+    assert.equal(p.maxEntryBudget, MICRO_AGGRESSIVE.maxEntryBudget);
+    assert.equal(p.maxAsk, MIDAS_AGGRESSIVE_V1.maxAsk);
+    assert.equal(p.tierAskBudgetFactor, 2.0);
     assert.equal(p.entryOrderType, 'FAK');
-    assert.notEqual(p.maxDistAbs, MIDAS_V1.maxDistAbs);
+    assert.equal(p.lateFlipReverseEnabled, true);
   });
 
-  it('tier 1.5× sobe $2 → $3 e não é cortado', () => {
+  it('tier 2.0× sobe $2 → $4 e não é cortado', () => {
     const p = canaryMidasPreset();
     assert.equal(resolveMidasEntryBudget(p, 0.7), 2);
-    assert.equal(resolveMidasEntryBudget(p, 0.82), 3);
-    assert.equal(resolveMidasEntryBudget(p, 0.9), 3);
+    assert.equal(resolveMidasEntryBudget(p, 0.82), 4);
+    assert.equal(resolveMidasEntryBudget(p, 0.9), 4);
   });
 
-  it('dry-run canário: notional ≤ cap $3 e ≥ $1 marketable', async () => {
+  it('dry-run canário: notional ≤ cap $4 e ≥ $1 marketable', async () => {
     const engine = bootstrapMidasCanaryEngine({ mode: 'dry-run' });
     engine.start();
     await engine.ingestMarketSnapshot(snap(0.62));
@@ -80,19 +79,20 @@ describe('MIDAS micro-live canary', () => {
     await engine.safeShutdown('test');
   });
 
-  it('risk canário aceita teto $3 (tier) e presetId micro-robust', () => {
+  it('risk canário aceita teto $4 (tier) e presetId micro-aggressive', () => {
     const engine = bootstrapMidasCanaryEngine({ mode: 'dry-run' });
-    assert.equal(engine.canary.maxCanaryBudget, 3);
+    assert.equal(engine.canary.maxCanaryBudget, 4);
     assert.equal(engine.canary.presetId, `${MIDAS_V1_PRESET_ID}-canary`);
+    assert.equal(MIDAS_V1_PRESET_ID, 'btc-micro-aggressive-v1');
   });
 
-  it('dry-run com ask high-tier: budget efetivo ≤ $3', async () => {
+  it('dry-run com ask high-tier: budget efetivo ≤ $4', async () => {
     const engine = bootstrapMidasCanaryEngine({ mode: 'dry-run' });
     engine.start();
     await engine.ingestMarketSnapshot(snap(0.85));
     const sink = [...engine.journal].reverse().find((j) => j.type === 'sink');
     if (sink?.intent) {
-      assert.ok(Number(sink.intent.budget) <= 3 + 1e-9);
+      assert.ok(Number(sink.intent.budget) <= 4 + 1e-9);
       assert.ok(Number(sink.intent.budget) >= 1 - 1e-9);
     }
     await engine.safeShutdown('test');
@@ -100,7 +100,7 @@ describe('MIDAS micro-live canary', () => {
 
   it('live mock exige client+flags; dry-run bootstrap ok', () => {
     const engine = bootstrapMidasCanaryEngine({ mode: 'dry-run' });
-    assert.equal(engine.canary.maxCanaryBudget, 3);
+    assert.equal(engine.canary.maxCanaryBudget, 4);
     assert.throws(
       () =>
         bootstrapMidasCanaryEngine({
