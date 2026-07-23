@@ -1,4 +1,4 @@
-# Evidência — MIDAS micro-live #1 (ENTER → fill → hold)
+# Evidência — MIDAS micro-live (ENTER → fill → hold)
 
 **Data:** 22/07/2026  
 **Host:** Giovanna (`data-robot` UI `hntw925e58wh7y0jcal0linv`)  
@@ -6,58 +6,52 @@
 **Modo:** live CLOB (`--live`, sem `--cancel`)  
 **Commits relevantes:** `b7628ef` (heartbeat/rotação) → `fa9c1d8` (min notional $1, cap canário $2)
 
-## Resultado
+## Progresso (meta: 3 micros)
+
+| # | Status | Side | Qty | Fill | Notional | Evento (ET) | marketId |
+|---|--------|------|-----|------|----------|-------------|----------|
+| 1 | **PASS** | DOWN | 2 | 0.86 | $1.72 | 1:10–1:15PM | `btc-updown-5m-1784740200` |
+| 2 | **PASS** | DOWN | 2 | 0.70 | $1.40 | 8:00–8:05PM | `btc-updown-5m-1784764800` |
+| 3 | pendente | — | — | — | — | — | — |
+
+## Micro #1
 
 | Campo | Valor |
 |-------|--------|
-| Gate E1 (1º micro) | **PASS** |
-| `accepted` | `true` |
-| `filled` | `true` |
-| `reconciled` | `true` |
-| `orphan` | `false` |
-| `parity.ok` | `true` |
-| Cap canário | **$2** (mín. marketable BUY Polymarket = $1) |
-| Hold | posição aberta ao fim do harness (sem EXIT live) |
-
-### Fill reconciliado
-
-| Campo | Valor |
-|-------|--------|
-| Side | DOWN |
-| Ask no sinal | 0.84 |
-| maxPrice | 0.86 |
-| Qty | **2** |
-| avgFillPrice | 0.86 |
-| Budget / notional | **$1.72** |
-| Order type | FAK |
-| Evento (ET) | Bitcoin Up or Down — July 22, **1:10PM–1:15PM** |
-| marketId | `btc-updown-5m-1784740200` |
-| intentId | `midas-carry-v1:1.0.0:0:btc-updown-5m-1784740200:ENTER:1` |
+| Gate E1 | **PASS** |
+| `accepted` / `filled` / `reconciled` | true / true / true |
+| `orphan` / `parity.ok` | false / true |
+| Ask → maxPrice | 0.84 → 0.86 |
 | Timeline | ACK `clob:matched` → FILL `user_ws_trade_matched` |
-| Rotações até ENTER | 1 |
-| Fee esperada (taker) | ≈ $0.01686 |
+| intentId | `midas-carry-v1:1.0.0:0:btc-updown-5m-1784740200:ENTER:1` |
+| Log | `/tmp/midas-micro/live-4.log` |
+| Rotações | 1 |
 
-### Tentativa anterior (não conta como micro)
+## Micro #2
 
-`live-3` (commit pré-`fa9c1d8`): ENTER gerado com notional **$0.91** → CLOB REJECT  
-`invalid amount for a marketable BUY order ($0.91), min size: 1`.  
-Corrigido com `sizeCanaryBuy` + `maxCanaryBudget: 2`.
+| Campo | Valor |
+|-------|--------|
+| Gate E2 (1/2) | **PASS** |
+| `accepted` / `filled` / `reconciled` | true / true / true |
+| `orphan` / `parity.ok` | false / true |
+| Ask → maxPrice | 0.68 → 0.70 |
+| Cap canário | $2 |
+| Fee esperada | ≈ $0.0294 |
+| Timeline | ACK `clob:matched` → FILL `user_ws_trade_matched` |
+| intentId | `midas-carry-v1:1.0.0:0:btc-updown-5m-1784764800:ENTER:1` |
+| Log | `/tmp/midas-micro/live-6.log` |
+| Rotações | 5 |
 
-## Artefatos
+### Tentativas que não contam
 
-No container UI (ephemeral `/tmp`):
+| Run | Resultado |
+|-----|-----------|
+| `live-3` | REJECT notional $0.91 abaixo do min marketable $1 (pré-`fa9c1d8`) |
+| `live-5` | ENTER FAK killed sem liquidez (`no orders found to match`) |
 
-| Arquivo | Conteúdo |
-|---------|----------|
-| `/tmp/midas-micro/live-4.log` | log completo + report `LIVE processado` |
+## Cap / sizing
 
-Consulta:
-
-```bash
-ssh Giovanna
-UICID=$(docker ps | awk '/hntw925e58wh7y0jcal0linv/{print $NF; exit}')
-docker exec "$UICID" sed -n '/LIVE processado/,/^}/p' /tmp/midas-micro/live-4.log
-```
+Polymarket exige **≥$1** em BUY marketable (FAK). Canário: `maxCanaryBudget: 2` + `sizeCanaryBuy`.
 
 ## Comando
 
@@ -65,7 +59,15 @@ docker exec "$UICID" sed -n '/LIVE processado/,/^}/p' /tmp/midas-micro/live-4.lo
 npm run midas:micro-live -- --live --timeout=1800
 ```
 
+Consulta:
+
+```bash
+ssh Giovanna
+UICID=$(docker ps | awk '/hntw925e58wh7y0jcal0linv/{print $NF; exit}')
+docker exec "$UICID" sed -n '/LIVE processado/,/^}/p' /tmp/midas-micro/live-6.log
+```
+
 ## Próximo
 
-1. Micro-live **#2** e **#3** (mesmo critério: fill reconciliado, hold, 0 órfã).
-2. Depois: EXIT live + P9 / dashboard (fora deste gate enter/hold).
+1. Micro-live **#3** (mesmo critério) — harness `live-7` em curso.
+2. Depois: EXIT live + P9 / dashboard.
