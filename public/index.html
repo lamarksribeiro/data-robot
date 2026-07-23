@@ -3,52 +3,97 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login · Data Robot</title>
-  
-  <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.0.1">
-  <link rel="apple-touch-icon" href="/favicon.svg?v=1.0.1">
-  
-  <!-- Fonts -->
+  <title>Data Robot · Operações</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
-  
-  <!-- Styles -->
-  <link rel="stylesheet" href="/styles.css?v=1.0.1">
-  
-  <!-- Script do Mascote -->
-  <script src="/js/mascot.js?v=1.0.1" defer></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/js/dashboard.js" defer></script>
 </head>
 <body>
-  <div class="login-wrapper">
-    <!-- O mascote container é injetado dinamicamente aqui -->
-    
-    <div class="login">
+  <main class="shell">
+    <section class="login" id="login-view">
       <div class="login__header">
         <h1 class="login__title">Data Robot</h1>
-        <p class="login__subtitle">Trading Algorítmico & Execução</p>
+        <p class="login__subtitle">Control plane operacional</p>
       </div>
-
-      <form class="form" id="login-form" autocomplete="on" novalidate onsubmit="event.preventDefault();">
-        <!-- Input de Usuário -->
+      <form class="form" id="login-form" autocomplete="on">
         <div class="field">
           <label class="field__label" for="username">Usuário</label>
-          <input class="field__input" type="text" id="username" name="username" placeholder="Digite seu usuário" autocomplete="username" required>
+          <input class="field__input" type="text" id="username" name="username" autocomplete="username" required>
         </div>
-
-        <!-- Input de Senha -->
         <div class="field">
           <label class="field__label" for="password">Senha</label>
-          <input class="field__input" type="password" id="password" name="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+          <input class="field__input" type="password" id="password" name="password" autocomplete="current-password" required>
         </div>
-
-        <!-- Botão Entrar -->
-        <button class="btn btn--primary" type="submit" id="btn-login">
-          Entrar
-        </button>
+        <button class="btn btn--primary" type="submit">Entrar</button>
+        <p class="form-message" id="login-message" role="status"></p>
       </form>
-    </div>
-  </div>
+    </section>
+
+    <section class="dashboard hidden" id="dashboard-view">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">GoldenLens</p>
+          <h1>Data Robot</h1>
+          <p class="muted" id="last-update">Aguardando Engine…</p>
+        </div>
+        <div class="topbar__actions">
+          <button class="btn btn--ghost" id="refresh-button" type="button">Atualizar</button>
+          <button class="btn btn--danger" id="kill-button" type="button">Kill switch</button>
+          <button class="btn btn--ghost" id="logout-button" type="button">Sair</button>
+        </div>
+      </header>
+
+      <div class="alert hidden" id="dashboard-alert" role="alert"></div>
+
+      <section class="status-grid" aria-label="Estado principal">
+        <article class="card"><span>Estado</span><strong id="engine-state">—</strong></article>
+        <article class="card"><span>Saúde</span><strong id="engine-health">—</strong></article>
+        <article class="card"><span>Modo</span><strong id="engine-mode">—</strong></article>
+        <article class="card"><span>Estratégia</span><strong id="strategy-id">—</strong></article>
+        <article class="card"><span>Mercado</span><strong id="market-id">—</strong></article>
+        <article class="card"><span>Aprovação</span><strong id="approval">—</strong></article>
+      </section>
+
+      <section class="panel-grid">
+        <article class="panel">
+          <div class="panel__header"><h2>Posição</h2><span id="position-badge" class="badge">flat</span></div>
+          <dl class="facts">
+            <div><dt>Lado</dt><dd id="position-side">—</dd></div>
+            <div><dt>Quantidade</dt><dd id="position-qty">0</dd></div>
+            <div><dt>Preço médio</dt><dd id="position-avg">—</dd></div>
+            <div><dt>PnL realizado</dt><dd id="position-pnl">0</dd></div>
+          </dl>
+        </article>
+
+        <article class="panel">
+          <div class="panel__header"><h2>Canário</h2><span class="badge badge--warn">P9</span></div>
+          <dl class="facts">
+            <div><dt>Hard cap</dt><dd id="canary-cap">—</dd></div>
+            <div><dt>Janela</dt><dd id="control-window">—</dd></div>
+            <div><dt>Reverse live</dt><dd id="live-reverse">—</dd></div>
+            <div><dt>Commit</dt><dd id="source-commit">—</dd></div>
+          </dl>
+        </article>
+
+        <article class="panel panel--wide">
+          <div class="panel__header"><h2>Ordens recentes</h2><span id="orders-count" class="badge">0</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Intent</th><th>Tipo</th><th>Lado</th><th>Estado</th><th>Fill</th><th>Mercado</th></tr></thead>
+              <tbody id="orders-body"><tr><td colspan="6" class="empty">Nenhuma ordem</td></tr></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel panel--wide">
+          <div class="panel__header"><h2>Diagnóstico</h2><span id="uptime" class="badge">—</span></div>
+          <pre class="console-box" id="diagnostics">Aguardando dados…</pre>
+        </article>
+      </section>
+    </section>
+  </main>
 </body>
 </html>

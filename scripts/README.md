@@ -61,7 +61,7 @@ npm run engine:soak -- --duration-hours=1 --interval-ms=1000
 
 ## TFC V7 — validação incremental
 
-Ver [../docs/tfc-validacao-real.md](../docs/tfc-validacao-real.md). `micro-entry` é legado; somente `micro-live` passa pelo pipeline válido de promoção. MIDAS ainda não tem harness no robot.
+Ver [../docs/tfc-validacao-real.md](../docs/tfc-validacao-real.md). `micro-entry` é legado; somente `micro-live` passa pelo pipeline válido de promoção. MIDAS possui harness e runner long-lived P9 fail-closed.
 
 | Script | npm | Descrição |
 |--------|-----|-----------|

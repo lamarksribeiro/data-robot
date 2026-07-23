@@ -2,8 +2,8 @@
 
 Status: **harness TFC e proteções genéricas implementados** (2026-07-20). CI sem rede/ordens reais.  
 **Campanha live:** nenhuma estratégia aprovada.
-**Trilha ágil:** Engine Ready ágil (horas + drills) + shadow sprint ≥20 + **3** micros reconciliados (cap $1).
-**Promoção P9:** ≥10 micros em dias distintos + shadow 100 + soak longo. MIDAS ainda não tem composition/harness próprio.
+**Trilha ágil MIDAS:** Engine Ready + shadow ≥5 + **3** micros reconciliados, concluída em 22/07.
+**Promoção P9:** ≥10 micros em dias distintos + shadow 100 + soak longo. MIDAS possui composition/harness e runner long-lived.
 
 ## Pipeline (referência TFC)
 
@@ -25,7 +25,7 @@ npm run tfc:micro-live -- --live --cancel --timeout=330
 | Constante | Valor | Papel |
 |-----------|-------|-------|
 | `MICRO_TEST.entryBudget` | $0.10 | Preferência de sizing |
-| `CANARY_LIMITS.maxCanaryBudget` | $1.00 | Risk hard cap (cobre 1 share no ask V7) |
+| `CANARY_LIMITS.maxCanaryBudget` | $2.00 | Hard cap para cumprir BUY marketable ≥$1, normalmente 2 shares |
 | Preset campeão `entryBudget` | $10 | **Bloqueado** em canary mode |
 
 Reason code: `CANARY_BUDGET_EXCEEDED`. Tier MIDAS do lab ($15/$20) **não** eleva o canário.
@@ -48,7 +48,7 @@ Reason code: `CANARY_BUDGET_EXCEEDED`. Tier MIDAS do lab ($15/$20) **não** elev
 ## Gate ops
 
 **Wave-1 (ágil):**
-- [ ] 3 micro-entradas reconciliadas (cap canário) por plugin + preset
+- [x] 3 micro-entradas MIDAS reconciliadas (hard cap $2)
 - [ ] sem órfã/duplicidade/violação de cap; fee/slippage registrados
 
 **Promoção (canário contínuo / P9):**

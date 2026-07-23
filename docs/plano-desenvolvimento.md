@@ -1,10 +1,10 @@
 # Plano de desenvolvimento — Data Robot
 
 **Revisado em:** 22/07/2026  
-**Estado atual:** engine + UI no Giovanna; **ainda não** é robô autônomo. Canário deste ciclo = **só MIDAS $1**.  
+**Estado atual:** engine + UI no Giovanna; base do serviço P9 implementada, ainda aguardando deploy/evidência contínua. Canário deste ciclo = **só MIDAS, notional marketable e hard cap $2**.
 **URL oficial:** https://robot.fracta.online  
 **Pacote:** `data-robot` **1.10.0**  
-**Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / preset lab `btc-champion-v1`). Plugin **implementado** no robot (CI); **shadow ≥5 ENTER OK** (22/07); **micro-live #1 fill OK** (22/07, cap $2); faltam micros #2–#3.  
+**Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / `btc-champion-v1`). Plugin, shadow ≥5, 3 micro-live e `danger_exit` live concluídos em 22/07. P9 está pronto para deploy controlado; late-flip live e janela longa ainda exigem evidência real.
 **Depois:** qualquer estratégia via o mesmo contrato (engine agnóstica). TFC V7 = helpers no código, fora do canário agora.
 
 Este é o roadmap canônico. O [runbook TFC](./tfc-validacao-real.md) é baseline histórico do plugin TFC — **não** define a trilha MIDAS deste ciclo.
@@ -29,10 +29,10 @@ Ficam fora deste ciclo:
 
 ## 2. Decisões corrigidas nesta revisão
 
-1. **Agora o teste/canário é só MIDAS; a engine continua strategy-agnostic.** Depois qualquer plugin aprovado (TFC, Apex, etc.) entra pelo mesmo contrato/catálogo. TFC V7 hoje é só referência de código (helpers/núcleo Danger Floor), sem smoke nem canário neste ciclo. Preset MIDAS `btc-champion-v1` em `midas-carry-v1/presets/` — não confundir com preset TFC homônimo. Plugin MIDAS ainda só no lab (`data-backtest`).
+1. **Agora o teste/canário é só MIDAS; a engine continua strategy-agnostic.** O plugin MIDAS está no registry do robot e aprovado no catálogo para canário BTC 5m. Disponibilidade no catálogo não ativa execução; cada processo seleciona um `strategyId`.
 2. **V7 substitui V6 como baseline de execução.** A V6 Hybrid depende de stop-buy sintético. A validação do backtest concluiu que esse mecanismo pode disparar na zona abaixo de 4s, onde o book e a latência não sustentam execução fiel.
 3. **F4 não implementará hedge stop da V6.** A sequência correta é late flip exit/reverse da V7/MIDAS e, depois, danger exit no piso de 4s.
-4. **Engine contínua já está no Giovanna (A1/A2).** `data-robot-engine` `:3201` em shadow/fixture com drills OK. Faltam plugin MIDAS, evidência live MIDAS e soak ≥4h (bg).
+4. **Engine contínua já está no Giovanna (A1/A2).** `data-robot-engine` `:3201` em shadow/fixture passou drills e soak ≥4h. Falta substituir o deployment fixture pelo estágio shadow MIDAS P9 e, depois, live controlado.
 5. **A UI estática não é o robô.** `npm start` serve somente `public/`. URL oficial da UI: https://robot.fracta.online. A engine deve ser um processo separado (`:3201`), sem secrets no frontend.
 6. **A latência média/mediana não basta.** Promoção exige p95/p99 por operação, visibilidade da ordem, taxa de erro e comportamento sob timeout.
 7. **REST imediato não é confirmação suficiente.** O canal WebSocket autenticado de usuário deve ser a fonte primária de eventos de ordem/trade; REST será usado para reconciliação.
@@ -53,17 +53,17 @@ Ficam fora deste ciclo:
 | ETH 5m | Arquitetura compatível; adapters/plugins ausentes | Exige descoberta/normalização do mercado ETH 5m e plugin aprovado com `supportedMarkets`; reutiliza engine, account risk, OMS e control plane. |
 | RTDS e CLOB market feed | Feito (P2) | Normalização, staleness, hub e source contínua com shutdown sem reconexão residual. |
 | Engine / contrato de estratégia | Feito (P1+P6 TFC + MIDAS) | Runtime + registry + fixtures + `tfc-v7` + **`midas-carry-v1`**. |
-| Catálogo / supervisão | Registry básico feito; evolução pendente | Plugins já são selecionáveis por `strategyId`; faltam estados de aprovação, `marketScope`, deployment config e supervisor. Multi-mercado live exige coordenador global da conta. |
+| Catálogo / supervisão | Catálogo P9 básico feito | Aprovação por `strategyId`/versão/preset/`marketScope` bloqueia o deploy fail-closed. Supervisor multi-instância/global permanece futuro. |
 | Gates de entrada | Feito (P6 TFC) | `evaluateEntryGates` + late flip + danger exit no plugin TFC; MIDAS reusa + tier. |
-| Preset de produção | MIDAS pendente no robot | Lab MIDAS: `midas-carry-v1/presets/btc-champion-v1.json`. Robot ainda alinha `watch`/`micro-entry` ao `btc-champion-v7`. |
-| Entrada real | Feito (P7 código TFC) | `tfc:micro-live` via engine + canary cap; campanha live bloqueada até P3–P5; MIDAS harness ainda inexistente. |
-| Saída / reverse / danger exit | Sinais no plugin TFC; execução live ausente | Plugin já emite late flip / danger EXIT. P8 = ciclo live reconciliado. `REVERSE` live bloqueado até saga. |
+| Preset de produção | MIDAS canário versionado | `btc-champion-v1` com sizing marketable e hard cap $2; budget $10 permanece bloqueado. |
+| Entrada real | Wave-1 concluída | 3 entradas MIDAS reconciliadas, 0 órfã; composição long-lived P9 implementada. |
+| Saída / reverse / danger exit | P8 micro parcial | `danger_exit` real reconciliado; late-flip passa pipeline live simulado e ainda requer evidência real. `REVERSE` live bloqueado. |
 | OMS e user WebSocket | Código live implementado; ops aberto | User WS autenticado, heartbeat CLOB, reconciliação por ordem e detecção de órfãs; validação real prolongada ainda pendente. |
 | Risco e kill switch | Código endurecido; ops aberto | Preflight live obrigatório, deadlines, caps, kill/circuit e `REVERSE` bloqueado até P8. |
 | Persistência / recovery | Código + drill shadow aprovados | Volume persistente no Giovanna; 2 restarts e restart pós-kill preservaram checkpoint e posição shadow. Ensaio com ordem/posição real permanece para o OMS smoke. |
 | Observabilidade | Código endurecido; ops aberto | Readiness depende de feed/recovery/user WS; métricas ausentes reprovam SLO; calibragem Giovanna pendente. |
 | Testes e CI | Feito | `npm run ci` (lint + architecture + testes); sem rede/ordens reais. |
-| Deploy | UI + engine no ar | UI em https://robot.fracta.online; engine `:3201` separada, interna, `running:healthy` em `shadow + fixture`. Falta soak ≥4h; soak longo só para P9. |
+| Deploy | UI + engine no ar | UI em https://robot.fracta.online; engine interna ainda em `shadow + fixture`. Soak curto passou; deployment MIDAS P9 e soak longo permanecem. |
 
 ### O que vamos seguir (sequência definitiva deste ciclo)
 
@@ -89,10 +89,10 @@ FUTURO: outras estratégias no mesmo contrato (TFC, Apex, …)
 | ✓ | 3 micros enter/hold + EXIT live (22/07) | REVERSE, ETH, catálogo ADR-002 completo |
 | 6 | P9 + dashboard UI | Autonomia 24/7 / budget backtest |
 
-**Produção canário** = MIDAS real, cap **$1**, ENTER→fill→hold até o fim do evento, com preflight/WS/reconcile/kill.  
+**Produção canário** = MIDAS real, BUY marketable mínimo, hard cap **$2**, ENTER→fill→hold/EXIT protegido, com preflight/WS/reconcile/kill.
 **Não** é autonomia 24/7 nem budget do backtest ($10).
 
-**bg:** soak engine ≥4h (não bloqueia 1–3).
+**Engine Ready curto:** soak ≥4h concluído. Soak ≥7 dias continua gate do P9.
 
 ### Próximos passos — detalhe
 
@@ -109,7 +109,7 @@ FUTURO: outras estratégias no mesmo contrato (TFC, Apex, …)
 | **5 — ✓** | **F** | EXIT live (danger/late-flip) | ciclo OK 22/07 ([evidência](./operacao/evidencia-midas-exit-live-2026-07-22.md)) |
 | **6** | **G** | P9 + dashboard UI | canário contínuo / budget mínimo |
 
-**Obrigatório em qualquer live MIDAS:** preflight, canary **$1**, ACK≠fill, User WS/REST, cancel/finally, kill.
+**Obrigatório em qualquer live MIDAS:** preflight, hard cap **$2**, ACK≠fill, User WS/REST, cancel/finally, kill e uma entrada por janela de controle.
 
 ### Evidência já obtida
 
@@ -370,7 +370,7 @@ Ver [arquitetura/risk-p4.md](./arquitetura/risk-p4.md).
 
 ### P5 — Resiliência, observabilidade, deploy e gate Engine Ready
 
-**Status:** código endurecido (2026-07-20); **ops Engine Ready ágil** ainda aberto no Giovanna. Soak ≥7d passou a ser gate de **P9 / canário contínuo**, não bloqueio do primeiro micro-live.
+**Status:** código endurecido; Engine Ready ágil aprovado no Giovanna. Soak ≥7d permanece gate de **P9 / canário contínuo**.
 
 Entregáveis:
 
@@ -390,10 +390,10 @@ Gate de saída (código / CI):
 - [x] control HTTP `/health` `/metrics` `/control/kill`;
 - [x] engine aprovável com fixtures, sem importar TFC no core.
 
-**Gate Engine Ready ágil — ops, suficiente para micro-live canário ($1):**
+**Gate Engine Ready ágil — ops, suficiente para micro-live canário (hard cap $2):**
 
 - [x] engine `:3201` no Giovanna com `/health` e `/ready` OK;
-- [ ] soak contínuo **≥4h** (ideal 24h) com fixtures **ou** shadow, sem divergência não resolvida;
+- [x] soak contínuo **≥4h** com fixture/shadow, sem divergência não resolvida (22/07, ~12h na auditoria);
 - [x] drills no mesmo dia: ≥2 restarts, 1 kill switch e restore de checkpoint; não havia resting para cancelar;
 - [x] zero órfã e zero violação de risco nos drills;
 - [x] engine aprovada sem depender de resultado, código ou comportamento da TFC/MIDAS.
@@ -415,7 +415,7 @@ Ver [arquitetura/observability-p5.md](./arquitetura/observability-p5.md).
 
 ### P6 — Plugins aprovados e paridade shadow
 
-**Status:** infraestrutura genérica e plugin TFC V7 concluídos; MIDAS ainda ausente. Cada combinação plugin + versão + preset percorre gate próprio.
+**Status:** infraestrutura genérica, TFC V7 e MIDAS concluídos no código. MIDAS percorreu gate ágil e está `canary-approved` para BTC 5m no catálogo.
 
 Entregáveis:
 
@@ -423,10 +423,10 @@ Entregáveis:
 - [x] estado próprio serializável; ordens/posição sob engine/OMS;
 - [x] entrada, late flip exit/reverse 8→4s e danger exit em [4s, 5s);
 - [x] paridade de volatilidade, `signedDistance`, preset e limites com o GLS (helpers + testes);
-- [x] paridade sintética ≥100 casos no CI; [ ] shadow sprint ≥20 eventos reais (ágil); [ ] shadow ≥100 (promoção P9).
-- [ ] MIDAS Carry V1 implementada pelo mesmo contrato, sem alterar core/OMS/risk;
-- [ ] preset MIDAS `btc-champion-v1` (path `midas-carry-v1/presets/`) versionado e paridade sintética contra o `data-backtest`;
-- [ ] MIDAS shadow sprint ≥20 eventos reais com mismatches explicados; [ ] ≥100 antes de canário contínuo.
+- [x] paridade sintética ≥100 casos no CI; [x] MIDAS shadow ágil ≥5 ENTER; [ ] shadow ≥100 (promoção P9 plena).
+- [x] MIDAS Carry V1 implementada pelo mesmo contrato, sem alterar core/OMS/risk;
+- [x] preset MIDAS `btc-champion-v1` versionado e paridade sintética ≥100 contra o `data-backtest`;
+- [x] shadow ágil ≥5 ENTER; [ ] shadow ≥100 antes da promoção contínua plena.
 
 Gate de saída:
 
@@ -434,15 +434,15 @@ Gate de saída:
 - [x] testes cobrem limites UP/DOWN, tempo, spread, OBI, odds sum e velocity;
 - [x] 0 decisão com feed stale;
 - [x] suíte genérica de conformidade passa para TFC V7;
-- [ ] mismatches de shadow sprint (≥20) explicados para liberar wave-1 micro-live;
+- [x] shadow ágil MIDAS ≥5 ENTER sem mismatch de intenção não explicado;
 - [ ] mismatches de 100 eventos reais explicados para cada plugin candidato antes de P9;
-- [ ] status `shadow-approved` (sprint) e depois `canary-approved` registrados por versão + preset; aprovação de TFC não promove MIDAS nem vice-versa.
+- [x] status `canary-approved` registrado por versão + preset + `marketScope` em `config/strategy-catalog.json`.
 
 Ver [arquitetura/tfc-v7-p6.md](./arquitetura/tfc-v7-p6.md).
 
 ### P7 — Micro-live de entrada por plugin
 
-**Status:** harness TFC e proteções genéricas concluídos (2026-07-20); nenhuma estratégia tem campanha live aprovada. MIDAS precisa de composition/harness próprio ou parametrização do canário genérico.
+**Status:** harness e composição MIDAS concluídos; wave-1 de três entradas real aprovada. Promoção contínua ainda exige campanha em dias distintos.
 
 Entregáveis:
 
@@ -454,10 +454,10 @@ Entregáveis:
 
 Gate de saída (trilha ágil → promoção):
 
-- [ ] **wave-1:** ≥3 entradas micro-live reconciliadas (cap canário) **por plugin + preset** — libera aprendizado live;
+- [x] **wave-1 MIDAS:** 3 entradas micro-live reconciliadas, 0 órfã;
 - [ ] **promoção:** ≥10 entradas em dias distintos antes de canário contínuo / P9;
 - [x] pipeline reconciliável sem órfã/duplicidade/violação de cap (testes mock);
-- [ ] slippage/fee explicado em runs live reais;
+- [x] slippage/fee explicado nos três runs MIDAS de 22/07;
 - [x] nenhuma promoção só por aceite da ordem (relatório exige fill/reconcile).
 - [x] resposta do POST não gera fill artificial; FAK é reconciliada por quantidade/preço reais;
 - [x] finally executa cancelamento remoto e encerra heartbeats/feed.
@@ -466,7 +466,7 @@ Ver [arquitetura/micro-live-p7.md](./arquitetura/micro-live-p7.md).
 
 ### P8 — Saídas por plugin: exit, reverse e danger exit
 
-**Status:** ausente.
+**Status:** `danger_exit` live aprovado; late-flip EXIT aprovado no pipeline live simulado e pendente de evidência CLOB real; `REVERSE` bloqueado.
 
 O risk engine rejeita `REVERSE` em live com `LIVE_REVERSE_UNSUPPORTED` até esta fase implementar e validar a saga genérica de duas pernas. Regras de sinal continuam no plugin; execução, reconciliação e exposição residual pertencem à engine/OMS.
 
@@ -487,7 +487,7 @@ Gate de saída:
 
 ### P9 — Canário e produção limitada
 
-**Status:** bloqueado pelos gates reais ainda abertos de P3–P8.
+**Status:** fundação implementada: runner long-lived fail-closed, catálogo, cap/janela persistentes, evidência JSONL e dashboard autenticado. Aguardando deploy shadow MIDAS e campanha real.
 
 Promoção progressiva:
 

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-22T23:59:00.000Z",
+  "strategies": [
+    {
+      "strategyId": "midas-carry-v1",
+      "version": "1.0.0",
+      "presetId": "btc-champion-v1",
+      "marketScope": ["btc-updown-5m"],
+      "approval": "canary-approved",
+      "canary": {
+        "hardCapUsd": 2,
+        "maxEntriesPerControlWindow": 1,
+        "controlWindowHours": 24,
+        "liveReverse": false
+      },
+      "evidence": [
+        "docs/operacao/evidencia-midas-shadow-2026-07-22.md",
+        "docs/operacao/evidencia-midas-micro-live-2026-07-22.md",
+        "docs/operacao/evidencia-midas-exit-live-2026-07-22.md"
+      ]
+    },
+    {
+      "strategyId": "tfc-v7",
+      "version": "1.0.0",
+      "presetId": "btc-champion-v7",
+      "marketScope": ["btc-updown-5m"],
+      "approval": "registered",
+      "evidence": []
+    },
+    {
+      "strategyId": "fixture-price-cross",
+      "version": "1.0.0",
+      "presetId": "fixture-price-cross",
+      "marketScope": ["fixture"],
+      "approval": "shadow-approved",
+      "evidence": []
+    }
+  ]
+}

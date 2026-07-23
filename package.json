@@ -29,7 +29,8 @@
     "ci": "npm run lint && npm run check:architecture && npm test",
     "engine:serve": "node scripts/engine-serve.js",
     "engine:soak": "node scripts/soak-run.js",
-    "start": "sirv public --port 3200 --host 0.0.0.0 --etag --maxage 0",
+    "p9:readiness": "node --test test/p9-service.test.js",
+    "start": "node scripts/ui-server.js",
     "dev": "sirv public --port 3200 --host 0.0.0.0 --dev",
     "ui:dev": "npm run dev",
     "ui:start": "npm start"

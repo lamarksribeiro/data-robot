@@ -98,7 +98,7 @@ Isso é comportamento do champion, não falha de infra.
 ## Próximo gate
 
 1. ~~Shadow ≥5 ENTER~~ **feito 22/07**
-2. **3×** `midas:micro-live -- --live` — **#1 OK** ([evidência micro](./evidencia-midas-micro-live-2026-07-22.md)); faltam #2–#3
-3. EXIT/danger live antes de subir budget / P9
+2. ~~3× `midas:micro-live -- --live`~~ **feito: 3 reconciliados, 0 órfã** ([evidência](./evidencia-midas-micro-live-2026-07-22.md))
+3. ~~EXIT danger live~~ **feito**; próximo gate = deploy P9 shadow e campanha supervisionada.
 
 Nenhuma ordem real foi enviada nesta evidência de shadow.

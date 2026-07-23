@@ -16,6 +16,7 @@
 | [Observabilidade P5](./arquitetura/observability-p5.md) | Métricas, control HTTP, soak, fault injection; ops Engine Ready |
 | [TFC V7 P6](./arquitetura/tfc-v7-p6.md) | Plugin TFC no contrato; ENTER/late flip/danger; paridade sintética; MIDAS é gate separado |
 | [Micro-live P7](./arquitetura/micro-live-p7.md) | Canário via engine; harness TFC; campanha por plugin/preset; ACK≠fill |
+| [Canário contínuo P9](./operacao/p9-canario-continuo.md) | Runner MIDAS, catálogo, dashboard, deploy e gates reais |
 | [Schema de runs](./arquitetura/runs-schema.md) | Envelope versionado, sanitização e retenção de evidência |
 | [Deploy Giovanna](./operacao/deploy-giovanna.md) | Coolify Giovanna, URL oficial `robot.fracta.online`, smoke CLOB, próximos passos |
 | [Ambientes](./operacao/ambientes.md) | local / shadow / canary / production |
