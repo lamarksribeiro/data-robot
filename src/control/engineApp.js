@@ -11,6 +11,7 @@ import { createLogger } from '../observability/logger.js';
 import { createAlertHub } from '../observability/alerts.js';
 import { evaluateSlos, DEFAULT_SLOS } from '../observability/slo.js';
 import { createJournalBackup } from '../observability/journalBackup.js';
+import { createExecutionAudit } from '../observability/executionAudit.js';
 import { buildHealthReport } from './health.js';
 import { createControlServer } from './httpServer.js';
 
@@ -28,6 +29,8 @@ export function createEngineApp(opts = {}) {
   const logger = opts.logger ?? createLogger({ service: 'data-robot-engine' });
   const alerts = opts.alerts ?? createAlertHub();
   const backup = opts.journalBackup ?? createJournalBackup({ dir: opts.backupDir });
+  const executionAudit =
+    opts.executionAudit ?? createExecutionAudit({ dir: opts.executionAuditDir, clock: opts.clock });
   const sink = opts.sink ?? createOmsSink({ mode, clock: opts.clock });
   const snapshotSource = opts.snapshotSource ?? null;
 
@@ -49,12 +52,25 @@ export function createEngineApp(opts = {}) {
   let recoveryOk = opts.restoreOnStart !== true;
   let autoCheckpointTimer = null;
   let started = false;
+  let startedAtMs = null;
   let sourceStatus = snapshotSource
     ? { kind: snapshotSource.kind ?? 'custom', running: false, ok: false, reason: 'NOT_STARTED' }
     : { kind: 'manual', running: false, ok: null, reason: null };
 
   function status() {
-    return engine.getStatus();
+    const base = engine.getStatus();
+    return {
+      ...base,
+      startedAtMs,
+      uptimeMs: startedAtMs == null ? 0 : Math.max(0, Date.now() - startedAtMs),
+      orders: (sink.oms?.listOrders?.() ?? []).slice(-25),
+      accountExposure: sink.oms?.accountExposure?.() ?? null,
+      catalog: opts.catalogEntry ?? null,
+      deployment: opts.deployment ?? null,
+      preflight: opts.preflight ?? null,
+      canary: opts.canary ?? null,
+      auditDir: executionAudit.dir,
+    };
   }
 
   function health() {
@@ -97,6 +113,23 @@ export function createEngineApp(opts = {}) {
   }
 
   async function ingest(snapshot, useMarketGate) {
+    if (
+      mode === 'live' &&
+      opts.haltOnMarketRotationWithPosition !== false &&
+      engine.position.qty > 0 &&
+      engine.position.marketId &&
+      snapshot.marketId !== engine.position.marketId
+    ) {
+      const reason = 'market-rotated-with-position';
+      executionAudit.append('protective_halt', {
+        reason,
+        fromMarketId: engine.position.marketId,
+        toMarketId: snapshot.marketId,
+        position: engine.position,
+      });
+      await engine.safeShutdown(reason);
+      return { skipped: true, reason: 'POSITION_REQUIRES_SETTLEMENT' };
+    }
     const t0 = performance.now();
     ticks += 1;
     lastFeedsOk = (snapshot.health?.ok ?? snapshot.feeds?.healthy) === true;
@@ -114,6 +147,14 @@ export function createEngineApp(opts = {}) {
     }
     const decisionResult = useMarketGate ? result?.result : result;
     if (decisionResult?.intentCount) metrics.inc('intents_emitted', decisionResult.intentCount);
+    if (decisionResult?.intentCount) {
+      executionAudit.append('decision', {
+        marketId: snapshot.marketId,
+        intentCount: decisionResult.intentCount,
+        diagnostics: decisionResult.diagnostics ?? null,
+        position: decisionResult.position ?? engine.position,
+      });
+    }
 
     const h = health();
     const m = metricsSnap();
@@ -162,6 +203,11 @@ export function createEngineApp(opts = {}) {
       backup.save(sink.oms.journal.snapshot(), 'checkpoint');
     }
     backup.saveCheckpoint?.(lastCheckpoint, 'engine');
+    executionAudit.append('checkpoint', {
+      state: engine.state,
+      marketId: lastCheckpoint.lastSnapshot?.marketId ?? null,
+      pendingIntentCount: lastCheckpoint.pendingIntents?.length ?? 0,
+    });
     logger.info('checkpoint_saved', { state: engine.state });
     return lastCheckpoint;
   }
@@ -180,6 +226,7 @@ export function createEngineApp(opts = {}) {
     getHealth: health,
     getStatus: () => ({ ...status(), health: health(), slos: evaluateSlos(metricsSnap(), health(), opts.slos) }),
     getMetrics: metricsSnap,
+    getCatalog: () => opts.catalogEntry ?? null,
     onKill: async (reason) => {
       logger.error('kill_requested', { reason });
       return engine.kill(reason);
@@ -193,6 +240,7 @@ export function createEngineApp(opts = {}) {
     logger,
     alerts,
     backup,
+    executionAudit,
     httpServer,
     health,
     status,
@@ -230,6 +278,13 @@ export function createEngineApp(opts = {}) {
       }
       engine.start();
       started = true;
+      startedAtMs = Date.now();
+      executionAudit.append('engine_started', {
+        strategyId,
+        mode,
+        deployment: opts.deployment ?? null,
+        catalog: opts.catalogEntry ?? null,
+      });
       logger.info('engine_started', { strategyId, mode, state: engine.state });
       if (snapshotSource) {
         try {
@@ -288,6 +343,7 @@ export function createEngineApp(opts = {}) {
       }
       sink.dispose?.();
       started = false;
+      executionAudit.append('engine_stopped', { strategyId, mode });
       logger.info('engine_stopped');
     },
   };

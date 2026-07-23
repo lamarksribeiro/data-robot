@@ -2,7 +2,7 @@
 
 Executor de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
 
-**Status:** 1.10.0 — engine + UI no Giovanna (A1/A2 ✓). Plugin MIDAS + **shadow ≥5 ENTER ✓** (22/07). **Seguir:** 3× micro $1 enter/hold → EXIT antes de subir budget.
+**Status:** 1.10.0 — Engine Ready ágil, MIDAS shadow, 3 micros e `danger_exit` live concluídos. Base P9 implementada no código; falta deploy controlado e evidência contínua.
 
 Estratégias aprovadas devem ficar disponíveis em um catálogo explícito e ser selecionadas por configuração. Instâncias de mercados distintos — por exemplo BTC 5m e ETH 5m — podem coexistir na mesma conta, desde que compartilhem coordenação global e durável de saldo, risk, OMS e recovery. Concorrência de estratégias no mesmo mercado exige um gate adicional de conflito/netting.
 
@@ -36,6 +36,7 @@ npm run ci
 | `npm run engine:serve` | Engine contínua + snapshots (`fixture` por default) + control HTTP (`:3201`) |
 | `npm run engine:soak` | Soak com fixtures; suporta `--duration-hours` e `--interval-ms` |
 | `npm run midas:micro-live` | Canário MIDAS via engine (`--live` para real) |
+| `npm run p9:readiness` | Gates locais do serviço P9, catálogo, janela e dashboard |
 | `npm run midas:shadow-sprint` | Shadow ≥N ENTER (feeds reais, sem CLOB) |
 | `npm run tfc:watch` | Gates TFC V7 observe-only |
 | `npm run tfc:micro-entry` | Legado: dry-run/micro CLOB direto (não usar p/ promoção) |
@@ -50,6 +51,7 @@ npm run ci
 - [Observabilidade P5](./docs/arquitetura/observability-p5.md) — control plane / Engine Ready
 - [TFC V7 P6](./docs/arquitetura/tfc-v7-p6.md) — plugin no contrato
 - [Micro-live P7](./docs/arquitetura/micro-live-p7.md) — canário via engine
+- [Canário contínuo P9](./docs/operacao/p9-canario-continuo.md) — configuração, deploy e gates
 - [Deploy Giovanna](./docs/operacao/deploy-giovanna.md) — Coolify + `robot.fracta.online`
 - [Evidência MIDAS shadow 22/07](./docs/operacao/evidencia-midas-shadow-2026-07-22.md) — gate ≥5 ENTER (PASS)
 - [Ambientes](./docs/operacao/ambientes.md) — local / shadow / canary / production

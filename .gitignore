@@ -5,4 +5,6 @@ node_modules
 runs/*.jsonl
 runs/*.json
 runs/journal-backups/
+runs/execution-audit/
+runs/instances/
 !runs/.gitkeep

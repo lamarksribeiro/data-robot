@@ -10,6 +10,7 @@ import http from 'node:http';
  * @param {() => object} opts.getHealth
  * @param {() => object} opts.getStatus
  * @param {() => object} opts.getMetrics
+ * @param {() => object} [opts.getCatalog]
  * @param {() => Promise<object>|object} [opts.onKill]
  * @param {string} [opts.opsToken] — se setado, POST /control/* exige header x-ops-token
  * @param {number} [opts.port]
@@ -51,6 +52,9 @@ export function createControlServer(opts) {
       }
       if (req.method === 'GET' && pathName === '/metrics') {
         return send(res, 200, opts.getMetrics());
+      }
+      if (req.method === 'GET' && pathName === '/catalog') {
+        return send(res, 200, opts.getCatalog?.() ?? null);
       }
       if (req.method === 'POST' && pathName === '/control/kill') {
         if (!authorize(req)) return send(res, 401, { ok: false, reason: 'UNAUTHORIZED' });

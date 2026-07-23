@@ -18,6 +18,16 @@ import {
   migrateStrategyState,
 } from './persistence.js';
 
+const EXPECTED_POLICY_DENIALS = new Set([
+  'ONE_POSITION_PER_INSTANCE',
+  'ONE_INTENT_PER_EVENT',
+  'CONTROL_WINDOW_LIMIT',
+  'BELOW_TACTICAL_FLOOR',
+  'CANARY_BUDGET_EXCEEDED',
+  'DEADLINE_EXPIRED',
+  'LIVE_REVERSE_UNSUPPORTED',
+]);
+
 /**
  * @param {object} opts
  * @param {'dry-run'|'shadow'|'live'} opts.mode
@@ -160,7 +170,13 @@ export function createEngine(opts) {
       tsMs: clock(),
     });
     if (!decision.allow) {
-      if (typeof riskEngine.recordFailure === 'function') {
+      // Uma negação esperada de policy (cap, idempotência, janela, piso) já foi
+      // auditada pelo risk engine e não é falha de transporte. Não deve abrir
+      // o circuit breaker e bloquear um EXIT protetivo posterior.
+      if (
+        typeof riskEngine.recordFailure === 'function' &&
+        !EXPECTED_POLICY_DENIALS.has(decision.reasonCode)
+      ) {
         riskEngine.recordFailure(decision.reasonCode);
       }
       return { allowed: false, decision };
@@ -464,6 +480,19 @@ export function createEngine(opts) {
      */
     restore(cp) {
       if (!cp || typeof cp !== 'object') throw new Error('checkpoint inválido');
+      if (cp.strategyId && cp.strategyId !== strategy.manifest.id) {
+        throw new Error(
+          `checkpoint de outra strategy: ${cp.strategyId}; esperado ${strategy.manifest.id}`,
+        );
+      }
+      if (cp.strategyInstanceId && cp.strategyInstanceId !== strategyInstanceId) {
+        throw new Error(
+          `checkpoint de outra instância: ${cp.strategyInstanceId}; esperado ${strategyInstanceId}`,
+        );
+      }
+      if (cp.mode && cp.mode !== mode) {
+        throw new Error(`checkpoint de outro modo: ${cp.mode}; esperado ${mode}`);
+      }
 
       const fromVer = cp.strategyStateVersion ?? 1;
       const toVer = strategy.manifest.stateVersion ?? 1;

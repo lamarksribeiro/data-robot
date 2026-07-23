@@ -50,11 +50,12 @@ body {
               radial-gradient(circle at 12% 82%, rgba(5, 150, 105, 0.03) 0%, transparent 40%),
               #050811;
   background-attachment: fixed;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;
+  min-height: 100%;
 }
+
+.shell { width: 100%; min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.hidden { display: none !important; }
+.form-message { min-height: 21px; margin: 0; color: var(--warn); font-size: 12px; }
 
 .login {
   position: relative;
@@ -206,6 +207,51 @@ body {
   font-size: 13.5px;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: var(--shadow-1);
+}
+
+.btn--ghost { width: auto; color: var(--text-2); background: var(--bg-2); border: 1px solid var(--border); }
+.btn--danger { width: auto; color: #fff; background: rgba(239,68,68,.18); border: 1px solid rgba(239,68,68,.5); }
+.btn--danger:hover { background: rgba(239,68,68,.3); }
+
+.dashboard { width: min(1440px, 100%); align-self: start; }
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.topbar h1 { margin: 0; font-size: 30px; }
+.topbar__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.eyebrow { margin: 0 0 3px; color: var(--accent); text-transform: uppercase; letter-spacing: .16em; font-size: 10px; font-weight: 800; }
+.muted { margin: 4px 0 0; color: var(--text-3); }
+.alert { padding: 12px 16px; margin-bottom: 18px; border: 1px solid rgba(239,68,68,.5); background: rgba(239,68,68,.12); border-radius: var(--radius-sm); }
+.alert[data-kind="warning"] { border-color: rgba(245,158,11,.5); background: rgba(245,158,11,.12); }
+.status-grid { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 12px; margin-bottom: 12px; }
+.card, .panel { background: rgba(8,12,24,.82); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-1); }
+.card { padding: 16px; min-width: 0; }
+.card span { display: block; color: var(--text-3); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+.card strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); color: var(--accent); }
+.panel-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+.panel { padding: 18px; min-width: 0; }
+.panel--wide { grid-column: 1 / -1; }
+.panel__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.panel h2 { font-size: 14px; margin: 0; }
+.badge { padding: 4px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font: 700 10px var(--font-mono); text-transform: uppercase; }
+.badge--warn { color: var(--warn); background: rgba(245,158,11,.1); }
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin: 0; }
+.facts div { border-top: 1px solid rgba(148,163,184,.1); padding-top: 10px; }
+.facts dt { color: var(--text-3); font-size: 10px; text-transform: uppercase; }
+.facts dd { margin: 4px 0 0; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px; }
+th, td { text-align: left; padding: 10px; border-top: 1px solid rgba(148,163,184,.1); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+th { color: var(--text-3); text-transform: uppercase; font-size: 9px; }
+.empty { text-align: center; color: var(--text-3); }
+.dashboard .console-box { max-height: 320px; overflow: auto; white-space: pre-wrap; margin: 0; }
+
+@media (max-width: 1000px) { .status-grid { grid-template-columns: repeat(3,1fr); } }
+@media (max-width: 700px) {
+  .shell { padding: 16px; }
+  .topbar { align-items: flex-start; flex-direction: column; }
+  .status-grid { grid-template-columns: repeat(2,1fr); }
+  .panel-grid { grid-template-columns: 1fr; }
+  .panel--wide { grid-column: auto; }
+  .facts { grid-template-columns: 1fr; }
 }
 
 .btn--primary {

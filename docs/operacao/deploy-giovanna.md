@@ -47,7 +47,7 @@ Detalhe: [plano §3](../plano-desenvolvimento.md#o-que-vamos-seguir-sequência-d
 
 **Feito:** A1/A2 + plugin MIDAS + CI + **shadow ≥5 ENTER** (22/07).  
 Evidência: [evidencia-midas-shadow-2026-07-22.md](./evidencia-midas-shadow-2026-07-22.md).  
-**Seguir:** 3 micros $1 enter/hold → EXIT depois.  
+**Seguir:** deployment P9 shadow MIDAS → campanha supervisionada com hard cap $2.
 **Não seguir agora:** smoke TFC, UI, soak 7d.
 
 ## Evidência Engine Ready ágil — 22/07/2026
@@ -68,4 +68,4 @@ Pendente para completar o gate operacional: soak contínuo ≥4h (ideal 24h). Ne
 - 5 ENTER em mercados BTC 5m distintos (~14:39Z–15:09Z); ver tabela completa na [evidência dedicada](./evidencia-midas-shadow-2026-07-22.md).
 - Overnight pré-fix: 1 ENTER / ~81 eventos — posição shadow não zerava na rotação; corrigido em `b1496ee`.
 - Artefatos: `/usr/src/app/runs/midas-shadow/LAST.done` e `sprint-20260722T143455Z.log`.
-- Micro-live #1 OK (22/07): [evidencia-midas-micro-live-2026-07-22.md](./evidencia-midas-micro-live-2026-07-22.md). Próximo: micros #2 e #3.
+- Três micro-live e `danger_exit` OK (22/07): [entrada](./evidencia-midas-micro-live-2026-07-22.md) e [saída](./evidencia-midas-exit-live-2026-07-22.md).

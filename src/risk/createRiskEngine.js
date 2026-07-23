@@ -32,6 +32,8 @@ export function createRiskEngine(opts = {}) {
     tacticalFloorSec: opts.tacticalFloorSec ?? 4,
     onePositionPerInstance: opts.onePositionPerInstance !== false,
     oneIntentPerEvent: opts.oneIntentPerEvent !== false,
+    maxEntriesPerControlWindow: Math.max(0, Number(opts.maxEntriesPerControlWindow ?? 0)),
+    controlWindowMs: Math.max(1, Number(opts.controlWindowMs ?? 24 * 60 * 60 * 1000)),
     maxSlippage: opts.maxSlippage ?? null,
     /** Cap P7 — se setado (ou canaryMode), bloqueia notional acima deste valor. */
     maxCanaryBudget: opts.maxCanaryBudget ?? null,
@@ -58,6 +60,10 @@ export function createRiskEngine(opts = {}) {
   const eventNotional = new Map();
   /** @type {number[]} */
   const orderTimestamps = [];
+  /** Eventos que já consumiram a única entrada permitida da instância. */
+  const enteredEvents = new Set();
+  /** Timestamps de ENTER aceitos; persistidos para limitar o canário entre restarts. */
+  const entryTimestamps = [];
   let dailyRealizedPnl = opts.dailyRealizedPnl ?? 0;
 
   function deny(reasonCode, detail, meta = {}) {
@@ -163,6 +169,9 @@ export function createRiskEngine(opts = {}) {
     while (orderTimestamps.length && now - orderTimestamps[0] > 60_000) {
       orderTimestamps.shift();
     }
+    while (entryTimestamps.length && now - entryTimestamps[0] >= limits.controlWindowMs) {
+      entryTimestamps.shift();
+    }
     if (
       (intent.kind === 'ENTER' || intent.kind === 'REVERSE') &&
       orderTimestamps.length >= limits.maxOrdersPerMinute
@@ -187,10 +196,27 @@ export function createRiskEngine(opts = {}) {
     if (
       limits.oneIntentPerEvent &&
       intent.kind === 'ENTER' &&
-      Array.isArray(ctx.openIntents) &&
-      ctx.openIntents.some((i) => i.marketId === intent.marketId && i.kind === 'ENTER')
+      (enteredEvents.has(`${intent.strategyInstanceId}:${intent.marketId}`) ||
+        (Array.isArray(ctx.openIntents) &&
+          ctx.openIntents.some((i) => i.marketId === intent.marketId && i.kind === 'ENTER')))
     ) {
       return deny(RISK_REASON.ONE_INTENT_PER_EVENT, { marketId: intent.marketId }, meta);
+    }
+
+    if (
+      intent.kind === 'ENTER' &&
+      limits.maxEntriesPerControlWindow > 0 &&
+      entryTimestamps.length >= limits.maxEntriesPerControlWindow
+    ) {
+      return deny(
+        RISK_REASON.CONTROL_WINDOW_LIMIT,
+        {
+          count: entryTimestamps.length,
+          max: limits.maxEntriesPerControlWindow,
+          controlWindowMs: limits.controlWindowMs,
+        },
+        meta,
+      );
     }
 
     const notional = intentNotional(intent);
@@ -271,6 +297,10 @@ export function createRiskEngine(opts = {}) {
       const eventKey = `${intent.strategyInstanceId}:${intent.marketId}`;
       eventNotional.set(eventKey, (eventNotional.get(eventKey) ?? 0) + notional);
     }
+    if (intent.kind === 'ENTER') {
+      enteredEvents.add(`${intent.strategyInstanceId}:${intent.marketId}`);
+      entryTimestamps.push(clock());
+    }
     circuit.recordSuccess();
   }
 
@@ -294,6 +324,8 @@ export function createRiskEngine(opts = {}) {
       dailyRealizedPnl,
       eventNotional: Object.fromEntries(eventNotional),
       orderTimestamps: [...orderTimestamps],
+      enteredEvents: [...enteredEvents],
+      entryTimestamps: [...entryTimestamps],
       accountBook: accountBook.snapshot(),
       circuit: circuit.snapshot(),
       killSwitch: killSwitch.snapshot(),
@@ -310,6 +342,10 @@ export function createRiskEngine(opts = {}) {
     }
     orderTimestamps.length = 0;
     orderTimestamps.push(...(snap.orderTimestamps ?? []));
+    enteredEvents.clear();
+    for (const key of snap.enteredEvents ?? []) enteredEvents.add(String(key));
+    entryTimestamps.length = 0;
+    entryTimestamps.push(...(snap.entryTimestamps ?? []).map(Number).filter(Number.isFinite));
     accountBook.restore(snap.accountBook);
     circuit.restore(snap.circuit);
     killSwitch.restore(snap.killSwitch);
