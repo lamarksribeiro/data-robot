@@ -69,5 +69,5 @@ npm run midas:micro-live -- --live --timeout=1800
 
 ## Próximo
 
-1. **EXIT live** (danger / late-flip) em micro controlado.
-2. P9 / dashboard UI / canário contínuo.
+1. **P9** / canário contínuo + dashboard UI.
+2. Subir budget só após P9.
