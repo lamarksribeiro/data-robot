@@ -210,8 +210,12 @@ body {
 }
 
 .btn--ghost { width: auto; color: var(--text-2); background: var(--bg-2); border: 1px solid var(--border); }
+.btn--warning { width: auto; color: #fff; background: rgba(245,158,11,.14); border: 1px solid rgba(245,158,11,.45); }
+.btn--warning:hover { background: rgba(245,158,11,.25); }
 .btn--danger { width: auto; color: #fff; background: rgba(239,68,68,.18); border: 1px solid rgba(239,68,68,.5); }
 .btn--danger:hover { background: rgba(239,68,68,.3); }
+.btn--critical { border-color: var(--err); box-shadow: 0 0 18px rgba(239,68,68,.16); }
+.btn:disabled { cursor: not-allowed; opacity: .45; transform: none; }
 
 .dashboard { width: min(1440px, 100%); align-self: start; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
@@ -231,6 +235,9 @@ body {
 .panel--wide { grid-column: 1 / -1; }
 .panel__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .panel h2 { font-size: 14px; margin: 0; }
+.panel__hint { margin: 5px 0 0; color: var(--text-3); font-size: 11px; }
+.control-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 9px; margin-bottom: 12px; }
+.control-grid .btn { width: 100%; box-shadow: none; }
 .badge { padding: 4px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font: 700 10px var(--font-mono); text-transform: uppercase; }
 .badge--warn { color: var(--warn); background: rgba(245,158,11,.1); }
 .facts { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin: 0; }
@@ -238,6 +245,7 @@ body {
 .facts dt { color: var(--text-3); font-size: 10px; text-transform: uppercase; }
 .facts dd { margin: 4px 0 0; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; }
 .table-wrap { overflow-x: auto; }
+.table-wrap--audit { max-height: 360px; overflow: auto; }
 table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px; }
 th, td { text-align: left; padding: 10px; border-top: 1px solid rgba(148,163,184,.1); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 th { color: var(--text-3); text-transform: uppercase; font-size: 9px; }
@@ -252,6 +260,7 @@ th { color: var(--text-3); text-transform: uppercase; font-size: 9px; }
   .panel-grid { grid-template-columns: 1fr; }
   .panel--wide { grid-column: auto; }
   .facts { grid-template-columns: 1fr; }
+  .control-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
 }
 
 .btn--primary {

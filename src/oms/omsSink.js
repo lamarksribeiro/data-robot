@@ -172,10 +172,10 @@ export function createOmsSink(opts = {}) {
       return { canceled };
     },
 
-    async cancelOpenOrders(reason = 'ops-cancel') {
+    async cancelOpenOrders(reason = 'ops-cancel', predicate = () => true) {
       const canceled = [];
       const failed = [];
-      for (const order of oms.openOrders()) {
+      for (const order of oms.openOrders().filter((order) => predicate(order))) {
         const raw = oms.getOrderRaw(order.intentId);
         if (!raw) continue;
         const result = await transport.cancel(raw);
@@ -207,6 +207,13 @@ export function createOmsSink(opts = {}) {
         }
       }
       return { canceled, failed };
+    },
+
+    async cancelOpenEntries(reason = 'operator-disarm') {
+      return api.cancelOpenOrders(
+        reason,
+        (order) => order.kind === 'ENTER' || order.kind === 'REVERSE',
+      );
     },
 
     async reconcileOrder(intentId) {

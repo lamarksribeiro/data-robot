@@ -1,9 +1,9 @@
 # Plano de desenvolvimento — Data Robot
 
-**Revisado em:** 22/07/2026  
-**Estado atual:** engine + UI no Giovanna; base do serviço P9 implementada, ainda aguardando deploy/evidência contínua. Canário deste ciclo = **só MIDAS, notional marketable e hard cap $2**.
+**Revisado em:** 23/07/2026
+**Estado atual:** Control Plane P9 v1 implementado e em validação/deploy no Giovanna. Canário deste ciclo = **só MIDAS, notional marketable e hard cap $2**.
 **URL oficial:** https://robot.fracta.online  
-**Pacote:** `data-robot` **1.10.0**  
+**Pacote:** `data-robot` **1.11.0**
 **Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / `btc-champion-v1`). Plugin, shadow ≥5, 3 micro-live e `danger_exit` live concluídos em 22/07. P9 está pronto para deploy controlado; late-flip live e janela longa ainda exigem evidência real.
 **Depois:** qualquer estratégia via o mesmo contrato (engine agnóstica). TFC V7 = helpers no código, fora do canário agora.
 
@@ -59,11 +59,11 @@ Ficam fora deste ciclo:
 | Entrada real | Wave-1 concluída | 3 entradas MIDAS reconciliadas, 0 órfã; composição long-lived P9 implementada. |
 | Saída / reverse / danger exit | P8 micro parcial | `danger_exit` real reconciliado; late-flip passa pipeline live simulado e ainda requer evidência real. `REVERSE` live bloqueado. |
 | OMS e user WebSocket | Código live implementado; ops aberto | User WS autenticado, heartbeat CLOB, reconciliação por ordem e detecção de órfãs; validação real prolongada ainda pendente. |
-| Risco e kill switch | Código endurecido; ops aberto | Preflight live obrigatório, deadlines, caps, kill/circuit e `REVERSE` bloqueado até P8. |
+| Risco e kill switch | Control Plane v1 feito; ops real aberto | Live inicia desarmado; arm refaz preflight/reconcile. Pause/stop bloqueiam entrada e preservam EXIT; cancel/flatten/rollback/kill são confirmados e auditados. |
 | Persistência / recovery | Código + drill shadow aprovados | Volume persistente no Giovanna; 2 restarts e restart pós-kill preservaram checkpoint e posição shadow. Ensaio com ordem/posição real permanece para o OMS smoke. |
 | Observabilidade | Código endurecido; ops aberto | Readiness depende de feed/recovery/user WS; métricas ausentes reprovam SLO; calibragem Giovanna pendente. |
 | Testes e CI | Feito | `npm run ci` (lint + architecture + testes); sem rede/ordens reais. |
-| Deploy | UI + engine no ar | UI em https://robot.fracta.online; engine interna ainda em `shadow + fixture`. Soak curto passou; deployment MIDAS P9 e soak longo permanecem. |
+| Deploy | UI + engine no ar; atualização em curso | UI oficial em https://robot.fracta.online; publicar o painel P9 e validar o salto privado UI→Engine. O canário live permanece desarmado até aprovação humana. |
 
 ### O que vamos seguir (sequência definitiva deste ciclo)
 
@@ -73,7 +73,7 @@ FEITO:  engine Giovanna + drills (A1/A2)
         Shadow MIDAS ≥5 ENTER (22/07 Giovanna)
           → docs/operacao/evidencia-midas-shadow-2026-07-22.md
           │
-AGORA:  6) P9 + dashboard UI (canário contínuo / budget mínimo)
+AGORA:  6) publicar/validar P9 + dashboard UI (canário contínuo / budget mínimo)
           │
 META:   Produção canário limitada com supervisão
           │
@@ -487,7 +487,7 @@ Gate de saída:
 
 ### P9 — Canário e produção limitada
 
-**Status:** fundação implementada: runner long-lived fail-closed, catálogo, cap/janela persistentes, evidência JSONL e dashboard autenticado. Aguardando deploy shadow MIDAS e campanha real.
+**Status:** Control Plane v1 implementado: runner fail-closed, catálogo, cap/janela persistentes, audit JSONL, login real, lifecycle, operações OMS e dashboard. Aguardando validação do deploy e campanha shadow/live supervisionada.
 
 Promoção progressiva:
 

@@ -77,18 +77,22 @@ export function createUiServer(opts = {}) {
     return false;
   }
 
-  async function proxyEngine(req, res, enginePath, method = 'GET') {
+  async function proxyEngine(req, res, enginePath, method = 'GET', body = null) {
     const headers = { accept: 'application/json' };
+    let requestBody;
     if (method !== 'GET') {
       if (!opts.engineOpsToken) {
         return json(res, 503, { ok: false, reason: 'ENGINE_OPS_TOKEN_NOT_CONFIGURED' });
       }
       headers['x-ops-token'] = opts.engineOpsToken;
+      headers['content-type'] = 'application/json';
+      requestBody = JSON.stringify(body ?? {});
     }
     try {
       const response = await fetch(`${engineBaseUrl}${enginePath}`, {
         method,
         headers,
+        body: requestBody,
         signal: AbortSignal.timeout(Number(opts.engineTimeoutMs ?? 5000)),
       });
       const text = await response.text();
@@ -126,6 +130,12 @@ export function createUiServer(opts = {}) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host || 'localhost'}`);
     try {
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method ?? '')) {
+        const origin = req.headers.origin;
+        if (origin && new URL(origin).host !== req.headers.host) {
+          return json(res, 403, { ok: false, reason: 'CROSS_ORIGIN_REQUEST_BLOCKED' });
+        }
+      }
       if (req.method === 'GET' && url.pathname === '/api/session') {
         return json(res, 200, {
           ok: true,
@@ -177,18 +187,43 @@ export function createUiServer(opts = {}) {
         ['/api/engine/status', '/status'],
         ['/api/engine/metrics', '/metrics'],
         ['/api/engine/catalog', '/catalog'],
+        ['/api/engine/instances', '/instances'],
       ]);
       if (req.method === 'GET' && readRoutes.has(url.pathname)) {
         if (!requireSession(req, res)) return;
         return proxyEngine(req, res, readRoutes.get(url.pathname));
       }
-      if (req.method === 'POST' && url.pathname === '/api/engine/control/kill') {
+      if (req.method === 'GET' && url.pathname === '/api/engine/audit') {
         if (!requireSession(req, res)) return;
+        const requested = Number(url.searchParams.get('limit') ?? 100);
+        const limit = Number.isFinite(requested) ? Math.max(1, Math.min(500, requested)) : 100;
+        return proxyEngine(req, res, `/audit?limit=${limit}`);
+      }
+
+      const controlRoutes = new Map([
+        ['/api/engine/control/arm', { path: '/control/arm', confirmation: 'ARM' }],
+        ['/api/engine/control/pause', { path: '/control/pause', confirmation: 'PAUSE' }],
+        ['/api/engine/control/stop', { path: '/control/stop', confirmation: 'STOP' }],
+        ['/api/engine/control/disarm', { path: '/control/disarm', confirmation: 'STOP' }],
+        ['/api/engine/control/reconcile', { path: '/control/reconcile', confirmation: 'RECONCILE' }],
+        ['/api/engine/control/cancel-all', { path: '/control/cancel-all', confirmation: 'CANCEL' }],
+        ['/api/engine/control/checkpoint', { path: '/control/checkpoint', confirmation: 'CHECKPOINT' }],
+        ['/api/engine/control/rollback', { path: '/control/rollback', confirmation: 'ROLLBACK' }],
+        ['/api/engine/control/flatten', { path: '/control/flatten', confirmation: 'FLATTEN' }],
+        ['/api/engine/control/kill', { path: '/control/kill', confirmation: 'HALT' }],
+      ]);
+      if (req.method === 'POST' && controlRoutes.has(url.pathname)) {
+        if (!requireSession(req, res)) return;
+        const action = controlRoutes.get(url.pathname);
         const body = await readJson(req);
-        if (body.confirm !== 'HALT') {
-          return json(res, 400, { ok: false, reason: 'CONFIRMATION_REQUIRED' });
+        if (body.confirm !== action.confirmation) {
+          return json(res, 400, {
+            ok: false,
+            reason: 'CONFIRMATION_REQUIRED',
+            confirmation: action.confirmation,
+          });
         }
-        return proxyEngine(req, res, '/control/kill', 'POST');
+        return proxyEngine(req, res, action.path, 'POST', body);
       }
       if (url.pathname.startsWith('/api/')) {
         return json(res, 404, { ok: false, reason: 'NOT_FOUND' });

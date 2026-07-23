@@ -5,7 +5,7 @@
 **Painel:** https://coolify.giovannarosito.com  
 **Projeto:** GoldenLens / production  
 **UI oficial:** https://robot.fracta.online  
-**Versão de referência no `main`:** `package.json` **1.10.0** (endurecimento live ACK≠fill, User WS, preflight já commitado)
+**Versão de referência no `main`:** `package.json` **1.11.0** (Control Plane P9 v1)
 
 O host de deploy continua sendo o servidor **Giovanna** (Coolify). O domínio público oficial é `robot.fracta.online` (Cloudflare → Giovanna). O hostname legado `robot.giovannarosito.com` **não** é mais usado.
 

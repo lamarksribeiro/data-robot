@@ -34,17 +34,19 @@ export async function prepareMidasCanaryRuntime(opts = {}) {
   const client =
     opts.client ?? buildClobClient({ wallet, signatureType, funderAddress, throwOnError: true });
 
-  const preflight = await runLivePreflight({
-    client,
-    signerAddress: wallet.address,
-    signatureType,
-    funderAddress,
-    minBalanceUsd: requestedCap,
-    // Recovery decide se as ordens remotas pertencem ao journal; não fingimos que não existem.
-    allowExistingOpenOrders: true,
-    fetchFn: opts.fetchFn,
-    clock: opts.clock,
-  });
+  const runPreflight = () =>
+    runLivePreflight({
+      client,
+      signerAddress: wallet.address,
+      signatureType,
+      funderAddress,
+      minBalanceUsd: requestedCap,
+      // Recovery decide se as ordens remotas pertencem ao journal; não fingimos que não existem.
+      allowExistingOpenOrders: true,
+      fetchFn: opts.fetchFn,
+      clock: opts.clock,
+    });
+  const preflight = await runPreflight();
   if (!preflight.ok) {
     const failed = Object.entries(preflight.checks)
       .filter(([, check]) => check.ok !== true)
@@ -102,7 +104,16 @@ export async function prepareMidasCanaryRuntime(opts = {}) {
         Object.entries(preflight.checks).map(([key, value]) => [key, { ...value }]),
       ),
     },
+    async revalidatePreflight() {
+      const current = await runPreflight();
+      return {
+        ok: current.ok,
+        checkedAt: current.checkedAt,
+        checks: Object.fromEntries(
+          Object.entries(current.checks).map(([key, value]) => [key, { ...value }]),
+        ),
+      };
+    },
     client,
   };
 }
-

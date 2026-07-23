@@ -59,6 +59,7 @@ function fixtureSnapshot(marketId, btc = 100) {
       down: { bestBid: 0.49, bestAsk: 0.5, bids: [], asks: [] },
     },
     feeds: { healthy: true },
+    identity: { upTokenId: 'fixture-up', downTokenId: 'fixture-down' },
   };
 }
 
@@ -151,6 +152,37 @@ describe('janela de controle persistente', () => {
     now += 60_000;
     assert.equal(restored.evaluate(intent('m2'), { mode: 'shadow' }).allow, true);
   });
+
+  it('bloqueia ENTER quando desarmada, persiste o estado e mantém EXIT liberado', () => {
+    const risk = createRiskEngine({ entryEnabled: false });
+    const enter = {
+      intentId: 'operator-enter',
+      kind: 'ENTER',
+      side: 'UP',
+      marketId: 'm1',
+      strategyInstanceId: 'fixture:operator',
+      budget: 1,
+      maxPrice: 0.5,
+      reason: 'test',
+    };
+    const exit = {
+      ...enter,
+      intentId: 'operator-exit',
+      kind: 'EXIT',
+      budget: null,
+      quantity: 2,
+      minPrice: 0.4,
+      maxPrice: null,
+    };
+    assert.equal(
+      risk.evaluate(enter, { mode: 'shadow' }).reasonCode,
+      RISK_REASON.OPERATOR_DISARMED,
+    );
+    assert.equal(risk.evaluate(exit, { mode: 'shadow' }).allow, true);
+    const restored = createRiskEngine();
+    restored.restore(risk.snapshot());
+    assert.equal(restored.entryEnabled, false);
+  });
 });
 
 describe('isolamento de checkpoint', () => {
@@ -211,6 +243,7 @@ describe('proteção de rotação com posição live', () => {
       serveHttp: false,
       backupDir: path.join(dir, 'backup'),
       executionAuditDir: path.join(dir, 'audit'),
+      startArmed: true,
     });
     cleanup.push(() => app.stop());
     await app.start();
@@ -220,6 +253,80 @@ describe('proteção de rotação com posição live', () => {
     assert.equal(result.reason, 'POSITION_REQUIRES_SETTLEMENT');
     assert.equal(app.engine.state, 'HALTED');
     assert.equal(app.engine.getStatus().haltReason, 'market-rotated-with-position');
+  });
+});
+
+describe('ciclo operacional da instância', () => {
+  it('inicia fail-closed, arma, pausa novas entradas e permite a saída', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p9-ops-'));
+    cleanup.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const orders = [];
+    const sink = {
+      start: async () => ({ ok: true }),
+      reconcileAll: async () => ({ ok: true, unresolved: [], orphans: [] }),
+      submit: async (intent) => {
+        orders.push(intent);
+        return {
+          accepted: true,
+          events: [{
+            eventId: `fill-${intent.intentId}`,
+            intentId: intent.intentId,
+            type: 'FILL',
+            side: intent.side,
+            qty: intent.kind === 'EXIT' ? intent.quantity : 2,
+            price: intent.kind === 'EXIT' ? intent.minPrice : 0.5,
+            tsMs: Date.now(),
+          }],
+        };
+      },
+      cancelOpenEntries: async () => ({ canceled: [], failed: [] }),
+      cancelOpenOrders: async () => ({ canceled: [], failed: [] }),
+      dispose: () => {},
+    };
+    const app = createEngineApp({
+      mode: 'shadow',
+      strategyId: 'fixture-price-cross',
+      strategyInstanceId: 'fixture:operator',
+      preset: { threshold: 50, budget: 1, maxPrice: 0.5, minExitPrice: 0.4 },
+      sink,
+      startArmed: false,
+      serveHttp: false,
+      backupDir: path.join(dir, 'backup'),
+      executionAuditDir: path.join(dir, 'audit'),
+    });
+    cleanup.push(() => app.stop());
+    await app.start();
+    await app.ingestSynthetic(fixtureSnapshot('market-a', 100));
+    assert.equal(app.status().operatorState, 'DISARMED');
+    assert.equal(app.engine.position.qty, 0);
+    assert.equal(orders.length, 0);
+
+    await app.arm();
+    await app.ingestSynthetic(fixtureSnapshot('market-a', 100));
+    assert.equal(app.status().operatorState, 'ARMED');
+    assert.ok(app.engine.position.qty > 0);
+
+    await app.flatten();
+    assert.equal(app.status().operatorState, 'DISARMED');
+    assert.equal(app.engine.position.qty, 0);
+    assert.equal(orders.at(-1).orderType, 'FAK');
+
+    await app.arm();
+    await app.ingestSynthetic(fixtureSnapshot('market-b', 100));
+    assert.ok(app.engine.position.qty > 0);
+    await app.pause();
+    assert.equal(app.status().operatorState, 'PAUSED');
+    assert.equal(app.status().entryEnabled, false);
+    await app.ingestSynthetic(fixtureSnapshot('market-b', 0));
+    assert.equal(app.engine.position.qty, 0);
+    assert.equal(orders.at(-1).kind, 'EXIT');
+    assert.ok(app.executionAudit.listRecent(20).some((row) => row.action === 'pause'));
+
+    await app.disarm();
+    app.checkpoint();
+    const rolledBack = await app.rollbackSafe();
+    assert.equal(rolledBack.state === 'BOOT', false);
+    assert.equal(app.status().operatorState, 'DISARMED');
   });
 });
 
@@ -282,9 +389,18 @@ describe('P8 late-flip no pipeline live simulado', () => {
 describe('dashboard autenticado', () => {
   it('nega acesso anônimo, autentica e faz proxy de status/kill', async () => {
     let killed = false;
+    let armed = false;
     const engine = http.createServer((req, res) => {
       res.setHeader('content-type', 'application/json');
       if (req.url === '/status') return res.end(JSON.stringify({ state: 'ARMED' }));
+      if (req.url === '/control/arm' && req.headers['x-ops-token'] === 'ops-secret') {
+        let body = '';
+        req.on('data', (chunk) => { body += chunk; });
+        return req.on('end', () => {
+          armed = JSON.parse(body).confirm === 'ARM';
+          res.end(JSON.stringify({ ok: true }));
+        });
+      }
       if (req.url === '/control/kill' && req.headers['x-ops-token'] === 'ops-secret') {
         killed = true;
         return res.end(JSON.stringify({ ok: true }));
@@ -320,6 +436,13 @@ describe('dashboard autenticado', () => {
     const cookie = login.headers.get('set-cookie').split(';')[0];
     const status = await fetch(`${base}/api/engine/status`, { headers: { cookie } });
     assert.equal((await status.json()).state, 'ARMED');
+    const arm = await fetch(`${base}/api/engine/control/arm`, {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ confirm: 'ARM' }),
+    });
+    assert.equal(arm.status, 200);
+    assert.equal(armed, true);
     const kill = await fetch(`${base}/api/engine/control/kill`, {
       method: 'POST',
       headers: { cookie, 'content-type': 'application/json' },

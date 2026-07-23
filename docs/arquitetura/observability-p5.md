@@ -30,7 +30,7 @@ Container da engine: `Dockerfile.engine` (CMD `scripts/engine-serve.js`). O runn
 | Arquivo | Papel |
 |---------|-------|
 | `health.js` | Probes dependentes de feed, recovery, user WS e órfãs |
-| `httpServer.js` | `/health` `/ready` `/status` `/metrics` + `POST /control/kill` |
+| `httpServer.js` | probes/status + catálogo/audit/instâncias + lifecycle e operações OMS autenticadas |
 | `engineApp.js` | Composition: engine + métricas + HTTP |
 | `faultInjection.js` | 401/429/503, user-WS loss, restart/kill |
 | `soak.js` | Soak por iterações ou duração real, com intervalo configurável |
@@ -41,7 +41,8 @@ Container da engine: `Dockerfile.engine` (CMD `scripts/engine-serve.js`). O runn
 - `GET /ready` — readiness da máquina de estados  
 - `GET /status` — status da engine  
 - `GET /metrics` — snapshot de métricas  
-- `POST /control/kill` — exige `x-ops-token` se `ENGINE_OPS_TOKEN` estiver setado  
+- `POST /control/*` — exige `x-ops-token` e confirmação específica para arm, pause, stop, reconcile, checkpoint, cancel, flatten, rollback e kill;
+- `GET /instances`, `/catalog`, `/audit` — visão operacional somente pelo proxy autenticado da UI em produção.
 
 `/health` inclui o estado de `snapshotSource`; `/ready` só abre depois de snapshot elegível e fecha quando fonte/feed deixam de estar aptos.
 

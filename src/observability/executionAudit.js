@@ -25,6 +25,32 @@ export function createExecutionAudit(opts = {}) {
     return row;
   }
 
-  return { dir, append };
-}
+  function listRecent(limit = 100) {
+    const max = Math.min(500, Math.max(1, Number(limit) || 100));
+    if (!fs.existsSync(dir)) return [];
+    const files = fs
+      .readdirSync(dir)
+      .filter((name) => name.startsWith('engine-') && name.endsWith('.jsonl'))
+      .sort()
+      .reverse();
+    const rows = [];
+    for (const name of files) {
+      const lines = fs
+        .readFileSync(path.join(dir, name), 'utf8')
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .reverse();
+      for (const line of lines) {
+        try {
+          rows.push(JSON.parse(line));
+        } catch {
+          rows.push({ type: 'audit_parse_error', file: name });
+        }
+        if (rows.length >= max) return rows;
+      }
+    }
+    return rows;
+  }
 
+  return { dir, append, listRecent };
+}

@@ -42,6 +42,8 @@ export function buildHealthReport(parts) {
     openOrders,
     availability: parts.availability ?? null,
     state,
+    operatorState: engineStatus.operatorState ?? null,
+    entryEnabled: engineStatus.entryEnabled !== false,
     mode,
     killActive,
     tsMs: Date.now(),
