@@ -1247,6 +1247,10 @@ tbody tr:hover {
   color: #f87171;
 }
 
+.health--idle em {
+  color: var(--text-3);
+}
+
 .gates-list__empty {
   color: var(--text-3);
   border-style: dashed !important;
