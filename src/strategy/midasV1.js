@@ -14,7 +14,7 @@ import {
 import { sizeCanaryBuy } from '../tfc/sizeCanaryBuy.js';
 
 export const MIDAS_V1_STRATEGY_ID = 'midas-carry-v1';
-export const MIDAS_V1_PRESET_ID = 'btc-champion-v1';
+export const MIDAS_V1_PRESET_ID = 'btc-micro-robust-v1';
 
 const HISTORY_MAX = 600;
 

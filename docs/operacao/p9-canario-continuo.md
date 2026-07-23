@@ -1,13 +1,13 @@
 # P9 — serviço MIDAS canário
 
-**Escopo:** BTC Up/Down 5m, `midas-carry-v1@1.0.0`, preset `btc-champion-v1`, uma instância e uma entrada por janela de 24h. `REVERSE` live permanece bloqueado.
+**Escopo:** BTC Up/Down 5m, `midas-carry-v1@1.0.0`, preset `btc-micro-robust-v1` (Robust dist 30 + sizing micro `$2`/`$3`), uma instância e uma entrada por janela de 24h. `REVERSE` live permanece bloqueado.
 
 ## O que foi implementado
 
 - runner long-lived no processo `engine:serve` com source BTC 5m;
 - preflight real fail-closed antes de iniciar o runtime live;
 - User WS + REST reconcile + heartbeat/cancel-on-disconnect;
-- hard cap de **$2** por ordem/evento e uma entrada por janela, persistidos no checkpoint;
+- hard cap de **$3** por ordem/evento (= `maxEntryBudget` do micro; tier 1.5× intacto) e uma entrada por janela, persistidos no checkpoint;
 - catálogo versionado por strategy/version/preset/`marketScope`;
 - halt protetivo na rotação caso ainda exista posição sem settlement reconciliado;
 - audit JSONL e checkpoints fora de `/tmp`;
@@ -25,7 +25,7 @@ ENGINE_CANARY_MODE=1
 ENGINE_STRATEGY_ID=midas-carry-v1
 ENGINE_STRATEGY_INSTANCE_ID=midas-carry-v1:btc5m:primary
 ENGINE_SNAPSHOT_SOURCE=btc5m
-ENGINE_CANARY_MAX_BUDGET=2
+ENGINE_CANARY_MAX_BUDGET=3
 ENGINE_CONTROL_WINDOW_MS=86400000
 ENGINE_STATE_DIR=/data
 ENGINE_START_ARMED=0

@@ -4,8 +4,16 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bootstrapMidasCanaryEngine } from '../src/composition/midasCanary.js';
-import { CANARY_LIMITS, MIDAS_V1, canaryMidasPreset } from '../src/tfc/preset-midas.js';
+import {
+  CANARY_LIMITS,
+  MIDAS_ROBUST_V1,
+  MIDAS_V1,
+  MICRO_ROBUST,
+  canaryMidasPreset,
+  resolveMidasEntryBudget,
+} from '../src/tfc/preset-midas.js';
 import { hasLiveFlag } from '../src/cli/liveGate.js';
+import { MIDAS_V1_PRESET_ID } from '../src/strategy/midasV1.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -42,14 +50,25 @@ function snap(ask = 0.62) {
 }
 
 describe('MIDAS micro-live canary', () => {
-  it('canaryMidasPreset sobrescreve entryBudget do campeão', () => {
+  it('canaryMidasPreset = Robust + micro $2/$3', () => {
     const p = canaryMidasPreset();
-    assert.equal(p.entryBudget, 0.1);
-    assert.equal(p.maxAsk, MIDAS_V1.maxAsk);
+    assert.equal(p.maxDistAbs, 30);
+    assert.equal(p.entryBudget, MICRO_ROBUST.entryBudget);
+    assert.equal(p.maxEntryBudget, MICRO_ROBUST.maxEntryBudget);
+    assert.equal(p.maxAsk, MIDAS_ROBUST_V1.maxAsk);
     assert.equal(p.tierAskBudgetFactor, 1.5);
+    assert.equal(p.entryOrderType, 'FAK');
+    assert.notEqual(p.maxDistAbs, MIDAS_V1.maxDistAbs);
   });
 
-  it('dry-run canário: notional ≤ cap $2', async () => {
+  it('tier 1.5× sobe $2 → $3 e não é cortado', () => {
+    const p = canaryMidasPreset();
+    assert.equal(resolveMidasEntryBudget(p, 0.7), 2);
+    assert.equal(resolveMidasEntryBudget(p, 0.82), 3);
+    assert.equal(resolveMidasEntryBudget(p, 0.9), 3);
+  });
+
+  it('dry-run canário: notional ≤ cap $3 e ≥ $1 marketable', async () => {
     const engine = bootstrapMidasCanaryEngine({ mode: 'dry-run' });
     engine.start();
     await engine.ingestMarketSnapshot(snap(0.62));
@@ -61,14 +80,27 @@ describe('MIDAS micro-live canary', () => {
     await engine.safeShutdown('test');
   });
 
-  it('risk canário bloqueia budget campeão $10/$15', () => {
+  it('risk canário aceita teto $3 (tier) e presetId micro-robust', () => {
     const engine = bootstrapMidasCanaryEngine({ mode: 'dry-run' });
-    assert.equal(engine.canary.maxCanaryBudget, 2);
+    assert.equal(engine.canary.maxCanaryBudget, 3);
+    assert.equal(engine.canary.presetId, `${MIDAS_V1_PRESET_ID}-canary`);
+  });
+
+  it('dry-run com ask high-tier: budget efetivo ≤ $3', async () => {
+    const engine = bootstrapMidasCanaryEngine({ mode: 'dry-run' });
+    engine.start();
+    await engine.ingestMarketSnapshot(snap(0.85));
+    const sink = [...engine.journal].reverse().find((j) => j.type === 'sink');
+    if (sink?.intent) {
+      assert.ok(Number(sink.intent.budget) <= 3 + 1e-9);
+      assert.ok(Number(sink.intent.budget) >= 1 - 1e-9);
+    }
+    await engine.safeShutdown('test');
   });
 
   it('live mock exige client+flags; dry-run bootstrap ok', () => {
     const engine = bootstrapMidasCanaryEngine({ mode: 'dry-run' });
-    assert.equal(engine.canary.maxCanaryBudget, 2);
+    assert.equal(engine.canary.maxCanaryBudget, 3);
     assert.throws(
       () =>
         bootstrapMidasCanaryEngine({
@@ -90,7 +122,6 @@ describe('MIDAS micro-live canary', () => {
   it('EXIT danger inclui tokenId e orderType FAK no canário', async () => {
     const { createMidasV1Strategy } = await import('../src/strategy/midasV1.js');
     const { buildStrategyContext } = await import('../src/engine/contract.js');
-    const { emptyPosition } = await import('../src/engine/schemas.js');
     const strategy = createMidasV1Strategy();
     const preset = canaryMidasPreset({ lateFlipReverseEnabled: false });
     const nowMs = 1_700_000_000_000;
@@ -102,7 +133,6 @@ describe('MIDAS micro-live canary', () => {
       priceToBeat: 100,
       book: bookOk(0.62),
     };
-    // força bid no lado da posição UP
     snapshot.book.up.bestBid = 0.6;
     const ctx = buildStrategyContext({
       snapshot,
@@ -117,7 +147,6 @@ describe('MIDAS micro-live canary', () => {
     for (let i = 0; i < 12; i += 1) {
       history.push({ ts: nowMs - (12 - i) * 400, btc: 100 + (i % 2 === 0 ? 0.5 : -0.5) });
     }
-    // último ponto perto do PTB para |dist| pequeno
     history.push({ ts: nowMs, btc: 100.01 });
     snapshot.btc = 100.01;
     const out = strategy.onSnapshot(ctx, { ...init.state, history, marketId: snapshot.marketId });

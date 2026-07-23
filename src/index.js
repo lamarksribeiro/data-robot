@@ -95,6 +95,9 @@ export {
 } from './strategy/midasV1.js';
 export {
   MIDAS_V1,
+  MIDAS_ROBUST_V1,
+  MICRO_ROBUST,
+  CANARY_LIMITS as MIDAS_CANARY_LIMITS,
   canaryMidasPreset,
   resolveMidasEntryBudget,
 } from './tfc/preset-midas.js';

@@ -6,7 +6,7 @@ import { createOmsSink } from '../oms/omsSink.js';
 import { createLiveTransport } from '../executor/liveTransport.js';
 import { createUserChannel } from '../executor/userChannel.js';
 import { CANARY_LIMITS, canaryMidasPreset } from '../tfc/preset-midas.js';
-import { MIDAS_V1_STRATEGY_ID } from '../strategy/midasV1.js';
+import { MIDAS_V1_PRESET_ID, MIDAS_V1_STRATEGY_ID } from '../strategy/midasV1.js';
 import { bootstrapEngine } from './bootstrap.js';
 
 /**
@@ -65,6 +65,7 @@ export function bootstrapMidasCanaryEngine(opts = {}) {
     riskOpts: {
       ...(opts.riskOpts ?? {}),
       canaryMode: true,
+      allowLiveReverse: opts.riskOpts?.allowLiveReverse === true,
       maxCanaryBudget: cap,
       maxNotionalPerOrder: Math.min(cap, Number(opts.riskOpts?.maxNotionalPerOrder ?? cap)),
       maxNotionalPerEvent: Math.min(cap, Number(opts.riskOpts?.maxNotionalPerEvent ?? cap)),
@@ -75,7 +76,7 @@ export function bootstrapMidasCanaryEngine(opts = {}) {
   });
 
   return Object.assign(engine, {
-    canary: { maxCanaryBudget: cap, presetId: 'btc-champion-v1-canary' },
+    canary: { maxCanaryBudget: cap, presetId: `${MIDAS_V1_PRESET_ID}-canary` },
     sink,
   });
 }

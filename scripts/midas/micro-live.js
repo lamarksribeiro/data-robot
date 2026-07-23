@@ -88,9 +88,9 @@ async function main() {
   }
 
   const mode = opts.live ? 'live' : 'dry-run';
-  // EXIT live: desliga REVERSE (ainda bloqueado em live) → late flip vira EXIT SELL.
+  // Live / wait-exit: desliga REVERSE (ainda sem saga P8) → late flip vira EXIT SELL.
   const preset = canaryMidasPreset(
-    opts.waitExit ? { lateFlipReverseEnabled: false } : {},
+    opts.live || opts.waitExit ? { lateFlipReverseEnabled: false } : {},
   );
   const state = createMarketState();
   const hub = createMarketHub({ state, healthLimits: WAIT_HEALTH });
