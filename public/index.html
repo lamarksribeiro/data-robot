@@ -2,70 +2,149 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Data Robot · Operações</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    media="print"
+    onload="this.media='all'"
+  >
+  <noscript>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+  </noscript>
   <link rel="stylesheet" href="/styles.css">
   <script src="/js/dashboard.js" defer></script>
+  <script src="/js/mascot.js" defer></script>
 </head>
 <body>
-  <main class="shell">
-    <section class="login" id="login-view">
-      <div class="login__header">
-        <h1 class="login__title">Data Robot</h1>
-        <p class="login__subtitle">Control plane operacional</p>
+  <section class="login" id="login-view">
+    <div class="login__brand">
+      <h1>Data Robot</h1>
+      <p class="login__subtitle">GoldenLens · Trading</p>
+    </div>
+    <form class="login__form" id="login-form" autocomplete="on" novalidate>
+      <div class="field">
+        <label class="field__label" for="username">Usuário</label>
+        <input class="field__input" type="text" id="username" name="username" autocomplete="username" placeholder="Digite seu usuário" required>
       </div>
-      <form class="form" id="login-form" autocomplete="on">
-        <div class="field">
-          <label class="field__label" for="username">Usuário</label>
-          <input class="field__input" type="text" id="username" name="username" autocomplete="username" required>
-        </div>
-        <div class="field">
-          <label class="field__label" for="password">Senha</label>
-          <input class="field__input" type="password" id="password" name="password" autocomplete="current-password" required>
-        </div>
-        <button class="btn btn--primary" type="submit">Entrar</button>
-        <p class="form-message" id="login-message" role="status"></p>
-      </form>
-    </section>
+      <div class="field">
+        <label class="field__label" for="password">Senha</label>
+        <input class="field__input" type="password" id="password" name="password" autocomplete="current-password" placeholder="Digite sua senha" required>
+      </div>
+      <p class="login__error hidden" id="login-message" role="alert"></p>
+      <button class="btn btn--primary login__submit" type="submit">Entrar</button>
+    </form>
+  </section>
 
-    <section class="dashboard hidden" id="dashboard-view">
-      <header class="topbar">
+  <div class="app dashboard hidden" id="dashboard-view">
+    <aside class="sidebar" aria-label="Navegação principal">
+      <div class="sidebar__brand">
+        <div class="sidebar__logo" aria-hidden="true">
+          <img class="sidebar__logo-img" src="/favicon.svg" alt="">
+        </div>
         <div>
-          <p class="eyebrow">GoldenLens</p>
-          <h1>Data Robot</h1>
-          <p class="muted" id="last-update">Aguardando Engine…</p>
+          <div class="sidebar__title">Data Robot</div>
+          <div class="sidebar__subtitle">GoldenLens · Trading</div>
         </div>
-        <div class="topbar__actions">
-          <button class="btn btn--ghost" id="refresh-button" type="button">Atualizar</button>
-          <button class="btn btn--ghost" id="logout-button" type="button">Sair</button>
+      </div>
+
+      <nav class="sidebar__nav">
+        <a class="navlink is-active" href="#overview">
+          <span class="navlink__icon" aria-hidden="true">⌁</span>
+          <span>Visão geral</span>
+        </a>
+        <a class="navlink" href="#operations">
+          <span class="navlink__icon" aria-hidden="true">⚡</span>
+          <span>Operação</span>
+        </a>
+        <a class="navlink" href="#orders">
+          <span class="navlink__icon" aria-hidden="true">≡</span>
+          <span>Ordens</span>
+        </a>
+        <a class="navlink" href="#strategies">
+          <span class="navlink__icon" aria-hidden="true">◇</span>
+          <span>Estratégias</span>
+        </a>
+        <a class="navlink" href="#audit">
+          <span class="navlink__icon" aria-hidden="true">☰</span>
+          <span>Auditoria</span>
+        </a>
+        <a class="navlink" href="#diagnostics-panel">
+          <span class="navlink__icon" aria-hidden="true">⌘</span>
+          <span>Diagnóstico</span>
+        </a>
+      </nav>
+
+      <div class="sidebar__footer">
+        <div class="sidebar__user">
+          <span class="dot dot--idle" id="connection-dot" aria-hidden="true"></span>
+          <span id="connection-label">Conectando…</span>
         </div>
-      </header>
+        <button class="btn btn--ghost btn--sm logout-button" type="button">Sair</button>
+      </div>
+    </aside>
+
+    <header class="topbar">
+      <button
+        id="menu-button"
+        class="menu-btn"
+        type="button"
+        aria-label="Abrir menu"
+        aria-expanded="false"
+        aria-controls="mobile-nav"
+      >
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </button>
+      <div class="topbar__crumbs">
+        <span>Operações</span>
+        <span class="topbar__sep">›</span>
+        <strong>Visão geral</strong>
+      </div>
+      <div class="topbar__actions">
+        <button class="btn btn--ghost btn--sm" id="refresh-button" type="button">Atualizar</button>
+        <button class="btn btn--ghost btn--sm logout-button" type="button">Sair</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="page-header" id="overview">
+        <div>
+          <p class="eyebrow">Control Plane P9</p>
+          <h1>Operação do robô</h1>
+          <p class="page-header__sub" id="last-update">Aguardando Engine…</p>
+        </div>
+        <span class="environment-badge"><span class="dot dot--warn"></span> Ambiente controlado</span>
+      </section>
 
       <div class="alert hidden" id="dashboard-alert" role="alert"></div>
 
       <section class="status-grid" aria-label="Estado principal">
-        <article class="card"><span>Operação</span><strong id="operator-state">—</strong></article>
-        <article class="card"><span>Engine</span><strong id="engine-state">—</strong></article>
-        <article class="card"><span>Saúde</span><strong id="engine-health">—</strong></article>
-        <article class="card"><span>Modo</span><strong id="engine-mode">—</strong></article>
-        <article class="card"><span>Estratégia</span><strong id="strategy-id">—</strong></article>
-        <article class="card"><span>Mercado</span><strong id="market-id">—</strong></article>
-        <article class="card"><span>Aprovação</span><strong id="approval">—</strong></article>
-        <article class="card"><span>Entradas</span><strong id="entry-enabled">—</strong></article>
+        <article class="stat-card"><span>Operação</span><strong id="operator-state">—</strong></article>
+        <article class="stat-card"><span>Engine</span><strong id="engine-state">—</strong></article>
+        <article class="stat-card"><span>Saúde</span><strong id="engine-health">—</strong></article>
+        <article class="stat-card"><span>Modo</span><strong id="engine-mode">—</strong></article>
+        <article class="stat-card"><span>Estratégia</span><strong id="strategy-id">—</strong></article>
+        <article class="stat-card"><span>Mercado</span><strong id="market-id">—</strong></article>
+        <article class="stat-card"><span>Aprovação</span><strong id="approval">—</strong></article>
+        <article class="stat-card"><span>Entradas</span><strong id="entry-enabled">—</strong></article>
       </section>
 
       <section class="panel-grid">
-        <article class="panel panel--wide">
+        <article class="panel panel--wide" id="operations">
           <div class="panel__header">
             <div>
+              <p class="panel__kicker">Lifecycle e segurança</p>
               <h2>Controle da instância</h2>
-              <p class="panel__hint" id="instance-id">—</p>
+              <p class="panel__hint panel__mono" id="instance-id">—</p>
             </div>
-            <span class="badge" id="instance-count">1 ativa</span>
+            <span class="badge badge--accent" id="instance-count">1 ativa</span>
           </div>
           <div class="control-grid" id="control-grid">
             <button class="btn btn--primary" data-action="arm" data-confirm="ARM" type="button">Armar</button>
@@ -78,7 +157,7 @@
             <button class="btn btn--danger" data-action="rollback" data-confirm="ROLLBACK" data-typed="true" type="button">Rollback</button>
             <button class="btn btn--danger btn--critical" data-action="kill" data-confirm="HALT" data-typed="true" type="button">Kill switch</button>
           </div>
-          <p class="panel__hint">Pausar ou parar bloqueia novas entradas, mas mantém o processamento de mercado e as saídas protetivas. Kill exige reinício da Engine.</p>
+          <p class="panel__note">Pausar ou parar bloqueia novas entradas, mas preserva o processamento de mercado e as saídas protetivas. Kill exige reinício da Engine.</p>
         </article>
 
         <article class="panel">
@@ -101,8 +180,11 @@
           </dl>
         </article>
 
-        <article class="panel panel--wide">
-          <div class="panel__header"><h2>Ordens recentes</h2><span id="orders-count" class="badge">0</span></div>
+        <article class="panel panel--wide" id="orders">
+          <div class="panel__header">
+            <div><p class="panel__kicker">OMS</p><h2>Ordens recentes</h2></div>
+            <span id="orders-count" class="badge">0</span>
+          </div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Intent</th><th>Tipo</th><th>Lado</th><th>Estado</th><th>Fill</th><th>Mercado</th></tr></thead>
@@ -111,8 +193,11 @@
           </div>
         </article>
 
-        <article class="panel panel--wide">
-          <div class="panel__header"><h2>Estratégias disponíveis</h2><span class="badge">catálogo</span></div>
+        <article class="panel panel--wide" id="strategies">
+          <div class="panel__header">
+            <div><p class="panel__kicker">Registry aprovado</p><h2>Estratégias disponíveis</h2></div>
+            <span class="badge badge--accent">catálogo</span>
+          </div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>Estratégia</th><th>Versão</th><th>Preset</th><th>Mercados</th><th>Aprovação</th></tr></thead>
@@ -121,8 +206,11 @@
           </div>
         </article>
 
-        <article class="panel panel--wide">
-          <div class="panel__header"><h2>Auditoria operacional</h2><span id="audit-count" class="badge">0</span></div>
+        <article class="panel panel--wide" id="audit">
+          <div class="panel__header">
+            <div><p class="panel__kicker">Trilha imutável</p><h2>Auditoria operacional</h2></div>
+            <span id="audit-count" class="badge">0</span>
+          </div>
           <div class="table-wrap table-wrap--audit">
             <table>
               <thead><tr><th>Horário</th><th>Evento</th><th>Ação</th><th>Resultado</th><th>Detalhe</th></tr></thead>
@@ -131,12 +219,39 @@
           </div>
         </article>
 
-        <article class="panel panel--wide">
-          <div class="panel__header"><h2>Diagnóstico</h2><span id="uptime" class="badge">—</span></div>
+        <article class="panel panel--wide" id="diagnostics-panel">
+          <div class="panel__header">
+            <div><p class="panel__kicker">Observabilidade</p><h2>Diagnóstico</h2></div>
+            <span id="uptime" class="badge">—</span>
+          </div>
           <pre class="console-box" id="diagnostics">Aguardando dados…</pre>
         </article>
       </section>
-    </section>
-  </main>
+    </main>
+  </div>
+
+  <div id="mobile-nav" class="mobile-nav" aria-hidden="true">
+    <button class="mobile-nav__backdrop" type="button" aria-label="Fechar menu"></button>
+    <aside class="mobile-nav__panel" aria-label="Menu">
+      <div class="mobile-nav__header">
+        <div class="sidebar__brand mobile-nav__brand">
+          <div class="sidebar__logo" aria-hidden="true"><img class="sidebar__logo-img" src="/favicon.svg" alt=""></div>
+          <div><div class="sidebar__title">Data Robot</div><div class="sidebar__subtitle">GoldenLens · Trading</div></div>
+        </div>
+        <button class="btn btn--icon btn--ghost mobile-nav__close" type="button" aria-label="Fechar">×</button>
+      </div>
+      <nav class="mobile-nav__links">
+        <a class="navlink is-active" href="#overview"><span class="navlink__icon">⌁</span><span>Visão geral</span></a>
+        <a class="navlink" href="#operations"><span class="navlink__icon">⚡</span><span>Operação</span></a>
+        <a class="navlink" href="#orders"><span class="navlink__icon">≡</span><span>Ordens</span></a>
+        <a class="navlink" href="#strategies"><span class="navlink__icon">◇</span><span>Estratégias</span></a>
+        <a class="navlink" href="#audit"><span class="navlink__icon">☰</span><span>Auditoria</span></a>
+        <a class="navlink" href="#diagnostics-panel"><span class="navlink__icon">⌘</span><span>Diagnóstico</span></a>
+      </nav>
+      <div class="mobile-nav__footer">
+        <button class="btn btn--ghost btn--sm logout-button" type="button">Sair</button>
+      </div>
+    </aside>
+  </div>
 </body>
 </html>
