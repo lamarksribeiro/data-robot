@@ -60,7 +60,8 @@ if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !opsToken) {
 let snapshotSource;
 try {
   snapshotSource = createSnapshotSource(sourceKind, {
-    intervalMs: Number(process.env.ENGINE_SOURCE_INTERVAL_MS || 1000),
+    // RTDS/CLOB acordam a engine por evento; este timer é apenas watchdog/fallback.
+    intervalMs: Number(process.env.ENGINE_SOURCE_INTERVAL_MS || 100),
     syncIntervalMs: Number(process.env.ENGINE_MARKET_SYNC_MS || 15_000),
     retryMs: Number(process.env.ENGINE_SOURCE_RETRY_MS || 2000),
   });

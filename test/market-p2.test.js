@@ -4,7 +4,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createMarketState } from '../src/feeds/marketState.js';
-import { evaluateFeedHealth, STALENESS } from '../src/market/health.js';
+import {
+  BTC5M_STALENESS,
+  evaluateFeedHealth,
+  STALENESS,
+} from '../src/market/health.js';
 import { buildMarketSnapshot } from '../src/market/normalize.js';
 import { evaluateSnapshotEligibility } from '../src/market/eligibility.js';
 import {
@@ -170,6 +174,20 @@ describe('capabilities', () => {
 });
 
 describe('hub + availability', () => {
+  it('usa staleness operacional calibrado para BTC 5m', () => {
+    const nowMs = 1_700_000_000_000;
+    const state = freshState(nowMs);
+    state.rtdsReceivedAt = nowMs - 5_000;
+    state.clobLastAt = nowMs - 10_000;
+    const hub = createMarketHub({ state, clock: () => nowMs });
+    hub.setEvent(sampleEvent(nowMs));
+
+    const captured = hub.capture({ requireAcceptingOrders: true });
+
+    assert.equal(captured.eligible, true);
+    assert.deepEqual(captured.snapshot.health.limits, BTC5M_STALENESS);
+  });
+
   it('disponibilidade ≥99,5% com feeds saudáveis', () => {
     const nowMs = 1_700_000_000_000;
     let t = nowMs;

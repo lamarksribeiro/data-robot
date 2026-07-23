@@ -3,12 +3,15 @@ import config from '../config.js';
 
 /**
  * @param {ReturnType<import('./marketState.js').createMarketState>} state
+ * @param {object} [opts]
+ * @param {() => void} [opts.onUpdate]
  */
-export function startRtdsFeed(state) {
+export function startRtdsFeed(state, opts = {}) {
   let ws = null;
   let pingTimer = null;
   let reconnectTimer = null;
   let stopped = false;
+  const onUpdate = typeof opts.onUpdate === 'function' ? opts.onUpdate : () => {};
 
   function connect() {
     if (stopped || ws) return;
@@ -33,7 +36,7 @@ export function startRtdsFeed(state) {
     socket.onmessage = (event) => {
       if (!event.data || event.data === 'PONG') return;
       try {
-        handlePayload(state, JSON.parse(event.data));
+        if (handlePayload(state, JSON.parse(event.data))) onUpdate();
       } catch { /* ignore */ }
     };
 
@@ -68,21 +71,22 @@ export function startRtdsFeed(state) {
 
 function handlePayload(state, data) {
   const topic = data.topic || '';
-  if (typeof topic !== 'string' || !topic.startsWith('crypto_prices')) return;
+  if (typeof topic !== 'string' || !topic.startsWith('crypto_prices')) return false;
 
   const payload = data.payload;
-  if (!payload || typeof payload !== 'object') return;
+  if (!payload || typeof payload !== 'object') return false;
 
   const apply = (value, ts) => {
     state.btc = parseFloat(value);
     state.rtdsTs = ts != null ? parseInt(ts, 10) : null;
     state.rtdsReceivedAt = Date.now();
+    return true;
   };
 
   if (Array.isArray(payload.data) && payload.data.length) {
     const last = payload.data[payload.data.length - 1];
-    apply(last.value, last.timestamp);
-    return;
+    return apply(last.value, last.timestamp);
   }
-  if (payload.value != null) apply(payload.value, payload.timestamp);
+  if (payload.value != null) return apply(payload.value, payload.timestamp);
+  return false;
 }

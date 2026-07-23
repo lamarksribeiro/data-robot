@@ -9,6 +9,16 @@ export const STALENESS = Object.freeze({
 });
 
 /**
+ * BTC 5m pode ter book quieto sem estar desconectado. Estes limites foram
+ * calibrados na campanha shadow e são usados pelo hub operacional BTC 5m.
+ */
+export const BTC5M_STALENESS = Object.freeze({
+  rtdsMaxLagMs: 8000,
+  clobMaxLagMs: 15000,
+  clockSkewMaxMs: 5000,
+});
+
+/**
  * @param {object} feeds
  * @param {object} [limits]
  */
