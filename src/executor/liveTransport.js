@@ -358,31 +358,74 @@ export function createLiveTransport(opts) {
       }
       let heartbeatId = '';
       let busy = false;
-      const isInvalidHeartbeatId = (err) =>
-        /Invalid Heartbeat ID/i.test(String(err?.message ?? err ?? ''));
+      const invalidHeartbeatInfo = (value) => {
+        let parsedMessage = null;
+        if (typeof value?.message === 'string') {
+          try {
+            parsedMessage = JSON.parse(value.message);
+          } catch {
+            /* mensagem textual comum */
+          }
+        }
+        const candidates = [
+          value,
+          value?.error,
+          value?.data,
+          value?.data?.error,
+          parsedMessage,
+          parsedMessage?.error,
+        ].filter(Boolean);
+        const message = candidates
+          .map((candidate) => candidate?.error_msg ?? candidate?.message ?? '')
+          .find((candidate) => /Invalid Heartbeat ID/i.test(String(candidate)));
+        if (!message) {
+          const fallback = String(value?.message ?? value ?? '');
+          if (!/Invalid Heartbeat ID/i.test(fallback)) return null;
+        }
+        const heartbeatIdFromError = candidates
+          .map((candidate) => candidate?.heartbeat_id)
+          .find((candidate) => typeof candidate === 'string' && candidate.length > 0);
+        return {
+          heartbeatId: heartbeatIdFromError ?? null,
+          message: String(message ?? value?.message ?? 'Invalid Heartbeat ID'),
+        };
+      };
+      const postWithRecovery = async (initialId) => {
+        let candidateId = initialId;
+        let emptyResetTried = false;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            const response = await client.postHeartbeat(candidateId);
+            const invalid = invalidHeartbeatInfo(response);
+            if (invalid) {
+              const error = new Error(invalid.message);
+              error.heartbeat_id = invalid.heartbeatId;
+              throw error;
+            }
+            return response;
+          } catch (err) {
+            const invalid = invalidHeartbeatInfo(err);
+            if (!invalid || attempt === 2) throw err;
+            if (invalid.heartbeatId && invalid.heartbeatId !== candidateId) {
+              candidateId = invalid.heartbeatId;
+              continue;
+            }
+            if (!emptyResetTried) {
+              candidateId = '';
+              emptyResetTried = true;
+              continue;
+            }
+            throw err;
+          }
+        }
+        throw new Error('CLOB heartbeat recovery exhausted');
+      };
       const beat = async (failClosed = false) => {
         if (busy) return;
         busy = true;
         try {
-          try {
-            const response = await client.postHeartbeat(heartbeatId);
-            if (response?.error_msg && /Invalid Heartbeat ID/i.test(String(response.error_msg))) {
-              throw new Error(String(response.error_msg));
-            }
-            heartbeatId = response?.heartbeat_id ?? heartbeatId;
-          } catch (err) {
-            // ID stale após gap/rotação: reset e tenta 1x com sessão nova.
-            if (isInvalidHeartbeatId(err)) {
-              heartbeatId = '';
-              const response = await client.postHeartbeat('');
-              if (response?.error_msg && /Invalid Heartbeat ID/i.test(String(response.error_msg))) {
-                throw new Error(String(response.error_msg));
-              }
-              heartbeatId = response?.heartbeat_id ?? '';
-              return;
-            }
-            throw err;
-          }
+          const response = await postWithRecovery(heartbeatId);
+          heartbeatId = response?.heartbeat_id ?? heartbeatId;
         } catch (err) {
           if (typeof onFailure === 'function') onFailure(err);
           if (failClosed) throw err;

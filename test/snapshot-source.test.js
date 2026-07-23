@@ -170,6 +170,154 @@ describe('btc5m snapshot source', () => {
     assert.equal(clobStopped, true);
   });
 
+  it('não degrada durante resync do mesmo mercado saudável', async () => {
+    let nowMs = 1_800_000_000_000;
+    const currentEvent = eventAt(nowMs, 'stable');
+    const statuses = [];
+    const source = createBtc5mSnapshotSource({
+      clock: () => nowMs,
+      intervalMs: 60_000,
+      syncIntervalMs: 1,
+      resolveEvent: async () => currentEvent,
+      fetchPtb: async () => 100,
+      startRtds: (state) => {
+        state.btc = 101;
+        state.wsRtdsConnected = true;
+        state.rtdsReceivedAt = nowMs;
+        return () => {};
+      },
+      createClob: (state) => ({
+        subscribe(upTokenId, downTokenId) {
+          state.upTokenId = upTokenId;
+          state.downTokenId = downTokenId;
+          state.wsClobConnected = true;
+          state.clobLastAt = nowMs;
+          state.up = { bestBid: 0.5, bestAsk: 0.51, bids: [], asks: [] };
+          state.down = { bestBid: 0.48, bestAsk: 0.49, bids: [], asks: [] };
+        },
+        stop() {},
+      }),
+    });
+
+    await source.start({
+      onSnapshot: async () => {},
+      onStatus: (status) => statuses.push({ ok: status.ok, reason: status.reason }),
+    });
+    assert.equal(source.status.ok, true);
+
+    const beforeResync = statuses.length;
+    nowMs += 10;
+    source.state.rtdsReceivedAt = nowMs;
+    source.state.clobLastAt = nowMs;
+    await source.pollNow();
+
+    assert.equal(source.status.ok, true);
+    assert.equal(
+      statuses.slice(beforeResync).some((status) => status.ok === false),
+      false,
+    );
+    await source.stop();
+  });
+
+  it('ingere imediatamente quando RTDS/CLOB atualizam, sem esperar o watchdog', async () => {
+    let nowMs = 1_800_000_000_000;
+    const state = {
+      btc: null,
+      priceToBeat: null,
+      wsRtdsConnected: false,
+      wsClobConnected: false,
+      rtdsReceivedAt: null,
+      clobLastAt: null,
+      upTokenId: null,
+      downTokenId: null,
+      up: { bestBid: null, bestAsk: null, bids: [], asks: [] },
+      down: { bestBid: null, bestAsk: null, bids: [], asks: [] },
+    };
+    let notifyRtds = () => {};
+    let notifyClob = () => {};
+    const snapshots = [];
+    const source = createBtc5mSnapshotSource({
+      state,
+      clock: () => nowMs,
+      intervalMs: 60_000,
+      resolveEvent: async () => eventAt(nowMs, 'event-driven'),
+      fetchPtb: async () => 100,
+      startRtds: (_state, opts) => {
+        notifyRtds = opts.onUpdate;
+        return () => {};
+      },
+      createClob: (_state, opts) => {
+        notifyClob = opts.onUpdate;
+        return {
+          subscribe(upTokenId, downTokenId) {
+            state.upTokenId = upTokenId;
+            state.downTokenId = downTokenId;
+          },
+          stop() {},
+        };
+      },
+    });
+
+    await source.start({ onSnapshot: async (snapshot) => snapshots.push(snapshot) });
+    const initialSnapshots = snapshots.length;
+    state.btc = 101;
+    state.wsRtdsConnected = true;
+    state.rtdsReceivedAt = nowMs;
+    state.wsClobConnected = true;
+    state.clobLastAt = nowMs;
+    state.up = { bestBid: 0.5, bestAsk: 0.51, bids: [], asks: [] };
+    state.down = { bestBid: 0.48, bestAsk: 0.49, bids: [], asks: [] };
+
+    notifyRtds();
+    notifyClob();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.ok(snapshots.length > initialSnapshots);
+    assert.equal(source.status.ok, true);
+    await source.stop();
+  });
+
+  it('mantém a fonte saudável quando apenas a janela tática terminou', async () => {
+    let nowMs = 1_800_000_000_000;
+    const currentEvent = eventAt(nowMs, 'late-window');
+    const source = createBtc5mSnapshotSource({
+      clock: () => nowMs,
+      intervalMs: 60_000,
+      resolveEvent: async () => currentEvent,
+      fetchPtb: async () => 100,
+      startRtds: (state) => {
+        state.btc = 101;
+        state.wsRtdsConnected = true;
+        state.rtdsReceivedAt = nowMs;
+        return () => {};
+      },
+      createClob: (state) => ({
+        subscribe(upTokenId, downTokenId) {
+          state.upTokenId = upTokenId;
+          state.downTokenId = downTokenId;
+          state.wsClobConnected = true;
+          state.clobLastAt = nowMs;
+          state.up = { bestBid: 0.5, bestAsk: 0.51, bids: [], asks: [] };
+          state.down = { bestBid: 0.48, bestAsk: 0.49, bids: [], asks: [] };
+        },
+        stop() {},
+      }),
+    });
+
+    await source.start({ onSnapshot: async () => {} });
+    nowMs += 17_000;
+    source.state.rtdsReceivedAt = nowMs;
+    source.state.clobLastAt = nowMs;
+    await source.pollNow();
+
+    assert.equal(source.status.ok, true);
+    assert.equal(source.status.reason, null);
+    assert.equal(source.status.eligible, false);
+    assert.equal(source.status.eligibilityReason, 'BELOW_MIN_SECS_LEFT');
+    await source.stop();
+  });
+
   it('mantém fail-closed sem evento e recupera no retry', async () => {
     let nowMs = 1_800_000_000_000;
     let currentEvent = null;

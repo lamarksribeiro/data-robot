@@ -39,13 +39,25 @@ function createLoopController(opts) {
   let running = false;
   let timer = null;
   let inFlight = null;
+  let pending = false;
 
   async function poll() {
-    if (!running || inFlight) return inFlight;
+    if (!running) return null;
+    if (inFlight) {
+      pending = true;
+      return inFlight;
+    }
+    pending = false;
     inFlight = Promise.resolve()
       .then(opts.tick)
       .finally(() => {
         inFlight = null;
+        if (running && pending) {
+          pending = false;
+          queueMicrotask(() => {
+            void poll();
+          });
+        }
       });
     return inFlight;
   }
@@ -77,6 +89,7 @@ function createLoopController(opts) {
     },
     async stop() {
       running = false;
+      pending = false;
       if (timer) {
         clearTimeout(timer);
         timer = null;
@@ -238,6 +251,8 @@ export function createBtc5mSnapshotSource(opts = {}) {
     syncFailures: 0,
     errors: 0,
     rotations: 0,
+    eligible: false,
+    eligibilityReason: null,
     lastSnapshotAtMs: null,
     lastSyncAtMs: null,
   };
@@ -256,22 +271,34 @@ export function createBtc5mSnapshotSource(opts = {}) {
       emitStatus({
         ok: false,
         reason: synced.reason ?? 'MARKET_SYNC_FAILED',
+        eligible: false,
+        eligibilityReason: synced.reason ?? 'MARKET_SYNC_FAILED',
         marketId: null,
         syncFailures: status.syncFailures + 1,
       });
       return synced;
     }
 
-    if (synced.marketId !== subscribedMarketId) {
+    const marketChanged = synced.marketId !== subscribedMarketId;
+    if (marketChanged) {
       clob.subscribe(synced.event.upTokenId, synced.event.downTokenId);
       subscribedMarketId = synced.marketId;
     }
-    emitStatus({
-      marketId: synced.marketId,
-      rotations: hub.stats.rotations,
-      reason: state.priceToBeat == null ? 'PRICE_TO_BEAT_UNAVAILABLE' : 'AWAITING_FEEDS',
-      ok: false,
-    });
+    if (marketChanged || status.ok !== true) {
+      emitStatus({
+        marketId: synced.marketId,
+        rotations: hub.stats.rotations,
+        reason: state.priceToBeat == null ? 'PRICE_TO_BEAT_UNAVAILABLE' : 'AWAITING_FEEDS',
+        ok: false,
+        eligible: false,
+        eligibilityReason: 'AWAITING_FEEDS',
+      });
+    } else {
+      emitStatus({
+        marketId: synced.marketId,
+        rotations: hub.stats.rotations,
+      });
+    }
     return synced;
   }
 
@@ -279,6 +306,10 @@ export function createBtc5mSnapshotSource(opts = {}) {
     if (!hub.event || nowMs >= nextSyncAtMs) return true;
     const endMs = hub.event.eventEnd instanceof Date ? hub.event.eventEnd.getTime() : null;
     return endMs != null && nowMs >= endMs;
+  }
+
+  function requestSnapshot() {
+    void loop.pollNow();
   }
 
   const loop = createLoopController({
@@ -293,15 +324,35 @@ export function createBtc5mSnapshotSource(opts = {}) {
           serverNowMs: opts.serverNowMs?.() ?? null,
         });
         if (!captured.snapshot) {
-          emitStatus({ ok: false, reason: captured.reasons?.[0] ?? 'NO_SNAPSHOT' });
+          const reason = captured.reasons?.[0] ?? 'NO_SNAPSHOT';
+          emitStatus({
+            ok: false,
+            reason,
+            eligible: false,
+            eligibilityReason: reason,
+          });
           return;
         }
 
         await handlers.onSnapshot(captured.snapshot);
+        const sourceOk =
+          captured.snapshot.health?.ok === true &&
+          Number.isFinite(Number(captured.snapshot.priceToBeat)) &&
+          Boolean(captured.snapshot.identity?.upTokenId) &&
+          Boolean(captured.snapshot.identity?.downTokenId);
+        const sourceReason = sourceOk
+          ? null
+          : captured.snapshot.health?.reasons?.[0] ??
+            captured.reasons?.[0] ??
+            'SOURCE_NOT_READY';
         emitStatus({
           running: true,
-          ok: captured.eligible,
-          reason: captured.eligible ? null : captured.reasons?.[0] ?? 'NOT_ELIGIBLE',
+          ok: sourceOk,
+          reason: sourceReason,
+          eligible: captured.eligible,
+          eligibilityReason: captured.eligible
+            ? null
+            : captured.reasons?.[0] ?? 'NOT_ELIGIBLE',
           marketId: captured.snapshot.marketId,
           snapshots: status.snapshots + 1,
           eligibleSnapshots: status.eligibleSnapshots + (captured.eligible ? 1 : 0),
@@ -335,8 +386,8 @@ export function createBtc5mSnapshotSource(opts = {}) {
       if (loop.running) return;
       handlers = normalizeHandlers(nextHandlers);
       emitStatus({ running: true, ok: false, reason: 'STARTING' });
-      stopRtds = startRtds(state);
-      clob = makeClob(state);
+      stopRtds = startRtds(state, { onUpdate: requestSnapshot });
+      clob = makeClob(state, { onUpdate: requestSnapshot });
       await loop.start();
     },
     pollNow: () => loop.pollNow(),

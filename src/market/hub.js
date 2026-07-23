@@ -8,7 +8,7 @@ import { fetchPriceToBeat } from '../markets/priceToBeat.js';
 import { createMarketState } from '../feeds/marketState.js';
 import { evaluateSnapshotEligibility } from './eligibility.js';
 import { buildMarketSnapshot, marketIdFromEvent } from './normalize.js';
-import { STALENESS } from './health.js';
+import { BTC5M_STALENESS } from './health.js';
 
 /**
  * @param {object} [opts]
@@ -20,7 +20,7 @@ import { STALENESS } from './health.js';
 export function createMarketHub(opts = {}) {
   const resolveEvent = opts.resolveEvent ?? findActiveBtc5mEvent;
   const fetchPtb = opts.fetchPtb ?? fetchPriceToBeat;
-  const healthLimits = opts.healthLimits ?? STALENESS;
+  const healthLimits = opts.healthLimits ?? BTC5M_STALENESS;
   const clock = opts.clock ?? (() => Date.now());
 
   const state = opts.state ?? createMarketState();

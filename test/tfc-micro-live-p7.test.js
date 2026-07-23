@@ -191,21 +191,55 @@ describe('live transport mock', () => {
     assert.equal(result.events[0].reason, 'NO_TOKEN_ID');
   });
 
-  it('heartbeat recupera Invalid Heartbeat ID com reset', async () => {
+  it('heartbeat recupera ApiError usando o heartbeat_id correto retornado pelo CLOB', async () => {
     const seq = [];
     let n = 0;
     const client = {
       async postHeartbeat(id = '') {
         n += 1;
         seq.push(id);
-        if (n === 1) throw new Error('Invalid Heartbeat ID');
-        return { heartbeat_id: 'after-reset' };
+        if (n === 1) {
+          const error = new Error(
+            '{"heartbeat_id":"server-recovery-id","error_msg":"Invalid Heartbeat ID"}',
+          );
+          error.name = 'ApiError';
+          error.status = 400;
+          error.data = {
+            error: {
+              heartbeat_id: 'server-recovery-id',
+              error_msg: 'Invalid Heartbeat ID',
+            },
+            status: 400,
+          };
+          throw error;
+        }
+        return { heartbeat_id: 'after-recovery' };
       },
     };
     const transport = createLiveTransport({ client, Side, OrderType });
     const stop = await transport.startHeartbeat(() => assert.fail('onFailure'), 60_000);
-    assert.deepEqual(seq, ['', '']);
+    assert.deepEqual(seq, ['', 'server-recovery-id']);
     stop();
+  });
+
+  it('heartbeat continua fail-closed para erro CLOB sem recuperação válida', async () => {
+    const client = {
+      async postHeartbeat() {
+        const error = new Error('CLOB unavailable');
+        error.status = 503;
+        throw error;
+      },
+    };
+    const transport = createLiveTransport({ client, Side, OrderType });
+    let failure = null;
+    await assert.rejects(
+      () =>
+        transport.startHeartbeat((error) => {
+          failure = error;
+        }, 60_000),
+      /CLOB unavailable/,
+    );
+    assert.equal(failure?.message, 'CLOB unavailable');
   });
 
   it('cancelOpenOrders no sink live mock', async () => {

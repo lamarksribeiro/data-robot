@@ -15,6 +15,7 @@ import { createClobFeed } from '../../src/feeds/clobFeed.js';
 import { findActiveBtc5mEvent } from '../../src/markets/btc5m.js';
 import { fetchPriceToBeat } from '../../src/markets/priceToBeat.js';
 import { buildMarketSnapshot } from '../../src/market/normalize.js';
+import { BTC5M_STALENESS } from '../../src/market/health.js';
 import { bootstrapEngine } from '../../src/composition/bootstrap.js';
 import { MIDAS_V1_STRATEGY_ID } from '../../src/strategy/midasV1.js';
 import { MIDAS_V1 } from '../../src/tfc/preset-midas.js';
@@ -144,7 +145,7 @@ async function main() {
               state,
               event,
               nowMs,
-              healthLimits: { rtdsMaxLagMs: 8_000, clobMaxLagMs: 15_000, clockSkewMaxMs: 5_000 },
+              healthLimits: BTC5M_STALENESS,
             });
             if (Number.isFinite(snapshot.btc)) {
               history.push({ ts: nowMs, btc: snapshot.btc });

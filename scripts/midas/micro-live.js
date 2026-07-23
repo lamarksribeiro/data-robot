@@ -24,6 +24,7 @@ import { createSigner } from '../../src/clob/wallet.js';
 import { resolveSignatureType } from '../../src/clob/signatureType.js';
 import config from '../../src/config.js';
 import { createMarketHub } from '../../src/market/hub.js';
+import { BTC5M_STALENESS } from '../../src/market/health.js';
 import { bootstrapMidasCanaryEngine } from '../../src/composition/midasCanary.js';
 import { buildMicroLiveReport, compareIntentParity } from '../../src/oms/microLiveReport.js';
 import { createMidasV1Strategy } from '../../src/strategy/midasV1.js';
@@ -32,13 +33,6 @@ import { buildStrategyContext } from '../../src/engine/contract.js';
 import { emptyPosition } from '../../src/engine/schemas.js';
 import { createUserChannel } from '../../src/executor/userChannel.js';
 import { preflightChecksFromResult, runLivePreflight } from '../../src/risk/livePreflight.js';
-
-/** Staleness folgado na espera de sinal (livro 5m pode ficar quieto). */
-const WAIT_HEALTH = Object.freeze({
-  rtdsMaxLagMs: 8_000,
-  clobMaxLagMs: 15_000,
-  clockSkewMaxMs: 5_000,
-});
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -93,7 +87,7 @@ async function main() {
     opts.live || opts.waitExit ? { lateFlipReverseEnabled: false } : {},
   );
   const state = createMarketState();
-  const hub = createMarketHub({ state, healthLimits: WAIT_HEALTH });
+  const hub = createMarketHub({ state, healthLimits: BTC5M_STALENESS });
   let engine = null;
   let stopRtds = null;
   let clobFeed = null;

@@ -6,14 +6,17 @@ const RECONNECT_MS = 500;
 
 /**
  * @param {ReturnType<import('./marketState.js').createMarketState>} state
+ * @param {object} [opts]
+ * @param {() => void} [opts.onUpdate]
  */
-export function createClobFeed(state) {
+export function createClobFeed(state, opts = {}) {
   let ws = null;
   let pingTimer = null;
   let reconnectTimer = null;
   let seedTimer = null;
   let subscribedTokens = [];
   let stopped = false;
+  const onUpdate = typeof opts.onUpdate === 'function' ? opts.onUpdate : () => {};
 
   const rawBids = { up: new Map(), down: new Map() };
   const rawAsks = { up: new Map(), down: new Map() };
@@ -35,17 +38,17 @@ export function createClobFeed(state) {
     state.clobLastAt = Date.now();
   }
 
-  function applyLevel(side, book, priceStr, size) {
+  function setLevel(book, priceStr, size) {
     if (size <= 0) book.delete(priceStr);
     else book.set(priceStr, size);
-    syncBest(side);
   }
 
   function rebuild(side, bids, asks) {
     rawBids[side].clear();
     rawAsks[side].clear();
-    for (const b of bids) applyLevel(side, rawBids[side], String(b.price), parseFloat(b.size || 0));
-    for (const a of asks) applyLevel(side, rawAsks[side], String(a.price), parseFloat(a.size || 0));
+    for (const b of bids) setLevel(rawBids[side], String(b.price), parseFloat(b.size || 0));
+    for (const a of asks) setLevel(rawAsks[side], String(a.price), parseFloat(a.size || 0));
+    syncBest(side);
   }
 
   function connect() {
@@ -66,9 +69,11 @@ export function createClobFeed(state) {
       try {
         const data = JSON.parse(event.data);
         const items = Array.isArray(data) ? data : [data];
+        let updated = false;
         for (const item of items) {
-          if (item?.event_type) processMessage(item);
+          if (item?.event_type) updated = processMessage(item) || updated;
         }
+        if (updated) onUpdate();
       } catch { /* ignore */ }
     };
 
@@ -93,6 +98,7 @@ export function createClobFeed(state) {
       if (!res.ok) return;
       const data = await res.json();
       rebuild(side, data.bids || [], data.asks || []);
+      onUpdate();
     } catch {
       /* ignore — WS continua como fonte primária */
     }
@@ -131,21 +137,33 @@ export function createClobFeed(state) {
   function processMessage(data) {
     const assetId = data.asset_id || '';
     const side = assetId === state.upTokenId ? 'up' : assetId === state.downTokenId ? 'down' : null;
-    if (!side) return;
+    if (!side) return false;
 
     if (data.event_type === 'book') {
       rebuild(side, data.bids || [], data.asks || []);
+      return true;
     } else if (data.event_type === 'price_change') {
+      let changed = false;
       for (const c of data.changes || []) {
         const size = parseFloat(c.size || 0);
-        if (c.side === 'SELL') applyLevel(side, rawAsks[side], String(c.price), size);
-        if (c.side === 'BUY') applyLevel(side, rawBids[side], String(c.price), size);
+        if (c.side === 'SELL') {
+          setLevel(rawAsks[side], String(c.price), size);
+          changed = true;
+        }
+        if (c.side === 'BUY') {
+          setLevel(rawBids[side], String(c.price), size);
+          changed = true;
+        }
       }
+      if (changed) syncBest(side);
+      return changed;
     } else if (data.event_type === 'best_bid_ask') {
       if (data.best_bid != null) state[side].bestBid = parseFloat(data.best_bid);
       if (data.best_ask != null) state[side].bestAsk = parseFloat(data.best_ask);
       state.clobLastAt = Date.now();
+      return true;
     }
+    return false;
   }
 
   connect();
