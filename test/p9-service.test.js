@@ -426,7 +426,12 @@ describe('dashboard autenticado', () => {
     cleanup.push(() => ui.stop());
     const base = `http://127.0.0.1:${ui.server.address().port}`;
 
-    const page = await (await fetch(base)).text();
+    const pageResponse = await fetch(base);
+    const csp = pageResponse.headers.get('content-security-policy');
+    assert.match(csp, /style-src[^;]*'unsafe-inline'/);
+    assert.match(csp, /script-src 'self'/);
+    assert.doesNotMatch(csp, /script-src[^;]*'unsafe-inline'/);
+    const page = await pageResponse.text();
     assert.match(page, /src="\/js\/mascot\.js(?:\?[^"]*)?"/);
     assert.match(page, /class="login-wrapper"/);
     assert.match(page, /class="sidebar"/);
