@@ -104,10 +104,19 @@ function showLoginMessage(message = '') {
 function setConnectionState(health) {
   const dot = $('connection-dot');
   const label = $('connection-label');
+  const processUp = Boolean(health?.healthy) || Boolean(health?.state);
   const ready = Boolean(health?.ready);
-  const healthy = ready || Boolean(health?.ok);
-  dot.className = `dot ${ready ? 'dot--ok' : healthy ? 'dot--warn' : 'dot--err'}`;
-  label.textContent = ready ? 'Engine pronta' : healthy ? 'Engine degradada' : 'Engine indisponível';
+  const ok = Boolean(health?.ok);
+  // ok=false com feeds stale ainda é Engine viva — não chamar de "indisponível"
+  const degraded = processUp && !ok;
+  dot.className = `dot ${ready ? 'dot--ok' : processUp ? 'dot--warn' : 'dot--err'}`;
+  label.textContent = ready
+    ? 'Engine pronta'
+    : processUp
+      ? degraded
+        ? 'Engine degradada'
+        : 'Engine online'
+      : 'Engine indisponível';
 }
 
 async function api(url, options = {}) {
