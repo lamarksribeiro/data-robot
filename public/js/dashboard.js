@@ -311,9 +311,62 @@ function renderHealth(health = {}, slos = {}, mode = 'shadow') {
   text('health-recovery', health.recoveryOk ? 'OK' : 'FALHA');
 }
 
+function renderGuide(status, health) {
+  const mode = String(status.mode || '').toLowerCase();
+  const live = mode === 'live';
+  const armed = status.operatorState === 'ARMED';
+  const halted = status.state === 'HALTED' || health?.halted === true;
+  const bal = status.preflight?.checks?.balance?.balanceUsd;
+  const cta = $('guide-cta');
+  const card = $('guide-card');
+
+  let title;
+  let body;
+  let next;
+  let showCta = false;
+  let tone = 'ok';
+
+  if (halted) {
+    tone = 'err';
+    title = 'Parado por emergência (HALTED)';
+    body = 'O robô não opera até a Engine ser reiniciada no Coolify.';
+    next = 'Peça reinício da Engine e depois Arme de novo.';
+  } else if (!live) {
+    tone = 'warn';
+    title = 'Simulação (shadow)';
+    body = 'Mercado real, decisões reais, mas nenhuma ordem vai para a Polymarket. Carteira não aparece aqui.';
+    next = 'Para usar dinheiro: ligar live na Engine (já feito pelo time) e então Armar.';
+  } else if (!armed) {
+    tone = 'warn';
+    title = 'Live pronto · ainda desarmado';
+    body = 'A Engine pode enviar ordens reais (canário até $3), mas está esperando você confirmar.';
+    next = 'Clique em Armar. Isso valida carteira/CLOB e libera entradas.';
+    showCta = true;
+  } else {
+    tone = 'ok';
+    title = 'Operando com dinheiro real';
+    body = `Entradas liberadas no canário MIDAS. Cap por ordem: ${status.canary?.hardCapUsd != null ? `$${Number(status.canary.hardCapUsd).toFixed(0)}` : '$3'}.`;
+    next = 'Para parar entradas sem derrubar o processo: Pausar.';
+  }
+
+  card.dataset.tone = tone;
+  text('guide-eyebrow', live ? 'Dinheiro real' : 'Sem dinheiro');
+  text('guide-title', title);
+  text('guide-body', body);
+  text('guide-next', next);
+  text(
+    'wallet-balance-banner',
+    live ? (Number.isFinite(Number(bal)) ? money(bal) : 'aguarde Armar') : 'n/a shadow',
+  );
+  if (cta) {
+    cta.hidden = !showCta;
+    cta.disabled = actionRunning || halted;
+  }
+}
+
 function updateControls(status) {
   const operatorState = status.operatorState;
-  for (const button of document.querySelectorAll('#control-grid button')) {
+  for (const button of document.querySelectorAll('#control-grid-primary button, #control-grid-advanced button')) {
     const action = button.dataset.action;
     let disabled = actionRunning;
     if (action === 'arm') disabled ||= operatorState === 'ARMED' || status.state === 'HALTED';
@@ -323,6 +376,14 @@ function updateControls(status) {
     if (action === 'rollback') disabled ||= operatorState !== 'DISARMED';
     if (action === 'kill') disabled ||= status.state === 'HALTED';
     button.disabled = disabled;
+  }
+  const cta = $('guide-cta');
+  if (cta) {
+    cta.disabled =
+      actionRunning ||
+      status.operatorState === 'ARMED' ||
+      status.state === 'HALTED' ||
+      String(status.mode).toLowerCase() !== 'live';
   }
 }
 
@@ -393,6 +454,7 @@ function render(status, health, instances) {
   const openOrders = status.openOrders ?? [];
 
   renderMode(status, health);
+  renderGuide(status, health);
 
   text('strategy-id', status.strategyId);
   text('strategy-preset', status.canary?.presetId || status.catalog?.presetId || '—');
@@ -588,9 +650,13 @@ for (const button of document.querySelectorAll('.logout-button')) {
     showLogin();
   });
 }
-for (const button of document.querySelectorAll('#control-grid button')) {
+for (const button of document.querySelectorAll('#control-grid-primary button, #control-grid-advanced button')) {
   button.addEventListener('click', () => runControl(button));
 }
+$('guide-cta')?.addEventListener('click', () => {
+  const arm = document.querySelector('#control-grid-primary button[data-action="arm"]');
+  if (arm && !arm.disabled) runControl(arm);
+});
 
 function openMobileNav() {
   menuButton.classList.add('is-open');

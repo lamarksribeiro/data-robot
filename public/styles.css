@@ -1251,6 +1251,83 @@ tbody tr:hover {
   color: var(--text-3);
 }
 
+.guide-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.9fr);
+  gap: 16px;
+  margin-bottom: 14px;
+  padding: 18px 20px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: var(--radius);
+}
+.guide-card[data-tone="warn"] {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+.guide-card[data-tone="err"] {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.guide-card__eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.guide-card[data-tone="warn"] .guide-card__eyebrow { color: var(--warn); }
+.guide-card[data-tone="err"] .guide-card__eyebrow { color: #f87171; }
+.guide-card strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-0);
+  font-size: 17px;
+  font-weight: 800;
+}
+.guide-card p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.guide-card__right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+  padding: 12px 14px;
+  background: rgba(5, 8, 17, 0.35);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.guide-card__right .btn { width: 100%; }
+
+.control-cards--primary { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 12px; }
+.advanced-box {
+  margin-top: 8px;
+  padding: 12px 14px;
+  background: rgba(5, 8, 17, 0.28);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+}
+.advanced-box summary {
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.advanced-box[open] summary { margin-bottom: 12px; color: var(--text-0); }
+
+@media (max-width: 1100px) {
+  .guide-card { grid-template-columns: minmax(0, 1fr); }
+  .control-cards--primary { grid-template-columns: minmax(0, 1fr); }
+}
+
 .gates-list__empty {
   color: var(--text-3);
   border-style: dashed !important;
