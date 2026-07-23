@@ -73,11 +73,11 @@ FEITO:  engine Giovanna + drills (A1/A2)
         Shadow MIDAS ≥5 ENTER (22/07 Giovanna)
           → docs/operacao/evidencia-midas-shadow-2026-07-22.md
           │
-AGORA:  4) micros #2 + #3 MIDAS (cap $2 / min notional $1)
+AGORA:  5) EXIT live MIDAS (danger / late_flip SELL)
           │
-META:   Produção canário = enter/hold repetível (3 runs OK)
+META:   Ciclo ENTER→EXIT reconciliado (P8 micro)
           │
-DEPOIS: EXIT/danger live → só então subir budget / P9
+DEPOIS: P9 / dashboard → só então subir budget
           │
 FUTURO: outras estratégias no mesmo contrato (TFC, Apex, …)
 ```
