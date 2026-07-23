@@ -5,22 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Login · Data Robot</title>
 
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.12.2">
-  <link rel="apple-touch-icon" href="/favicon.svg?v=1.12.2">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.12.3">
+  <link rel="apple-touch-icon" href="/favicon.svg?v=1.12.3">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <link rel="stylesheet" href="/styles/tokens.css?v=1.12.0">
-  <link rel="stylesheet" href="/styles.css?v=1.12.2">
+  <link rel="stylesheet" href="/styles.css?v=1.12.3">
 
-  <script src="/js/dashboard.js?v=1.12.2" defer></script>
-  <script src="/js/mascot.js?v=1.12.2" defer></script>
+  <script src="/js/dashboard.js?v=1.12.3" defer></script>
+  <script src="/js/mascot.js?v=1.12.3" defer></script>
 </head>
 <body>
   <div class="login-wrapper">
+    <!-- O mascote container é injetado dinamicamente aqui -->
     <div class="login" id="login-view">
       <div class="login__header">
         <h1 class="login__title">Data Robot</h1>
@@ -60,14 +59,14 @@
       </div>
 
       <nav class="sidebar__nav">
-        <a class="navlink is-active" href="#overview"><span class="navlink__icon" aria-hidden="true"><i class="fa-solid fa-chart-simple"></i></span><span>Visão geral</span></a>
-        <a class="navlink" href="#market"><span class="navlink__icon" aria-hidden="true"><i class="fa-solid fa-chart-line"></i></span><span>Mercado</span></a>
-        <a class="navlink" href="#position-pnl"><span class="navlink__icon" aria-hidden="true"><i class="fa-solid fa-wallet"></i></span><span>Posição & PnL</span></a>
-        <a class="navlink" href="#orders"><span class="navlink__icon" aria-hidden="true"><i class="fa-solid fa-list-check"></i></span><span>Ordens</span></a>
-        <a class="navlink" href="#operations"><span class="navlink__icon" aria-hidden="true"><i class="fa-solid fa-bolt"></i></span><span>Controles</span></a>
-        <a class="navlink" href="#strategies"><span class="navlink__icon" aria-hidden="true"><i class="fa-solid fa-chess-knight"></i></span><span>Estratégias</span></a>
-        <a class="navlink" href="#audit"><span class="navlink__icon" aria-hidden="true"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Auditoria</span></a>
-        <a class="navlink" href="#diagnostics-panel"><span class="navlink__icon" aria-hidden="true"><i class="fa-solid fa-terminal"></i></span><span>Diagnóstico</span></a>
+        <a class="navlink is-active" href="#overview"><span class="navlink__icon" aria-hidden="true">⌁</span><span>Visão geral</span></a>
+        <a class="navlink" href="#market"><span class="navlink__icon" aria-hidden="true">◎</span><span>Mercado</span></a>
+        <a class="navlink" href="#position-pnl"><span class="navlink__icon" aria-hidden="true">$</span><span>Posição & PnL</span></a>
+        <a class="navlink" href="#orders"><span class="navlink__icon" aria-hidden="true">≡</span><span>Ordens</span></a>
+        <a class="navlink" href="#operations"><span class="navlink__icon" aria-hidden="true">⚡</span><span>Controles</span></a>
+        <a class="navlink" href="#strategies"><span class="navlink__icon" aria-hidden="true">◇</span><span>Estratégias</span></a>
+        <a class="navlink" href="#audit"><span class="navlink__icon" aria-hidden="true">☰</span><span>Auditoria</span></a>
+        <a class="navlink" href="#diagnostics-panel"><span class="navlink__icon" aria-hidden="true">⌘</span><span>Diagnóstico</span></a>
       </nav>
 
       <div class="sidebar__footer">
@@ -75,7 +74,7 @@
           <span class="dot dot--idle" id="connection-dot" aria-hidden="true"></span>
           <span id="connection-label">Conectando…</span>
         </div>
-        <button class="btn btn--ghost btn--sm logout-button" type="button"><i class="fa-solid fa-right-from-bracket"></i> Sair</button>
+        <button class="btn btn--ghost btn--sm logout-button" type="button">Sair</button>
       </div>
     </aside>
 
@@ -90,8 +89,8 @@
       </div>
       <div class="topbar__actions">
         <span class="topbar-pill" id="topbar-mode">—</span>
-        <button class="btn btn--ghost btn--sm" id="refresh-button" type="button"><i class="fa-solid fa-rotate-right"></i> Atualizar</button>
-        <button class="btn btn--ghost btn--sm logout-button" type="button"><i class="fa-solid fa-right-from-bracket"></i> Sair</button>
+        <button class="btn btn--ghost btn--sm" id="refresh-button" type="button">Atualizar</button>
+        <button class="btn btn--ghost btn--sm logout-button" type="button">Sair</button>
       </div>
     </header>
 
@@ -419,20 +418,20 @@
           <div class="sidebar__logo" aria-hidden="true"><img class="sidebar__logo-img" src="/favicon.svg" alt=""></div>
           <div><div class="sidebar__title">Data Robot</div><div class="sidebar__subtitle">GoldenLens · Trading</div></div>
         </div>
-        <button class="btn btn--icon btn--ghost mobile-nav__close" type="button" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+        <button class="btn btn--icon btn--ghost mobile-nav__close" type="button" aria-label="Fechar">×</button>
       </div>
       <nav class="mobile-nav__links">
-        <a class="navlink is-active" href="#overview"><span class="navlink__icon"><i class="fa-solid fa-chart-simple"></i></span><span>Visão geral</span></a>
-        <a class="navlink" href="#market"><span class="navlink__icon"><i class="fa-solid fa-chart-line"></i></span><span>Mercado</span></a>
-        <a class="navlink" href="#position-pnl"><span class="navlink__icon"><i class="fa-solid fa-wallet"></i></span><span>Posição & PnL</span></a>
-        <a class="navlink" href="#orders"><span class="navlink__icon"><i class="fa-solid fa-list-check"></i></span><span>Ordens</span></a>
-        <a class="navlink" href="#operations"><span class="navlink__icon"><i class="fa-solid fa-bolt"></i></span><span>Controles</span></a>
-        <a class="navlink" href="#strategies"><span class="navlink__icon"><i class="fa-solid fa-chess-knight"></i></span><span>Estratégias</span></a>
-        <a class="navlink" href="#audit"><span class="navlink__icon"><i class="fa-solid fa-clock-rotate-left"></i></span><span>Auditoria</span></a>
-        <a class="navlink" href="#diagnostics-panel"><span class="navlink__icon"><i class="fa-solid fa-terminal"></i></span><span>Diagnóstico</span></a>
+        <a class="navlink is-active" href="#overview"><span class="navlink__icon">⌁</span><span>Visão geral</span></a>
+        <a class="navlink" href="#market"><span class="navlink__icon">◎</span><span>Mercado</span></a>
+        <a class="navlink" href="#position-pnl"><span class="navlink__icon">$</span><span>Posição & PnL</span></a>
+        <a class="navlink" href="#orders"><span class="navlink__icon">≡</span><span>Ordens</span></a>
+        <a class="navlink" href="#operations"><span class="navlink__icon">⚡</span><span>Controles</span></a>
+        <a class="navlink" href="#strategies"><span class="navlink__icon">◇</span><span>Estratégias</span></a>
+        <a class="navlink" href="#audit"><span class="navlink__icon">☰</span><span>Auditoria</span></a>
+        <a class="navlink" href="#diagnostics-panel"><span class="navlink__icon">⌘</span><span>Diagnóstico</span></a>
       </nav>
       <div class="mobile-nav__footer">
-        <button class="btn btn--ghost btn--sm logout-button" type="button"><i class="fa-solid fa-right-from-bracket"></i> Sair</button>
+        <button class="btn btn--ghost btn--sm logout-button" type="button">Sair</button>
       </div>
     </aside>
   </div>
