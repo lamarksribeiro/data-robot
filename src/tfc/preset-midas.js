@@ -1,9 +1,9 @@
 /**
- * Preset campeão MIDAS Carry V1 (data-backtest lab midas-carry-v1).
+ * Presets MIDAS Carry V1 (data-backtest lab midas-carry-v1).
  * Núcleo = TFC V7 Danger Floor + envelope high-ask + tier de budget.
  */
 
-import { CANARY_LIMITS, MICRO_TEST } from './preset-v7.js';
+import { CANARY_LIMITS as TFC_CANARY_LIMITS, MICRO_TEST } from './preset-v7.js';
 
 /** Params espelhados de labs/.../midas-carry-v1/presets/btc-champion-v1.json */
 export const MIDAS_V1 = {
@@ -53,7 +53,35 @@ export const MIDAS_V1 = {
   earlyWarnEnabled: false,
 };
 
-export { CANARY_LIMITS, MICRO_TEST };
+/** Espelho de labs/.../presets/btc-robust-v1.json (champion + maxDistAbs 30). */
+export const MIDAS_ROBUST_V1 = {
+  ...MIDAS_V1,
+  maxDistAbs: 30,
+};
+
+/**
+ * Sizing micro conservador para wallet ~$34.
+ * entry $2 / tier 1.5× teto $3 — sem hard cap abaixo do sizing.
+ */
+export const MICRO_ROBUST = Object.freeze({
+  entryBudget: 2,
+  maxEntryBudget: 3,
+  minShares: 1,
+  entryOrderType: 'FAK',
+  exitOrderType: 'FAK',
+});
+
+/**
+ * Cap de canário MIDAS — alinhado a maxEntryBudget do micro robust.
+ * Independente do CANARY_LIMITS TFC V7 ($2).
+ */
+export const CANARY_LIMITS = Object.freeze({
+  maxCanaryBudget: MICRO_ROBUST.maxEntryBudget,
+  preferredEntryBudget: MICRO_ROBUST.entryBudget,
+  maxSlippage: TFC_CANARY_LIMITS.maxSlippage,
+});
+
+export { MICRO_TEST };
 
 /**
  * Budget efetivo de entrada (tier quando ask >= threshold).
@@ -75,7 +103,7 @@ export function resolveMidasEntryBudget(params, ask) {
   return budget;
 }
 
-/** Preset efetivo para micro-live MIDAS (gates champion + sizing canário). */
+/** Preset efetivo para canário MIDAS (Robust + sizing micro $2/$3). */
 export function canaryMidasPreset(override = {}) {
-  return { ...MIDAS_V1, ...MICRO_TEST, ...override };
+  return { ...MIDAS_ROBUST_V1, ...MICRO_ROBUST, ...override };
 }

@@ -98,7 +98,7 @@ describe('catálogo de aprovação P9', () => {
     const midas = store.assertApproved({
       strategyId: 'midas-carry-v1',
       version: '1.0.0',
-      presetId: 'btc-champion-v1',
+      presetId: 'btc-micro-robust-v1',
       marketScope: 'btc-updown-5m',
       mode: 'live',
     });

@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-22T23:59:00.000Z",
+  "updatedAt": "2026-07-23T07:00:00.000Z",
   "strategies": [
     {
       "strategyId": "midas-carry-v1",
       "version": "1.0.0",
-      "presetId": "btc-champion-v1",
+      "presetId": "btc-micro-robust-v1",
       "marketScope": ["btc-updown-5m"],
       "approval": "canary-approved",
       "canary": {
-        "hardCapUsd": 2,
+        "hardCapUsd": 3,
         "maxEntriesPerControlWindow": 1,
         "controlWindowHours": 24,
         "liveReverse": false

@@ -4,7 +4,7 @@
 **Estado atual:** Control Plane P9 v1 publicado e validado no Giovanna. Canário deste ciclo = **só MIDAS, notional marketable e hard cap $2**.
 **URL oficial:** https://robot.fracta.online  
 **Pacote:** `data-robot` **1.11.1**
-**Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / `btc-champion-v1`). Plugin, shadow ≥5, 3 micro-live e `danger_exit` live concluídos em 22/07. P9 está publicado em shadow/desarmado; late-flip live e janela longa ainda exigem evidência real.
+**Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / `btc-micro-robust-v1`). Plugin, shadow ≥5, 3 micro-live e `danger_exit` live concluídos em 22/07. P9 em shadow; canário redesenhado para Robust micro `$2`/`$3`.
 **Depois:** qualquer estratégia via o mesmo contrato (engine agnóstica). TFC V7 = helpers no código, fora do canário agora.
 
 Este é o roadmap canônico. O [runbook TFC](./tfc-validacao-real.md) é baseline histórico do plugin TFC — **não** define a trilha MIDAS deste ciclo.
@@ -55,7 +55,7 @@ Ficam fora deste ciclo:
 | Engine / contrato de estratégia | Feito (P1+P6 TFC + MIDAS) | Runtime + registry + fixtures + `tfc-v7` + **`midas-carry-v1`**. |
 | Catálogo / supervisão | Catálogo P9 básico feito | Aprovação por `strategyId`/versão/preset/`marketScope` bloqueia o deploy fail-closed. Supervisor multi-instância/global permanece futuro. |
 | Gates de entrada | Feito (P6 TFC) | `evaluateEntryGates` + late flip + danger exit no plugin TFC; MIDAS reusa + tier. |
-| Preset de produção | MIDAS canário versionado | `btc-champion-v1` com sizing marketable e hard cap $2; budget $10 permanece bloqueado. |
+| Preset de produção | MIDAS canário versionado | `btc-micro-robust-v1` (Robust dist 30 + `$2`/`$3`); budget lab $10 permanece fora do canário. |
 | Entrada real | Wave-1 concluída | 3 entradas MIDAS reconciliadas, 0 órfã; composição long-lived P9 implementada. |
 | Saída / reverse / danger exit | P8 micro parcial | `danger_exit` real reconciliado; late-flip passa pipeline live simulado e ainda requer evidência real. `REVERSE` live bloqueado. |
 | OMS e user WebSocket | Código live implementado; ops aberto | User WS autenticado, heartbeat CLOB, reconciliação por ordem e detecção de órfãs; validação real prolongada ainda pendente. |

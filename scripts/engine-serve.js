@@ -96,7 +96,9 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
     console.error('[engine:serve] Recusa: MIDAS P9 exige ENGINE_SNAPSHOT_SOURCE=btc5m');
     process.exit(2);
   }
-  preset = canaryMidasPreset({ lateFlipReverseEnabled: false });
+  // Live: reverse off → late flip vira EXIT (REVERSE ainda sem saga P8).
+  // Shadow: reverse on como no Robust de lab.
+  preset = canaryMidasPreset(mode === 'live' ? { lateFlipReverseEnabled: false } : {});
   const maxCanaryBudget = Number(
     process.env.ENGINE_CANARY_MAX_BUDGET || MIDAS_CANARY_HARD_CAP_USD,
   );
