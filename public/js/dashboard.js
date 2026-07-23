@@ -273,23 +273,31 @@ function renderGates(entry) {
   }
 }
 
-function renderHealth(health = {}, slos = {}) {
+function renderHealth(health = {}, slos = {}, mode = 'shadow') {
   const list = $('health-list');
   list.replaceChildren();
+  const isLive = String(mode).toLowerCase() === 'live';
   const items = [
-    ['Feeds (RTDS/CLOB)', health.feedsOk],
-    ['Recovery / reconcile', health.recoveryOk],
-    ['User channel WS', health.userChannelOk],
-    ['Pronto (ready)', health.ready],
-    ['Armada (engine)', health.armed],
-    ['Live money', health.live],
-    ['Halted', health.halted === true ? false : true],
+    { label: 'Feeds (RTDS/CLOB)', ok: health.feedsOk === true },
+    { label: 'Recovery / reconcile', ok: health.recoveryOk === true },
+    { label: 'User channel WS', ok: health.userChannelOk === true },
+    { label: 'Pronto (ready)', ok: health.ready === true },
+    { label: 'Armada (engine)', ok: health.armed === true },
+    {
+      label: 'Dinheiro real (live)',
+      ok: isLive ? health.live === true : null,
+      note: isLive ? (health.live ? 'ATIVO' : 'FALHA') : 'desligado · shadow',
+    },
+    { label: 'Halted', ok: health.halted !== true, note: health.halted ? 'SIM' : 'não' },
   ];
-  for (const [label, ok] of items) {
+  for (const item of items) {
     const li = document.createElement('li');
-    const good = ok === true;
-    li.className = good ? 'health--ok' : 'health--bad';
-    li.innerHTML = `<span class="dot ${good ? 'dot--ok' : 'dot--err'}"></span><strong>${label}</strong><em>${good ? 'OK' : 'FALHA'}</em>`;
+    const neutral = item.ok == null;
+    const good = item.ok === true;
+    li.className = neutral ? 'health--idle' : good ? 'health--ok' : 'health--bad';
+    const dot = neutral ? 'dot--idle' : good ? 'dot--ok' : 'dot--err';
+    const statusText = item.note ?? (good ? 'OK' : 'FALHA');
+    li.innerHTML = `<span class="dot ${dot}"></span><strong>${item.label}</strong><em>${statusText}</em>`;
     list.append(li);
   }
   text('slo-badge', slos.ok ? 'SLO OK' : 'SLO atenção');
@@ -459,7 +467,7 @@ function render(status, health, instances) {
   text('live-reverse', status.canary ? (status.canary.liveReverse ? 'ativado' : 'bloqueado') : '—');
   text('canary-preset', status.canary?.presetId || status.catalog?.presetId || '—');
 
-  renderHealth(health, status.slos);
+  renderHealth(health, status.slos, status.mode);
   renderOpenOrders(openOrders);
   renderOrders(status.orders);
   setConnectionState(health);
