@@ -26,6 +26,7 @@ const EXPECTED_POLICY_DENIALS = new Set([
   'CANARY_BUDGET_EXCEEDED',
   'DEADLINE_EXPIRED',
   'LIVE_REVERSE_UNSUPPORTED',
+  'OPERATOR_DISARMED',
 ]);
 
 /**
@@ -318,6 +319,19 @@ export function createEngine(opts) {
     get risk() {
       return riskEngine;
     },
+    getLastSnapshot() {
+      return lastSnapshot ? structuredClone(lastSnapshot) : null;
+    },
+    async submitOperatorIntent(intent) {
+      if (!intent || typeof intent !== 'object') throw new Error('operator intent obrigatório');
+      return dispatchIntent({
+        ...intent,
+        strategyInstanceId,
+        intentId:
+          intent.intentId ??
+          `${strategyInstanceId}:${intent.marketId ?? lastSnapshot?.marketId}:operator:${intent.kind}:${++intentSeq}`,
+      });
+    },
 
     start() {
       if (state !== 'BOOT' && state !== 'HALTED') {
@@ -543,6 +557,7 @@ export function createEngine(opts) {
         journalLength: journal.length,
         killActive: Boolean(riskEngine.killSwitch?.active),
         riskMetrics: typeof riskEngine.audit?.metrics === 'function' ? riskEngine.audit.metrics() : {},
+        entryEnabled: riskEngine.entryEnabled !== false,
       };
     },
   };

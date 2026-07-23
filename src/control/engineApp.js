@@ -33,6 +33,7 @@ export function createEngineApp(opts = {}) {
     opts.executionAudit ?? createExecutionAudit({ dir: opts.executionAuditDir, clock: opts.clock });
   const sink = opts.sink ?? createOmsSink({ mode, clock: opts.clock });
   const snapshotSource = opts.snapshotSource ?? null;
+  const startArmed = opts.startArmed ?? mode !== 'live';
 
   const engine = bootstrapEngine({
     strategyId,
@@ -53,6 +54,10 @@ export function createEngineApp(opts = {}) {
   let autoCheckpointTimer = null;
   let started = false;
   let startedAtMs = null;
+  let operatorState = startArmed ? 'ARMED' : 'DISARMED';
+  let operatorChangedAtMs = null;
+  let operatorQueue = Promise.resolve();
+  let latestPreflight = opts.preflight ?? null;
   let sourceStatus = snapshotSource
     ? { kind: snapshotSource.kind ?? 'custom', running: false, ok: false, reason: 'NOT_STARTED' }
     : { kind: 'manual', running: false, ok: null, reason: null };
@@ -66,11 +71,200 @@ export function createEngineApp(opts = {}) {
       orders: (sink.oms?.listOrders?.() ?? []).slice(-25),
       accountExposure: sink.oms?.accountExposure?.() ?? null,
       catalog: opts.catalogEntry ?? null,
+      catalogEntries: opts.catalog?.strategies ?? [],
       deployment: opts.deployment ?? null,
-      preflight: opts.preflight ?? null,
+      preflight: latestPreflight,
       canary: opts.canary ?? null,
       auditDir: executionAudit.dir,
+      operatorState,
+      operatorChangedAtMs,
+      entryEnabled: engine.risk.entryEnabled !== false,
     };
+  }
+
+  function auditOperator(action, detail = {}) {
+    executionAudit.append('operator_action', {
+      action,
+      operatorState,
+      strategyId,
+      strategyInstanceId: engine.strategyInstanceId,
+      ...detail,
+    });
+  }
+
+  function serializeOperatorAction(action, fn) {
+    const run = operatorQueue.then(fn, fn);
+    operatorQueue = run.catch(() => {});
+    return run.catch((error) => {
+      auditOperator(action, { ok: false, reason: error.message });
+      throw error;
+    });
+  }
+
+  function setOperatorState(next, action, detail = {}) {
+    operatorState = next;
+    operatorChangedAtMs = Date.now();
+    auditOperator(action, { ok: true, ...detail });
+    return status();
+  }
+
+  async function reconcile(reason = 'operator-reconcile') {
+    return serializeOperatorAction('reconcile', async () => {
+      const result = await sink.reconcileAll?.();
+      recoveryOk = result?.ok !== false;
+      const orphans = result?.orphans ?? [];
+      if (!recoveryOk || orphans.length > 0) {
+        engine.risk.setEntryEnabled(false);
+        operatorState = 'DISARMED';
+        throw new Error('RECONCILIATION_UNRESOLVED');
+      }
+      auditOperator('reconcile', { ok: true, reason, result });
+      return result ?? { ok: true, unresolved: [], orphans: [] };
+    });
+  }
+
+  async function arm(reason = 'operator-arm') {
+    return serializeOperatorAction('arm', async () => {
+      if (!started) throw new Error('ENGINE_NOT_STARTED');
+      if (engine.state === 'HALTED' || engine.getStatus().killActive) {
+        throw new Error('HALTED_RESTART_REQUIRED');
+      }
+      if (mode === 'live') {
+        sink.assertReady?.();
+        if (typeof opts.beforeArm === 'function') {
+          latestPreflight = await opts.beforeArm();
+          if (latestPreflight?.ok !== true) throw new Error('PREFLIGHT_FAILED');
+        }
+      }
+      const recovery = await sink.reconcileAll?.();
+      recoveryOk = recovery?.ok !== false;
+      if (
+        !recoveryOk ||
+        (recovery?.unresolved?.length ?? 0) > 0 ||
+        (recovery?.orphans?.length ?? 0) > 0
+      ) {
+        throw new Error('RECONCILIATION_UNRESOLVED');
+      }
+      const h = health();
+      if (!h.feedsOk || !h.recoveryOk || !h.userChannelOk || h.orphanOrders > 0) {
+        throw new Error('DEPENDENCIES_NOT_READY');
+      }
+      engine.risk.setEntryEnabled(true);
+      return setOperatorState('ARMED', 'arm', { reason, recovery });
+    });
+  }
+
+  async function disarm(nextState = 'DISARMED', reason = 'operator-stop') {
+    return serializeOperatorAction(nextState === 'PAUSED' ? 'pause' : 'disarm', async () => {
+      if (!started) throw new Error('ENGINE_NOT_STARTED');
+      engine.risk.setEntryEnabled(false);
+      const cancellation = await sink.cancelOpenEntries?.(reason);
+      if ((cancellation?.failed?.length ?? 0) > 0) {
+        operatorState = nextState;
+        operatorChangedAtMs = Date.now();
+        auditOperator(nextState === 'PAUSED' ? 'pause' : 'disarm', {
+          ok: false,
+          reason: 'ENTRY_CANCEL_FAILED',
+          cancellation,
+        });
+        throw new Error('ENTRY_CANCEL_FAILED');
+      }
+      return setOperatorState(
+        nextState,
+        nextState === 'PAUSED' ? 'pause' : 'disarm',
+        { reason, cancellation },
+      );
+    });
+  }
+
+  async function cancelAll(reason = 'operator-cancel-all') {
+    return serializeOperatorAction('cancel_all', async () => {
+      engine.risk.setEntryEnabled(false);
+      operatorState = 'DISARMED';
+      operatorChangedAtMs = Date.now();
+      const result = await sink.cancelOpenOrders?.(reason);
+      auditOperator('cancel_all', { ok: (result?.failed?.length ?? 0) === 0, reason, result });
+      if ((result?.failed?.length ?? 0) > 0) throw new Error('ORDER_CANCEL_FAILED');
+      return result ?? { canceled: [], failed: [] };
+    });
+  }
+
+  async function rollbackSafe(reason = 'operator-rollback') {
+    return serializeOperatorAction('rollback', async () => {
+      if (operatorState !== 'DISARMED') throw new Error('DISARM_REQUIRED');
+      if ((sink.oms?.openOrders?.().length ?? 0) > 0) throw new Error('OPEN_ORDERS_BLOCK_ROLLBACK');
+      const result = rollback();
+      engine.start();
+      engine.risk.setEntryEnabled(false);
+      operatorState = 'DISARMED';
+      operatorChangedAtMs = Date.now();
+      const recovery = await sink.reconcileAll?.();
+      recoveryOk = recovery?.ok !== false;
+      if (!recoveryOk || (recovery?.orphans?.length ?? 0) > 0) {
+        throw new Error('ROLLBACK_RECONCILIATION_FAILED');
+      }
+      auditOperator('rollback', { ok: true, reason, recovery });
+      return { ...result, ...engine.getStatus() };
+    });
+  }
+
+  async function flatten(reason = 'operator-flatten') {
+    return serializeOperatorAction('flatten', async () => {
+      if (!started) throw new Error('ENGINE_NOT_STARTED');
+      if (engine.state === 'HALTED') throw new Error('HALTED_RESTART_REQUIRED');
+      engine.risk.setEntryEnabled(false);
+      operatorState = 'DISARMED';
+      operatorChangedAtMs = Date.now();
+      const entryCancellation = await sink.cancelOpenEntries?.('operator-flatten');
+      if ((entryCancellation?.failed?.length ?? 0) > 0) throw new Error('ENTRY_CANCEL_FAILED');
+
+      const position = engine.position;
+      if (!(Number(position.qty) > 0) || !position.side) {
+        auditOperator('flatten', { ok: true, reason, alreadyFlat: true });
+        return { alreadyFlat: true, position };
+      }
+      const snapshot = engine.getLastSnapshot();
+      if (!snapshot || snapshot.marketId !== position.marketId) {
+        throw new Error('CURRENT_MARKET_SNAPSHOT_REQUIRED');
+      }
+      const sideKey = String(position.side).toLowerCase();
+      const tokenId =
+        position.side === 'UP' ? snapshot.identity?.upTokenId : snapshot.identity?.downTokenId;
+      const bid = Number(snapshot.book?.[sideKey]?.bestBid);
+      if (!tokenId || !Number.isFinite(bid) || bid <= 0) {
+        throw new Error('EXIT_MARKET_DATA_UNAVAILABLE');
+      }
+      const floor = Number(preset.stopMinBid ?? preset.minExitPrice ?? 0.01);
+      const slippage = Number(preset.entrySlippageMax ?? 0.02);
+      const minPrice = Math.max(
+        Number.isFinite(floor) ? floor : 0.01,
+        bid - (Number.isFinite(slippage) ? slippage : 0.02),
+      );
+      const result = await engine.submitOperatorIntent({
+        kind: 'EXIT',
+        side: position.side,
+        marketId: position.marketId,
+        quantity: Number(position.qty),
+        minPrice,
+        maxPrice: null,
+        tokenId,
+        orderType: 'FAK',
+        deadlineMs: Date.now() + 3_000,
+        reason,
+        presetId: opts.catalogEntry?.presetId ?? null,
+      });
+      auditOperator('flatten', {
+        ok: result?.allowed === true && result?.result?.accepted !== false,
+        reason,
+        position,
+        minPrice,
+        intentId: result?.result?.intentId ?? null,
+      });
+      if (result?.allowed !== true || result?.result?.accepted === false) {
+        throw new Error(result?.decision?.reasonCode ?? 'FLATTEN_REJECTED');
+      }
+      return result;
+    });
   }
 
   function health() {
@@ -215,6 +409,10 @@ export function createEngineApp(opts = {}) {
   function rollback() {
     if (!lastCheckpoint) throw new Error('nenhum checkpoint para rollback');
     engine.restore(lastCheckpoint);
+    executionAudit.append('rollback', {
+      state: engine.state,
+      savedAtMs: lastCheckpoint.savedAtMs ?? null,
+    });
     logger.warn('rollback_applied', { state: engine.state });
     return engine.getStatus();
   }
@@ -226,10 +424,44 @@ export function createEngineApp(opts = {}) {
     getHealth: health,
     getStatus: () => ({ ...status(), health: health(), slos: evaluateSlos(metricsSnap(), health(), opts.slos) }),
     getMetrics: metricsSnap,
-    getCatalog: () => opts.catalogEntry ?? null,
+    getCatalog: () => opts.catalog ?? { strategies: opts.catalogEntry ? [opts.catalogEntry] : [] },
+    getInstances: () => [
+      {
+        strategyInstanceId: engine.strategyInstanceId,
+        strategyId,
+        mode,
+        marketId: engine.getStatus().lastMarketId,
+        operatorState,
+        engineState: engine.state,
+        active: started,
+      },
+    ],
+    getAudit: (limit) => executionAudit.listRecent(limit),
+    onArm: arm,
+    onPause: (reason) => disarm('PAUSED', reason),
+    onDisarm: (reason) => disarm('DISARMED', reason),
+    onCancelAll: cancelAll,
+    onReconcile: reconcile,
+    onCheckpoint: (reason) =>
+      serializeOperatorAction('checkpoint', async () => {
+        const saved = checkpoint();
+        auditOperator('checkpoint', { ok: true, reason, savedAtMs: saved.savedAtMs ?? null });
+        return {
+          savedAtMs: saved.savedAtMs ?? null,
+          state: saved.engineState,
+          marketId: saved.lastSnapshot?.marketId ?? null,
+        };
+      }),
+    onRollback: rollbackSafe,
+    onFlatten: flatten,
     onKill: async (reason) => {
       logger.error('kill_requested', { reason });
-      return engine.kill(reason);
+      engine.risk.setEntryEnabled(false);
+      operatorState = 'HALTED';
+      operatorChangedAtMs = Date.now();
+      const result = await engine.kill(reason);
+      auditOperator('kill', { ok: true, reason, result });
+      return result;
     },
   });
 
@@ -252,6 +484,13 @@ export function createEngineApp(opts = {}) {
     },
     checkpoint,
     rollback,
+    arm,
+    pause: (reason) => disarm('PAUSED', reason),
+    disarm: (reason) => disarm('DISARMED', reason),
+    cancelAll,
+    reconcile,
+    flatten,
+    rollbackSafe,
     evaluateSlos: () => evaluateSlos(metricsSnap(), health(), opts.slos ?? DEFAULT_SLOS),
 
     async start() {
@@ -277,11 +516,15 @@ export function createEngineApp(opts = {}) {
         recoveryOk = true;
       }
       engine.start();
+      engine.risk.setEntryEnabled(startArmed);
+      operatorState = startArmed ? 'ARMED' : 'DISARMED';
+      operatorChangedAtMs = Date.now();
       started = true;
       startedAtMs = Date.now();
       executionAudit.append('engine_started', {
         strategyId,
         mode,
+        operatorState,
         deployment: opts.deployment ?? null,
         catalog: opts.catalogEntry ?? null,
       });

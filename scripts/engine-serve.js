@@ -70,6 +70,7 @@ try {
 }
 
 const registry = createDefaultRegistry();
+const catalog = catalogStore.load();
 const manifest = registry.resolve(strategyId).manifest;
 const presetId = manifest.presetId ?? strategyId;
 const marketScope = sourceKind === 'btc5m' ? 'btc-updown-5m' : 'fixture';
@@ -155,8 +156,14 @@ const app = createEngineApp({
   executionAuditDir: path.join(instanceStateDir, 'execution-audit'),
   snapshotSource,
   catalogEntry,
+  catalog,
   deployment,
   preflight: runtime?.preflight ?? null,
+  beforeArm: runtime?.revalidatePreflight,
+  startArmed:
+    process.env.ENGINE_START_ARMED == null
+      ? mode !== 'live'
+      : process.env.ENGINE_START_ARMED === '1',
   canary:
     strategyId === MIDAS_V1_STRATEGY_ID
       ? {

@@ -164,7 +164,8 @@ describe('control HTTP', () => {
 
     const ok = await fetchJson(port, '/control/kill', {
       method: 'POST',
-      headers: { 'x-ops-token': 'secret' },
+      headers: { 'x-ops-token': 'secret', 'content-type': 'application/json' },
+      body: JSON.stringify({ confirm: 'HALT' }),
     });
     assert.equal(ok.ok, true);
 
@@ -305,6 +306,7 @@ function fetchJson(port, pathName, init = {}) {
       },
     );
     req.on('error', reject);
+    if (init.body) req.write(init.body);
     req.end();
   });
 }

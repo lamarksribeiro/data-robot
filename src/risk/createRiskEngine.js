@@ -65,6 +65,7 @@ export function createRiskEngine(opts = {}) {
   /** Timestamps de ENTER aceitos; persistidos para limitar o canário entre restarts. */
   const entryTimestamps = [];
   let dailyRealizedPnl = opts.dailyRealizedPnl ?? 0;
+  let entryEnabled = opts.entryEnabled !== false;
 
   function deny(reasonCode, detail, meta = {}) {
     const decision = { allow: false, reasonCode, detail };
@@ -133,6 +134,14 @@ export function createRiskEngine(opts = {}) {
       return deny(
         RISK_REASON.LIVE_REVERSE_UNSUPPORTED,
         { reason: 'reverse exige saga SELL -> reconcile -> BUY' },
+        meta,
+      );
+    }
+
+    if (!entryEnabled && (intent.kind === 'ENTER' || intent.kind === 'REVERSE')) {
+      return deny(
+        RISK_REASON.OPERATOR_DISARMED,
+        { entryEnabled: false, operatorState: ctx.operatorState ?? null },
         meta,
       );
     }
@@ -326,6 +335,7 @@ export function createRiskEngine(opts = {}) {
       orderTimestamps: [...orderTimestamps],
       enteredEvents: [...enteredEvents],
       entryTimestamps: [...entryTimestamps],
+      entryEnabled,
       accountBook: accountBook.snapshot(),
       circuit: circuit.snapshot(),
       killSwitch: killSwitch.snapshot(),
@@ -346,6 +356,7 @@ export function createRiskEngine(opts = {}) {
     for (const key of snap.enteredEvents ?? []) enteredEvents.add(String(key));
     entryTimestamps.length = 0;
     entryTimestamps.push(...(snap.entryTimestamps ?? []).map(Number).filter(Number.isFinite));
+    entryEnabled = snap.entryEnabled !== false;
     accountBook.restore(snap.accountBook);
     circuit.restore(snap.circuit);
     killSwitch.restore(snap.killSwitch);
@@ -366,6 +377,13 @@ export function createRiskEngine(opts = {}) {
     tripKill,
     snapshot,
     restore,
+    get entryEnabled() {
+      return entryEnabled;
+    },
+    setEntryEnabled(enabled) {
+      entryEnabled = enabled === true;
+      return entryEnabled;
+    },
     RISK_REASON,
   };
 }
