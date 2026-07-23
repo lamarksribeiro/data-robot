@@ -427,7 +427,8 @@ describe('dashboard autenticado', () => {
     const base = `http://127.0.0.1:${ui.server.address().port}`;
 
     const page = await (await fetch(base)).text();
-    assert.match(page, /src="\/js\/mascot\.js"/);
+    assert.match(page, /src="\/js\/mascot\.js(?:\?[^"]*)?"/);
+    assert.match(page, /class="login-wrapper"/);
     assert.match(page, /class="sidebar"/);
     assert.match(page, /class="topbar"/);
 
