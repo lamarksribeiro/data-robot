@@ -73,11 +73,11 @@ FEITO:  engine Giovanna + drills (A1/A2)
         Shadow MIDAS ≥5 ENTER (22/07 Giovanna)
           → docs/operacao/evidencia-midas-shadow-2026-07-22.md
           │
-AGORA:  5) EXIT live MIDAS (danger / late_flip SELL)
+AGORA:  6) P9 + dashboard UI (canário contínuo / budget mínimo)
           │
-META:   Ciclo ENTER→EXIT reconciliado (P8 micro)
+META:   Produção canário limitada com supervisão
           │
-DEPOIS: P9 / dashboard → só então subir budget
+DEPOIS: subir budget / outras estratégias
           │
 FUTURO: outras estratégias no mesmo contrato (TFC, Apex, …)
 ```
@@ -86,8 +86,8 @@ FUTURO: outras estratégias no mesmo contrato (TFC, Apex, …)
 |---|--------|-----------------|
 | ✓ | Plugin `midas-carry-v1` + paridade ≥100 + `midas:micro-live` | Smoke/canário TFC |
 | ✓ | Shadow ≥5 ENTER (22/07) | Exigir shadow 100 / 7 dias |
-| 3 | 3 micros $1 reconciliados | UI dashboard, login real |
-| 4 | EXIT live antes de subir $ | REVERSE, ETH, catálogo ADR-002 completo |
+| ✓ | 3 micros enter/hold + EXIT live (22/07) | REVERSE, ETH, catálogo ADR-002 completo |
+| 6 | P9 + dashboard UI | Autonomia 24/7 / budget backtest |
 
 **Produção canário** = MIDAS real, cap **$1**, ENTER→fill→hold até o fim do evento, com preflight/WS/reconcile/kill.  
 **Não** é autonomia 24/7 nem budget do backtest ($10).
@@ -106,8 +106,8 @@ FUTURO: outras estratégias no mesmo contrato (TFC, Apex, …)
 | **2 — ✓** | **C'** | Shadow MIDAS curto | ≥5 ENTER (22/07 Giovanna); [evidência](./operacao/evidencia-midas-shadow-2026-07-22.md) |
 | **3 — ✓** | **E1** | 1º micro-live MIDAS | fill/reconcile 22/07 ([evidência](./operacao/evidencia-midas-micro-live-2026-07-22.md)) |
 | **4 — ✓** | **E2** | +2 micros (cap $2) | 3 reconciliados 22/07 ([evidência](./operacao/evidencia-midas-micro-live-2026-07-22.md)) |
-| **5** | **F** | EXIT live (danger/late-flip) | micro controlado, antes de subir budget |
-| **6** | **G** | P9 + outras estratégias | depois do canário MIDAS estável |
+| **5 — ✓** | **F** | EXIT live (danger/late-flip) | ciclo OK 22/07 ([evidência](./operacao/evidencia-midas-exit-live-2026-07-22.md)) |
+| **6** | **G** | P9 + dashboard UI | canário contínuo / budget mínimo |
 
 **Obrigatório em qualquer live MIDAS:** preflight, canary **$1**, ACK≠fill, User WS/REST, cancel/finally, kill.
 
