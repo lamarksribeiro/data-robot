@@ -5,26 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Login · Data Robot</title>
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.11.4">
-  <link rel="apple-touch-icon" href="/favicon.svg?v=1.11.4">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.12.0">
+  <link rel="apple-touch-icon" href="/favicon.svg?v=1.12.0">
 
-  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <!-- Styles -->
-  <link rel="stylesheet" href="/styles.css?v=1.11.4">
+  <link rel="stylesheet" href="/styles.css?v=1.12.0">
 
-  <!-- Scripts -->
-  <script src="/js/dashboard.js?v=1.11.4" defer></script>
-  <script src="/js/mascot.js?v=1.11.4" defer></script>
+  <script src="/js/dashboard.js?v=1.12.0" defer></script>
+  <script src="/js/mascot.js?v=1.12.0" defer></script>
 </head>
 <body>
   <div class="login-wrapper">
-    <!-- O mascote container é injetado dinamicamente aqui -->
-
     <div class="login" id="login-view">
       <div class="login__header">
         <h1 class="login__title">Data Robot</h1>
@@ -64,30 +58,14 @@
       </div>
 
       <nav class="sidebar__nav">
-        <a class="navlink is-active" href="#overview">
-          <span class="navlink__icon" aria-hidden="true">⌁</span>
-          <span>Visão geral</span>
-        </a>
-        <a class="navlink" href="#operations">
-          <span class="navlink__icon" aria-hidden="true">⚡</span>
-          <span>Operação</span>
-        </a>
-        <a class="navlink" href="#orders">
-          <span class="navlink__icon" aria-hidden="true">≡</span>
-          <span>Ordens</span>
-        </a>
-        <a class="navlink" href="#strategies">
-          <span class="navlink__icon" aria-hidden="true">◇</span>
-          <span>Estratégias</span>
-        </a>
-        <a class="navlink" href="#audit">
-          <span class="navlink__icon" aria-hidden="true">☰</span>
-          <span>Auditoria</span>
-        </a>
-        <a class="navlink" href="#diagnostics-panel">
-          <span class="navlink__icon" aria-hidden="true">⌘</span>
-          <span>Diagnóstico</span>
-        </a>
+        <a class="navlink is-active" href="#overview"><span class="navlink__icon" aria-hidden="true">⌁</span><span>Visão geral</span></a>
+        <a class="navlink" href="#market"><span class="navlink__icon" aria-hidden="true">◎</span><span>Mercado</span></a>
+        <a class="navlink" href="#position-pnl"><span class="navlink__icon" aria-hidden="true">$</span><span>Posição & PnL</span></a>
+        <a class="navlink" href="#orders"><span class="navlink__icon" aria-hidden="true">≡</span><span>Ordens</span></a>
+        <a class="navlink" href="#operations"><span class="navlink__icon" aria-hidden="true">⚡</span><span>Controles</span></a>
+        <a class="navlink" href="#strategies"><span class="navlink__icon" aria-hidden="true">◇</span><span>Estratégias</span></a>
+        <a class="navlink" href="#audit"><span class="navlink__icon" aria-hidden="true">☰</span><span>Auditoria</span></a>
+        <a class="navlink" href="#diagnostics-panel"><span class="navlink__icon" aria-hidden="true">⌘</span><span>Diagnóstico</span></a>
       </nav>
 
       <div class="sidebar__footer">
@@ -100,24 +78,16 @@
     </aside>
 
     <header class="topbar">
-      <button
-        id="menu-button"
-        class="menu-btn"
-        type="button"
-        aria-label="Abrir menu"
-        aria-expanded="false"
-        aria-controls="mobile-nav"
-      >
-        <span aria-hidden="true"></span>
-        <span aria-hidden="true"></span>
-        <span aria-hidden="true"></span>
+      <button id="menu-button" class="menu-btn" type="button" aria-label="Abrir menu" aria-expanded="false" aria-controls="mobile-nav">
+        <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
       </button>
       <div class="topbar__crumbs">
         <span>Operações</span>
         <span class="topbar__sep">›</span>
-        <strong>Visão geral</strong>
+        <strong id="topbar-section">Visão geral</strong>
       </div>
       <div class="topbar__actions">
+        <span class="topbar-pill" id="topbar-mode">—</span>
         <button class="btn btn--ghost btn--sm" id="refresh-button" type="button">Atualizar</button>
         <button class="btn btn--ghost btn--sm logout-button" type="button">Sair</button>
       </div>
@@ -127,26 +97,199 @@
       <section class="page-header" id="overview">
         <div>
           <p class="eyebrow">Control Plane P9</p>
-          <h1>Operação do robô</h1>
+          <h1>Sala de operação</h1>
           <p class="page-header__sub" id="last-update">Aguardando Engine…</p>
         </div>
-        <span class="environment-badge"><span class="dot dot--warn"></span> Ambiente controlado</span>
+        <div class="page-header__badges">
+          <span class="environment-badge" id="env-badge"><span class="dot dot--warn"></span> <span id="env-badge-label">Ambiente controlado</span></span>
+          <span class="environment-badge" id="uptime-badge">Uptime —</span>
+        </div>
       </section>
 
       <div class="alert hidden" id="dashboard-alert" role="alert"></div>
 
-      <section class="status-grid" aria-label="Estado principal">
-        <article class="stat-card"><span>Operação</span><strong id="operator-state">—</strong></article>
-        <article class="stat-card"><span>Engine</span><strong id="engine-state">—</strong></article>
-        <article class="stat-card"><span>Saúde</span><strong id="engine-health">—</strong></article>
-        <article class="stat-card"><span>Modo</span><strong id="engine-mode">—</strong></article>
-        <article class="stat-card"><span>Estratégia</span><strong id="strategy-id">—</strong></article>
-        <article class="stat-card"><span>Mercado</span><strong id="market-id">—</strong></article>
-        <article class="stat-card"><span>Aprovação</span><strong id="approval">—</strong></article>
-        <article class="stat-card"><span>Entradas</span><strong id="entry-enabled">—</strong></article>
+      <section class="mode-banner" id="mode-banner" aria-live="polite">
+        <div class="mode-banner__main">
+          <span class="mode-banner__label" id="mode-title">Modo</span>
+          <strong id="mode-name">—</strong>
+          <p id="mode-explain">—</p>
+        </div>
+        <dl class="mode-banner__facts">
+          <div><dt>Operador</dt><dd id="operator-state">—</dd></div>
+          <div><dt>Engine</dt><dd id="engine-state">—</dd></div>
+          <div><dt>Entradas</dt><dd id="entry-enabled">—</dd></div>
+          <div><dt>Saúde</dt><dd id="engine-health">—</dd></div>
+        </dl>
+      </section>
+
+      <section class="status-grid status-grid--ops" aria-label="Resumo operacional">
+        <article class="stat-card">
+          <span>Estratégia ativa</span>
+          <strong id="strategy-id">—</strong>
+          <em class="stat-card__meta" id="strategy-preset">preset —</em>
+        </article>
+        <article class="stat-card">
+          <span>Ativo / janela</span>
+          <strong id="asset-label">—</strong>
+          <em class="stat-card__meta" id="market-window">—</em>
+        </article>
+        <article class="stat-card">
+          <span>Mercado atual</span>
+          <strong id="market-id">—</strong>
+          <em class="stat-card__meta" id="secs-left">—</em>
+        </article>
+        <article class="stat-card">
+          <span>Aprovação</span>
+          <strong id="approval">—</strong>
+          <em class="stat-card__meta" id="canary-cap">cap —</em>
+        </article>
+        <article class="stat-card">
+          <span>PnL realizado</span>
+          <strong id="pnl-realized">—</strong>
+          <em class="stat-card__meta" id="exposure-notional">exposição —</em>
+        </article>
+        <article class="stat-card">
+          <span>Carteira (USDC)</span>
+          <strong id="wallet-balance">—</strong>
+          <em class="stat-card__meta" id="wallet-note">—</em>
+        </article>
+        <article class="stat-card">
+          <span>Ordens abertas</span>
+          <strong id="open-orders-count">0</strong>
+          <em class="stat-card__meta" id="pending-intents">intents —</em>
+        </article>
+        <article class="stat-card">
+          <span>Commit</span>
+          <strong id="source-commit">—</strong>
+          <em class="stat-card__meta" id="instance-short">instância —</em>
+        </article>
       </section>
 
       <section class="panel-grid">
+        <article class="panel" id="market">
+          <div class="panel__header">
+            <div>
+              <p class="panel__kicker">Feed ao vivo</p>
+              <h2>Mercado em operação</h2>
+            </div>
+            <span class="badge" id="feed-badge">feed</span>
+          </div>
+          <dl class="facts facts--dense">
+            <div><dt>Ativo</dt><dd id="market-asset">—</dd></div>
+            <div><dt>Janela</dt><dd id="market-interval">—</dd></div>
+            <div><dt>Market ID</dt><dd id="market-id-full">—</dd></div>
+            <div><dt>Tempo restante</dt><dd id="market-secs">—</dd></div>
+            <div><dt>Lado favorito</dt><dd id="market-fav">—</dd></div>
+            <div><dt>Ask favorito</dt><dd id="market-ask">—</dd></div>
+            <div><dt>Gates de entrada</dt><dd id="market-entry-ok">—</dd></div>
+            <div><dt>Fonte de snapshot</dt><dd id="market-source">—</dd></div>
+          </dl>
+          <div class="gates-box" id="gates-box">
+            <p class="panel__hint">Gates da estratégia (por que entra ou não)</p>
+            <ul class="gates-list" id="gates-list"></ul>
+          </div>
+        </article>
+
+        <article class="panel" id="health-panel">
+          <div class="panel__header">
+            <div>
+              <p class="panel__kicker">Dependências</p>
+              <h2>Saúde do sistema</h2>
+            </div>
+            <span class="badge" id="slo-badge">SLO</span>
+          </div>
+          <ul class="health-list" id="health-list"></ul>
+          <dl class="facts facts--dense">
+            <div><dt>Disponibilidade</dt><dd id="health-availability">—</dd></div>
+            <div><dt>Órfãs / abertas</dt><dd id="health-orphans">—</dd></div>
+            <div><dt>User WS</dt><dd id="health-userws">—</dd></div>
+            <div><dt>Recovery</dt><dd id="health-recovery">—</dd></div>
+          </dl>
+        </article>
+
+        <article class="panel" id="position-pnl">
+          <div class="panel__header">
+            <div>
+              <p class="panel__kicker">Conta da estratégia</p>
+              <h2>Posição & PnL</h2>
+            </div>
+            <span id="position-badge" class="badge">flat</span>
+          </div>
+          <dl class="facts facts--dense">
+            <div><dt>Lado</dt><dd id="position-side">—</dd></div>
+            <div><dt>Quantidade</dt><dd id="position-qty">0</dd></div>
+            <div><dt>Preço médio</dt><dd id="position-avg">—</dd></div>
+            <div><dt>Mercado da posição</dt><dd id="position-market">—</dd></div>
+            <div><dt>PnL realizado</dt><dd id="position-pnl">0</dd></div>
+            <div><dt>Exposição aberta</dt><dd id="position-exposure">—</dd></div>
+            <div><dt>Qty aberta (conta)</dt><dd id="position-open-qty">—</dd></div>
+            <div><dt>Instâncias com risco</dt><dd id="position-instances">—</dd></div>
+          </dl>
+        </article>
+
+        <article class="panel" id="wallet-canary">
+          <div class="panel__header">
+            <div>
+              <p class="panel__kicker">Limites & capital</p>
+              <h2>Carteira e canário</h2>
+            </div>
+            <span class="badge badge--warn">P9</span>
+          </div>
+          <dl class="facts facts--dense">
+            <div><dt>Saldo USDC</dt><dd id="wallet-balance-detail">—</dd></div>
+            <div><dt>Allowance</dt><dd id="wallet-allowance">—</dd></div>
+            <div><dt>Preflight</dt><dd id="wallet-preflight">—</dd></div>
+            <div><dt>Hard cap / ordem</dt><dd id="canary-cap-detail">—</dd></div>
+            <div><dt>Entradas / janela</dt><dd id="canary-entries">—</dd></div>
+            <div><dt>Janela de controle</dt><dd id="control-window">—</dd></div>
+            <div><dt>Reverse live</dt><dd id="live-reverse">—</dd></div>
+            <div><dt>Preset canário</dt><dd id="canary-preset">—</dd></div>
+          </dl>
+          <p class="panel__note" id="wallet-explain">
+            Em shadow não há saldo CLOB real. Em live, o saldo vem do preflight (arm / start).
+          </p>
+        </article>
+
+        <article class="panel panel--wide" id="orders">
+          <div class="panel__header">
+            <div>
+              <p class="panel__kicker">OMS</p>
+              <h2>Ordens</h2>
+              <p class="panel__hint">Abertas = ainda no livro ou em trânsito. Histórico = últimas enviadas nesta sessão.</p>
+            </div>
+            <div class="panel__header-actions">
+              <span id="orders-open-badge" class="badge badge--warn">0 abertas</span>
+              <span id="orders-count" class="badge">0 total</span>
+            </div>
+          </div>
+
+          <h3 class="subheading">Abertas agora</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Horário</th><th>Tipo</th><th>Lado</th><th>Estado</th>
+                  <th>Qtd</th><th>Preço</th><th>OT</th><th>Exchange</th><th>Mercado</th><th>Motivo</th>
+                </tr>
+              </thead>
+              <tbody id="open-orders-body"><tr><td colspan="10" class="empty">Nenhuma ordem aberta</td></tr></tbody>
+            </table>
+          </div>
+
+          <h3 class="subheading">Histórico recente</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Horário</th><th>Intent</th><th>Tipo</th><th>Lado</th><th>Estado</th>
+                  <th>Fill</th><th>Preço</th><th>OT</th><th>Mercado</th><th>Motivo</th>
+                </tr>
+              </thead>
+              <tbody id="orders-body"><tr><td colspan="10" class="empty">Nenhuma ordem</td></tr></tbody>
+            </table>
+          </div>
+        </article>
+
         <article class="panel panel--wide" id="operations">
           <div class="panel__header">
             <div>
@@ -156,69 +299,77 @@
             </div>
             <span class="badge badge--accent" id="instance-count">1 ativa</span>
           </div>
-          <div class="control-grid" id="control-grid">
-            <button class="btn btn--primary" data-action="arm" data-confirm="ARM" type="button">Armar</button>
-            <button class="btn btn--warning" data-action="pause" data-confirm="PAUSE" type="button">Pausar</button>
-            <button class="btn btn--ghost" data-action="stop" data-confirm="STOP" type="button">Parar entradas</button>
-            <button class="btn btn--ghost" data-action="reconcile" data-confirm="RECONCILE" type="button">Reconciliar</button>
-            <button class="btn btn--ghost" data-action="checkpoint" data-confirm="CHECKPOINT" type="button">Checkpoint</button>
-            <button class="btn btn--warning" data-action="cancel-all" data-confirm="CANCEL" type="button">Cancelar ordens</button>
-            <button class="btn btn--danger" data-action="flatten" data-confirm="FLATTEN" data-typed="true" type="button">Zerar posição</button>
-            <button class="btn btn--danger" data-action="rollback" data-confirm="ROLLBACK" data-typed="true" type="button">Rollback</button>
-            <button class="btn btn--danger btn--critical" data-action="kill" data-confirm="HALT" data-typed="true" type="button">Kill switch</button>
-          </div>
-          <p class="panel__note">Pausar ou parar bloqueia novas entradas, mas preserva o processamento de mercado e as saídas protetivas. Kill exige reinício da Engine.</p>
-        </article>
-
-        <article class="panel">
-          <div class="panel__header"><h2>Posição</h2><span id="position-badge" class="badge">flat</span></div>
-          <dl class="facts">
-            <div><dt>Lado</dt><dd id="position-side">—</dd></div>
-            <div><dt>Quantidade</dt><dd id="position-qty">0</dd></div>
-            <div><dt>Preço médio</dt><dd id="position-avg">—</dd></div>
-            <div><dt>PnL realizado</dt><dd id="position-pnl">0</dd></div>
-          </dl>
-        </article>
-
-        <article class="panel">
-          <div class="panel__header"><h2>Canário</h2><span class="badge badge--warn">P9</span></div>
-          <dl class="facts">
-            <div><dt>Hard cap</dt><dd id="canary-cap">—</dd></div>
-            <div><dt>Janela</dt><dd id="control-window">—</dd></div>
-            <div><dt>Reverse live</dt><dd id="live-reverse">—</dd></div>
-            <div><dt>Commit</dt><dd id="source-commit">—</dd></div>
-          </dl>
-        </article>
-
-        <article class="panel panel--wide" id="orders">
-          <div class="panel__header">
-            <div><p class="panel__kicker">OMS</p><h2>Ordens recentes</h2></div>
-            <span id="orders-count" class="badge">0</span>
-          </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Intent</th><th>Tipo</th><th>Lado</th><th>Estado</th><th>Fill</th><th>Mercado</th></tr></thead>
-              <tbody id="orders-body"><tr><td colspan="6" class="empty">Nenhuma ordem</td></tr></tbody>
-            </table>
+          <p class="panel__note">
+            Este processo roda <strong>uma</strong> estratégia/instância. Trocar estratégia ou ativo exige alterar env no Coolify e redeploy — não há seletor a quente (protege capital e checkpoint).
+          </p>
+          <div class="control-cards" id="control-grid">
+            <button class="control-card btn--primary" data-action="arm" data-confirm="ARM" type="button">
+              <strong>Armar</strong>
+              <span>Libera novas entradas após preflight/reconciliação. Use quando quiser que o robô opere.</span>
+            </button>
+            <button class="control-card btn--warning" data-action="pause" data-confirm="PAUSE" type="button">
+              <strong>Pausar</strong>
+              <span>Bloqueia ENTER/REVERSE, mas continua feed e EXIT protetivo. Posição existente segue protegida.</span>
+            </button>
+            <button class="control-card btn--ghost" data-action="stop" data-confirm="STOP" type="button">
+              <strong>Parar entradas</strong>
+              <span>Marca operador como DISARMED. Mesmo efeito protetivo da pausa, com estado explícito “desarmado”.</span>
+            </button>
+            <button class="control-card btn--ghost" data-action="reconcile" data-confirm="RECONCILE" type="button">
+              <strong>Reconciliar</strong>
+              <span>Compara OMS × exchange. Se houver órfã ou pendência, desarma automaticamente.</span>
+            </button>
+            <button class="control-card btn--ghost" data-action="checkpoint" data-confirm="CHECKPOINT" type="button">
+              <strong>Checkpoint</strong>
+              <span>Grava estado (posição, risk, journal) no volume persistente para recovery.</span>
+            </button>
+            <button class="control-card btn--warning" data-action="cancel-all" data-confirm="CANCEL" type="button">
+              <strong>Cancelar ordens</strong>
+              <span>Cancela todas as ordens abertas na exchange (entradas e exits resting).</span>
+            </button>
+            <button class="control-card btn--danger" data-action="flatten" data-confirm="FLATTEN" data-typed="true" type="button">
+              <strong>Zerar posição</strong>
+              <span>Desarma, cancela entradas e envia EXIT FAK da posição aberta. Digite FLATTEN.</span>
+            </button>
+            <button class="control-card btn--danger" data-action="rollback" data-confirm="ROLLBACK" data-typed="true" type="button">
+              <strong>Rollback</strong>
+              <span>Só com operador DISARMED e sem ordens abertas. Restaura último checkpoint. Digite ROLLBACK.</span>
+            </button>
+            <button class="control-card btn--danger btn--critical" data-action="kill" data-confirm="HALT" data-typed="true" type="button">
+              <strong>Kill switch</strong>
+              <span>HALTED imediato + cancela ordens. Exige reinício do processo Engine. Digite HALT.</span>
+            </button>
           </div>
         </article>
 
         <article class="panel panel--wide" id="strategies">
           <div class="panel__header">
-            <div><p class="panel__kicker">Registry aprovado</p><h2>Estratégias disponíveis</h2></div>
+            <div>
+              <p class="panel__kicker">Catálogo versionado</p>
+              <h2>Estratégias</h2>
+              <p class="panel__hint">A linha marcada como ATIVA é a que este processo está rodando agora.</p>
+            </div>
             <span class="badge badge--accent">catálogo</span>
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Estratégia</th><th>Versão</th><th>Preset</th><th>Mercados</th><th>Aprovação</th></tr></thead>
-              <tbody id="catalog-body"><tr><td colspan="5" class="empty">Carregando catálogo…</td></tr></tbody>
+              <thead>
+                <tr>
+                  <th></th><th>Estratégia</th><th>Versão</th><th>Preset</th>
+                  <th>Mercados</th><th>Aprovação</th><th>Hard cap</th>
+                </tr>
+              </thead>
+              <tbody id="catalog-body"><tr><td colspan="7" class="empty">Carregando catálogo…</td></tr></tbody>
             </table>
           </div>
         </article>
 
         <article class="panel panel--wide" id="audit">
           <div class="panel__header">
-            <div><p class="panel__kicker">Trilha imutável</p><h2>Auditoria operacional</h2></div>
+            <div>
+              <p class="panel__kicker">Trilha imutável</p>
+              <h2>Auditoria operacional</h2>
+            </div>
             <span id="audit-count" class="badge">0</span>
           </div>
           <div class="table-wrap table-wrap--audit">
@@ -231,7 +382,10 @@
 
         <article class="panel panel--wide" id="diagnostics-panel">
           <div class="panel__header">
-            <div><p class="panel__kicker">Observabilidade</p><h2>Diagnóstico</h2></div>
+            <div>
+              <p class="panel__kicker">Observabilidade</p>
+              <h2>Diagnóstico bruto</h2>
+            </div>
             <span id="uptime" class="badge">—</span>
           </div>
           <pre class="console-box" id="diagnostics">Aguardando dados…</pre>
@@ -252,8 +406,10 @@
       </div>
       <nav class="mobile-nav__links">
         <a class="navlink is-active" href="#overview"><span class="navlink__icon">⌁</span><span>Visão geral</span></a>
-        <a class="navlink" href="#operations"><span class="navlink__icon">⚡</span><span>Operação</span></a>
+        <a class="navlink" href="#market"><span class="navlink__icon">◎</span><span>Mercado</span></a>
+        <a class="navlink" href="#position-pnl"><span class="navlink__icon">$</span><span>Posição & PnL</span></a>
         <a class="navlink" href="#orders"><span class="navlink__icon">≡</span><span>Ordens</span></a>
+        <a class="navlink" href="#operations"><span class="navlink__icon">⚡</span><span>Controles</span></a>
         <a class="navlink" href="#strategies"><span class="navlink__icon">◇</span><span>Estratégias</span></a>
         <a class="navlink" href="#audit"><span class="navlink__icon">☰</span><span>Auditoria</span></a>
         <a class="navlink" href="#diagnostics-panel"><span class="navlink__icon">⌘</span><span>Diagnóstico</span></a>

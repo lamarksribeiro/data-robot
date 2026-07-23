@@ -62,13 +62,58 @@ export function createEngineApp(opts = {}) {
     ? { kind: snapshotSource.kind ?? 'custom', running: false, ok: false, reason: 'NOT_STARTED' }
     : { kind: 'manual', running: false, ok: null, reason: null };
 
+  function marketSummary(base) {
+    const marketId = base.lastMarketId ?? base.position?.marketId ?? null;
+    const diag = base.diagnostics ?? {};
+    const entry = diag.entry ?? {};
+    const source = sourceStatus ?? {};
+    let asset = '—';
+    let window = '—';
+    if (typeof marketId === 'string') {
+      if (marketId.startsWith('btc-updown-5m')) {
+        asset = 'BTC';
+        window = 'Up/Down 5m';
+      } else if (marketId.startsWith('eth-updown-5m')) {
+        asset = 'ETH';
+        window = 'Up/Down 5m';
+      } else if (marketId.includes('fixture')) {
+        asset = 'FIXTURE';
+        window = 'simulado';
+      }
+    } else if (source.kind === 'btc5m') {
+      asset = 'BTC';
+      window = 'Up/Down 5m';
+    } else if (source.kind === 'fixture') {
+      asset = 'FIXTURE';
+      window = 'simulado';
+    }
+    return {
+      asset,
+      window,
+      marketId,
+      sourceKind: source.kind ?? null,
+      sourceOk: source.ok ?? null,
+      sourceReason: source.reason ?? null,
+      secsLeft: Number.isFinite(Number(diag.secsLeft)) ? Number(diag.secsLeft) : null,
+      favoriteSide: entry.fav ?? null,
+      ask: Number.isFinite(Number(entry.ask)) ? Number(entry.ask) : null,
+      entryOk: entry.ok === true,
+      feedsHealthy: diag.feedsHealthy !== false,
+      inPosition: diag.inPosition === true || Number(base.position?.qty) > 0,
+    };
+  }
+
   function status() {
     const base = engine.getStatus();
+    const allOrders = sink.oms?.listOrders?.() ?? [];
+    const openOrders = sink.oms?.openOrders?.() ?? [];
     return {
       ...base,
       startedAtMs,
       uptimeMs: startedAtMs == null ? 0 : Math.max(0, Date.now() - startedAtMs),
-      orders: (sink.oms?.listOrders?.() ?? []).slice(-25),
+      orders: allOrders.slice(-40),
+      openOrders,
+      market: marketSummary(base),
       accountExposure: sink.oms?.accountExposure?.() ?? null,
       catalog: opts.catalogEntry ?? null,
       catalogEntries: opts.catalog?.strategies ?? [],

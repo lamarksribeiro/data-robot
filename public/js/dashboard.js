@@ -6,21 +6,82 @@ const menuButton = $('menu-button');
 const mobileNav = $('mobile-nav');
 let pollTimer = null;
 let actionRunning = false;
+let lastStatus = null;
+
+const MODE_COPY = {
+  shadow: {
+    title: 'SHADOW — simulação ao vivo',
+    explain:
+      'A estratégia recebe o mercado real e gera decisões, mas nenhuma ordem vai para a Polymarket. Serve para validar gates, timing e estabilidade sem risco de capital.',
+    badge: 'Shadow · sem dinheiro real',
+    tone: 'warn',
+  },
+  live: {
+    title: 'LIVE — dinheiro real',
+    explain:
+      'Ordens são enviadas ao CLOB. Só opere armado após shadow estável, com canário e preflight OK. Reverse ainda bloqueado neste deployment.',
+    badge: 'Live · capital em risco',
+    tone: 'err',
+  },
+  'dry-run': {
+    title: 'DRY-RUN — teste local',
+    explain: 'Modo de desenvolvimento: intents sem exchange.',
+    badge: 'Dry-run',
+    tone: 'idle',
+  },
+};
+
+const SECTION_TITLES = {
+  overview: 'Visão geral',
+  market: 'Mercado',
+  'position-pnl': 'Posição & PnL',
+  orders: 'Ordens',
+  operations: 'Controles',
+  strategies: 'Estratégias',
+  audit: 'Auditoria',
+  'diagnostics-panel': 'Diagnóstico',
+  'health-panel': 'Saúde',
+  'wallet-canary': 'Carteira',
+};
 
 function text(id, value) {
-  $(id).textContent = value == null || value === '' ? '—' : String(value);
+  const el = $(id);
+  if (!el) return;
+  el.textContent = value == null || value === '' ? '—' : String(value);
 }
 
 function number(value, digits = 4) {
   const n = Number(value);
-  return Number.isFinite(n) ? n.toFixed(digits).replace(/\.?0+$/, '') : '—';
+  if (!Number.isFinite(n)) return '—';
+  return n.toFixed(digits).replace(/\.?0+$/, '');
+}
+
+function money(value, digits = 2) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  const sign = n < 0 ? '-' : '';
+  return `${sign}$${Math.abs(n).toFixed(digits)}`;
 }
 
 function duration(ms) {
   const total = Math.floor(Number(ms || 0) / 1000);
   const hours = Math.floor(total / 3600);
   const mins = Math.floor((total % 3600) / 60);
-  return `${hours}h ${mins}m`;
+  const secs = total % 60;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  if (mins > 0) return `${mins}m ${secs}s`;
+  return `${secs}s`;
+}
+
+function fmtTime(ms) {
+  if (!ms) return '—';
+  return new Date(ms).toLocaleTimeString('pt-BR', { hour12: false });
+}
+
+function shortId(value, n = 10) {
+  if (!value) return '—';
+  const s = String(value);
+  return s.length <= n ? s : `${s.slice(0, n)}…`;
 }
 
 function showAlert(message, kind = 'error') {
@@ -43,8 +104,8 @@ function showLoginMessage(message = '') {
 function setConnectionState(health) {
   const dot = $('connection-dot');
   const label = $('connection-label');
-  const ready = Boolean(health.ready);
-  const healthy = ready || Boolean(health.ok);
+  const ready = Boolean(health?.ready);
+  const healthy = ready || Boolean(health?.ok);
   dot.className = `dot ${ready ? 'dot--ok' : healthy ? 'dot--warn' : 'dot--err'}`;
   label.textContent = ready ? 'Engine pronta' : healthy ? 'Engine degradada' : 'Engine indisponível';
 }
@@ -75,48 +136,94 @@ function emptyRow(body, columns, message) {
   body.append(row);
 }
 
-function appendCells(row, values) {
+function appendCells(row, values, opts = {}) {
   for (const raw of values) {
     const value = raw == null || raw === '' ? '—' : String(raw);
     const cell = document.createElement('td');
     cell.textContent = value;
     cell.title = value;
+    if (opts.mono !== false) cell.classList.add('mono-cell');
     row.append(cell);
+  }
+}
+
+function orderRow(order) {
+  return [
+    fmtTime(order.updatedAtMs || order.createdAtMs),
+    order.intentId ? shortId(order.intentId, 14) : '—',
+    order.kind,
+    order.tokenSide,
+    order.state,
+    `${number(order.qtyFilled)} / ${number(order.qty)}`,
+    number(order.price),
+    order.orderType,
+    order.marketId ? shortId(order.marketId, 22) : '—',
+    order.reason ? shortId(order.reason, 24) : '—',
+  ];
+}
+
+function renderOpenOrders(orders = []) {
+  const body = $('open-orders-body');
+  body.replaceChildren();
+  text('open-orders-count', orders.length);
+  text('orders-open-badge', `${orders.length} abertas`);
+  if (!orders.length) return emptyRow(body, 10, 'Nenhuma ordem aberta');
+  for (const order of orders) {
+    const row = document.createElement('tr');
+    row.className = 'row--open';
+    appendCells(row, [
+      fmtTime(order.updatedAtMs || order.createdAtMs),
+      order.kind,
+      order.tokenSide,
+      order.state,
+      `${number(order.qtyFilled)} / ${number(order.qty)}`,
+      number(order.price),
+      order.orderType,
+      order.hasExchangeId ? 'sim' : 'não',
+      order.marketId ? shortId(order.marketId, 22) : '—',
+      order.reason ? shortId(order.reason, 24) : '—',
+    ]);
+    body.append(row);
   }
 }
 
 function renderOrders(orders = []) {
   const body = $('orders-body');
   body.replaceChildren();
-  text('orders-count', orders.length);
-  if (!orders.length) return emptyRow(body, 6, 'Nenhuma ordem');
+  text('orders-count', `${orders.length} total`);
+  if (!orders.length) return emptyRow(body, 10, 'Nenhuma ordem');
   for (const order of [...orders].reverse()) {
     const row = document.createElement('tr');
-    appendCells(row, [
-      order.intentId,
-      order.kind,
-      order.tokenSide,
-      order.state,
-      `${number(order.qtyFilled)} / ${number(order.qty)}`,
-      order.marketId,
-    ]);
+    if (!['MATCHED', 'CANCELED', 'REJECTED', 'EXPIRED'].includes(order.state)) {
+      row.className = 'row--open';
+    }
+    appendCells(row, orderRow(order));
     body.append(row);
   }
 }
 
-function renderCatalog(catalog = {}) {
+function renderCatalog(catalog = {}, activeStrategyId = null, activePresetId = null) {
   const body = $('catalog-body');
   body.replaceChildren();
   const entries = catalog.strategies ?? [];
-  if (!entries.length) return emptyRow(body, 5, 'Catálogo indisponível');
+  if (!entries.length) return emptyRow(body, 7, 'Catálogo indisponível');
   for (const entry of entries) {
     const row = document.createElement('tr');
+    const active =
+      entry.strategyId === activeStrategyId &&
+      (!activePresetId || entry.presetId === activePresetId);
+    if (active) row.classList.add('row--active');
+    const mark = document.createElement('td');
+    mark.textContent = active ? 'ATIVA' : '';
+    mark.className = active ? 'tag-active' : '';
+    row.append(mark);
     appendCells(row, [
       entry.strategyId,
       entry.version,
       entry.presetId,
       (entry.marketScope ?? []).join(', '),
       entry.approval,
+      entry.canary?.hardCapUsd != null ? money(entry.canary.hardCapUsd) : '—',
     ]);
     body.append(row);
   }
@@ -145,6 +252,57 @@ function renderAudit(rows = []) {
   }
 }
 
+function renderGates(entry) {
+  const list = $('gates-list');
+  list.replaceChildren();
+  const gates = entry?.gates ?? {};
+  const keys = Object.keys(gates);
+  if (!keys.length) {
+    const li = document.createElement('li');
+    li.className = 'gates-list__empty';
+    li.textContent = 'Sem avaliação de gates neste tick (fora da janela ou sem snapshot elegível).';
+    list.append(li);
+    return;
+  }
+  for (const key of keys) {
+    const g = gates[key] ?? {};
+    const li = document.createElement('li');
+    li.className = g.pass ? 'gate--ok' : 'gate--fail';
+    li.innerHTML = `<strong>${key}</strong><span>${g.detail ?? (g.pass ? 'ok' : 'falhou')}</span>`;
+    list.append(li);
+  }
+}
+
+function renderHealth(health = {}, slos = {}) {
+  const list = $('health-list');
+  list.replaceChildren();
+  const items = [
+    ['Feeds (RTDS/CLOB)', health.feedsOk],
+    ['Recovery / reconcile', health.recoveryOk],
+    ['User channel WS', health.userChannelOk],
+    ['Pronto (ready)', health.ready],
+    ['Armada (engine)', health.armed],
+    ['Live money', health.live],
+    ['Halted', health.halted === true ? false : true],
+  ];
+  for (const [label, ok] of items) {
+    const li = document.createElement('li');
+    const good = ok === true;
+    li.className = good ? 'health--ok' : 'health--bad';
+    li.innerHTML = `<span class="dot ${good ? 'dot--ok' : 'dot--err'}"></span><strong>${label}</strong><em>${good ? 'OK' : 'FALHA'}</em>`;
+    list.append(li);
+  }
+  text('slo-badge', slos.ok ? 'SLO OK' : 'SLO atenção');
+  $('slo-badge').className = `badge ${slos.ok ? 'badge--accent' : 'badge--warn'}`;
+  text(
+    'health-availability',
+    health.availability == null ? '—' : `${(Number(health.availability) * 100).toFixed(1)}%`,
+  );
+  text('health-orphans', `${health.orphanOrders ?? 0} / ${health.openOrders ?? 0}`);
+  text('health-userws', health.userChannelOk ? 'OK' : 'FALHA');
+  text('health-recovery', health.recoveryOk ? 'OK' : 'FALHA');
+}
+
 function updateControls(status) {
   const operatorState = status.operatorState;
   for (const button of document.querySelectorAll('#control-grid button')) {
@@ -160,43 +318,167 @@ function updateControls(status) {
   }
 }
 
-function render(status, health, instances) {
+function renderMode(status, health) {
+  const mode = String(status.mode || 'shadow').toLowerCase();
+  const copy = MODE_COPY[mode] ?? {
+    title: `Modo ${mode}`,
+    explain: 'Modo operacional da Engine.',
+    badge: mode,
+    tone: 'idle',
+  };
+  text('mode-title', 'Como o robô está rodando');
+  text('mode-name', copy.title);
+  text('mode-explain', copy.explain);
+  text('topbar-mode', copy.badge);
+  text('env-badge-label', copy.badge);
+  const banner = $('mode-banner');
+  banner.dataset.tone = copy.tone;
+  const envDot = $('env-badge')?.querySelector('.dot');
+  if (envDot) {
+    envDot.className = `dot dot--${copy.tone === 'err' ? 'err' : copy.tone === 'warn' ? 'warn' : 'ok'}`;
+  }
   text('operator-state', status.operatorState);
   text('engine-state', status.state);
-  text('engine-health', health.ready ? 'READY' : health.ok ? 'HEALTHY' : 'DEGRADED');
-  text('engine-mode', status.mode);
-  text('strategy-id', status.strategyId);
-  text('market-id', status.lastMarketId);
-  text('approval', status.catalog?.approval);
   text('entry-enabled', status.entryEnabled ? 'LIBERADAS' : 'BLOQUEADAS');
+  text('engine-health', health?.ready ? 'READY' : health?.ok ? 'HEALTHY' : 'DEGRADED');
+}
+
+function renderWallet(status) {
+  const mode = String(status.mode || '').toLowerCase();
+  const bal = status.preflight?.checks?.balance;
+  const balanceUsd = bal?.balanceUsd;
+  const allowanceUsd = bal?.allowanceUsd;
+  if (mode === 'shadow' || mode === 'dry-run') {
+    text('wallet-balance', 'n/a');
+    text('wallet-note', 'shadow · sem CLOB');
+    text('wallet-balance-detail', 'não aplicável em shadow');
+    text('wallet-allowance', '—');
+    text('wallet-preflight', status.preflight ? (status.preflight.ok ? 'OK (stale)' : 'FALHA') : 'sem preflight');
+    text(
+      'wallet-explain',
+      'Shadow não consulta saldo na Polymarket. O saldo real aparece em live após preflight (arm/start).',
+    );
+    return;
+  }
+  text('wallet-balance', money(balanceUsd));
+  text('wallet-note', bal?.ok === false ? 'preflight falhou' : 'via preflight');
+  text('wallet-balance-detail', money(balanceUsd));
+  text('wallet-allowance', money(allowanceUsd));
+  text(
+    'wallet-preflight',
+    status.preflight?.ok
+      ? `OK · ${status.preflight.checkedAt ? new Date(status.preflight.checkedAt).toLocaleTimeString('pt-BR') : ''}`
+      : status.preflight
+        ? 'FALHA'
+        : 'ainda não armou',
+  );
+  text(
+    'wallet-explain',
+    'Saldo/allowance vêm do preflight live. Ao armar, a Engine revalida. Não é mark-to-market contínuo da carteira.',
+  );
+}
+
+function render(status, health, instances) {
+  lastStatus = status;
+  const market = status.market ?? {};
+  const pos = status.position ?? {};
+  const openOrders = status.openOrders ?? [];
+
+  renderMode(status, health);
+
+  text('strategy-id', status.strategyId);
+  text('strategy-preset', status.canary?.presetId || status.catalog?.presetId || '—');
+  text('asset-label', market.asset || '—');
+  text('market-window', market.window || '—');
+  text('market-id', shortId(market.marketId || status.lastMarketId, 28));
+  text(
+    'secs-left',
+    market.secsLeft != null ? `${number(market.secsLeft, 1)}s restantes` : '—',
+  );
+  text('approval', status.catalog?.approval);
+  text('canary-cap', status.canary ? `cap ${money(status.canary.hardCapUsd)}` : 'cap —');
+  text('pnl-realized', money(pos.realizedPnl));
+  const pnlEl = $('pnl-realized');
+  if (pnlEl) {
+    const pnl = Number(pos.realizedPnl);
+    pnlEl.classList.toggle('is-pos', Number.isFinite(pnl) && pnl > 0);
+    pnlEl.classList.toggle('is-neg', Number.isFinite(pnl) && pnl < 0);
+  }
+  text(
+    'exposure-notional',
+    status.accountExposure?.openNotional != null
+      ? `exposição ${money(status.accountExposure.openNotional)}`
+      : 'exposição —',
+  );
+  text('pending-intents', `${status.pendingIntentCount ?? 0} pending`);
+  text('source-commit', status.deployment?.sourceCommit?.slice(0, 12));
+  text('instance-short', shortId(status.strategyInstanceId, 28));
   text('instance-id', status.strategyInstanceId);
   text('instance-count', `${instances.length} ativa${instances.length === 1 ? '' : 's'}`);
-  text('position-side', status.position?.side);
-  text('position-qty', number(status.position?.qty));
-  text('position-avg', number(status.position?.avgPrice));
-  text('position-pnl', number(status.position?.realizedPnl));
-  text('position-badge', Number(status.position?.qty) > 0 ? 'aberta' : 'flat');
-  text('canary-cap', status.canary ? `$${number(status.canary.hardCapUsd, 2)}` : '—');
+  text('uptime', duration(status.uptimeMs));
+  text('uptime-badge', `Uptime ${duration(status.uptimeMs)}`);
+  text('last-update', `Atualizado em ${new Date().toLocaleTimeString('pt-BR')}`);
+
+  text('market-asset', market.asset);
+  text('market-interval', market.window);
+  text('market-id-full', market.marketId || status.lastMarketId);
+  text('market-secs', market.secsLeft != null ? `${number(market.secsLeft, 1)} s` : '—');
+  text('market-fav', market.favoriteSide);
+  text('market-ask', number(market.ask));
+  text('market-entry-ok', market.entryOk ? 'PASSAM' : 'BLOQUEADOS');
+  text(
+    'market-source',
+    `${market.sourceKind ?? health?.snapshotSource?.kind ?? '—'} · ${
+      market.sourceOk === true || health?.snapshotSource?.ok === true ? 'OK' : market.sourceReason || health?.snapshotSource?.reason || '—'
+    }`,
+  );
+  const feedOk = health?.feedsOk === true && (market.sourceOk !== false);
+  text('feed-badge', feedOk ? 'feed OK' : 'feed atenção');
+  $('feed-badge').className = `badge ${feedOk ? 'badge--accent' : 'badge--warn'}`;
+  renderGates(status.diagnostics?.entry);
+
+  text('position-side', pos.side);
+  text('position-qty', number(pos.qty));
+  text('position-avg', number(pos.avgPrice));
+  text('position-market', pos.marketId || '—');
+  text('position-pnl', money(pos.realizedPnl));
+  text('position-exposure', money(status.accountExposure?.openNotional));
+  text('position-open-qty', number(status.accountExposure?.openQty));
+  text('position-instances', status.accountExposure?.instances ?? '—');
+  text('position-badge', Number(pos.qty) > 0 ? 'aberta' : 'flat');
+
+  renderWallet(status);
+  text('canary-cap-detail', status.canary ? money(status.canary.hardCapUsd) : '—');
+  text(
+    'canary-entries',
+    status.canary?.maxEntriesPerControlWindow != null
+      ? String(status.canary.maxEntriesPerControlWindow)
+      : '—',
+  );
   text('control-window', status.canary ? duration(status.canary.controlWindowMs) : '—');
   text('live-reverse', status.canary ? (status.canary.liveReverse ? 'ativado' : 'bloqueado') : '—');
-  text('source-commit', status.deployment?.sourceCommit?.slice(0, 12));
-  text('uptime', duration(status.uptimeMs));
-  text('last-update', `Atualizado em ${new Date().toLocaleTimeString('pt-BR')}`);
+  text('canary-preset', status.canary?.presetId || status.catalog?.presetId || '—');
+
+  renderHealth(health, status.slos);
+  renderOpenOrders(openOrders);
+  renderOrders(status.orders);
   setConnectionState(health);
   $('diagnostics').textContent = JSON.stringify(
     {
       health,
-      source: health.snapshotSource,
+      market: status.market,
+      source: health?.snapshotSource,
       diagnostics: status.diagnostics,
       riskMetrics: status.riskMetrics,
       accountExposure: status.accountExposure,
       preflight: status.preflight,
+      slos: status.slos,
       haltReason: status.haltReason,
+      openOrders,
     },
     null,
     2,
   );
-  renderOrders(status.orders);
   updateControls(status);
 }
 
@@ -210,8 +492,9 @@ async function refresh() {
       api('/api/engine/audit?limit=100'),
     ]);
     clearAlert();
-    render(status, health, instances);
-    renderCatalog(catalog);
+    const healthView = status.health ?? health;
+    render(status, healthView, instances);
+    renderCatalog(catalog, status.strategyId, status.canary?.presetId || status.catalog?.presetId);
     renderAudit(audit);
   } catch (error) {
     if (error.status === 401) return showLogin();
@@ -241,10 +524,11 @@ function showLogin() {
 async function runControl(button) {
   const action = button.dataset.action;
   const confirmation = button.dataset.confirm;
+  const label = button.querySelector('strong')?.textContent?.trim() || button.textContent.trim();
   if (button.dataset.typed === 'true') {
     const typed = window.prompt(`Ação sensível. Digite ${confirmation} para confirmar.`);
     if (typed !== confirmation) return;
-  } else if (!window.confirm(`Confirmar ação ${button.textContent.trim()}?`)) {
+  } else if (!window.confirm(`Confirmar: ${label}?`)) {
     return;
   }
   actionRunning = true;
@@ -254,9 +538,9 @@ async function runControl(button) {
       method: 'POST',
       body: JSON.stringify({ confirm: confirmation }),
     });
-    showAlert(`Ação ${button.textContent.trim()} concluída.`, 'warning');
+    showAlert(`Ação ${label} concluída.`, 'warning');
   } catch (error) {
-    showAlert(`Falha em ${button.textContent.trim()}: ${error.message}`);
+    showAlert(`Falha em ${label}: ${error.message}`);
   } finally {
     actionRunning = false;
     await refresh();
@@ -325,6 +609,8 @@ mobileNav.querySelector('.mobile-nav__close').addEventListener('click', closeMob
 for (const link of document.querySelectorAll('.navlink')) {
   link.addEventListener('click', () => {
     const href = link.getAttribute('href');
+    const id = href?.replace('#', '') ?? 'overview';
+    text('topbar-section', SECTION_TITLES[id] || 'Visão geral');
     for (const peer of document.querySelectorAll(`.navlink[href="${href}"]`)) {
       peer.classList.add('is-active');
     }
