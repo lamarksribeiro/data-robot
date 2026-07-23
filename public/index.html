@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Login · Data Robot</title>
 
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.12.1">
-  <link rel="apple-touch-icon" href="/favicon.svg?v=1.12.1">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.12.2">
+  <link rel="apple-touch-icon" href="/favicon.svg?v=1.12.2">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,10 +14,10 @@
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <link rel="stylesheet" href="/styles/tokens.css?v=1.12.0">
-  <link rel="stylesheet" href="/styles.css?v=1.12.1">
+  <link rel="stylesheet" href="/styles.css?v=1.12.2">
 
-  <script src="/js/dashboard.js?v=1.12.1" defer></script>
-  <script src="/js/mascot.js?v=1.12.1" defer></script>
+  <script src="/js/dashboard.js?v=1.12.2" defer></script>
+  <script src="/js/mascot.js?v=1.12.2" defer></script>
 </head>
 <body>
   <div class="login-wrapper">
@@ -110,6 +110,19 @@
 
       <div class="alert hidden" id="dashboard-alert" role="alert"></div>
 
+      <section class="guide-card" id="guide-card" aria-live="polite">
+        <div class="guide-card__left">
+          <span class="guide-card__eyebrow" id="guide-eyebrow">Estado</span>
+          <strong id="guide-title">—</strong>
+          <p id="guide-body">—</p>
+        </div>
+        <div class="guide-card__right">
+          <span class="guide-card__eyebrow">Próximo passo</span>
+          <strong id="guide-next">—</strong>
+          <button class="btn btn--primary" id="guide-cta" type="button" hidden>Armar e operar</button>
+        </div>
+      </section>
+
       <section class="mode-banner" id="mode-banner" aria-live="polite">
         <div class="mode-banner__main">
           <span class="mode-banner__label" id="mode-title">Modo</span>
@@ -120,7 +133,7 @@
           <div><dt>Operador</dt><dd id="operator-state">—</dd></div>
           <div><dt>Engine</dt><dd id="engine-state">—</dd></div>
           <div><dt>Entradas</dt><dd id="entry-enabled">—</dd></div>
-          <div><dt>Saúde</dt><dd id="engine-health">—</dd></div>
+          <div><dt>Carteira</dt><dd id="wallet-balance-banner">—</dd></div>
         </dl>
       </section>
 
@@ -295,53 +308,55 @@
         <article class="panel panel--wide" id="operations">
           <div class="panel__header">
             <div>
-              <p class="panel__kicker">Lifecycle e segurança</p>
-              <h2>Controle da instância</h2>
+              <p class="panel__kicker">Controle</p>
+              <h2>O que você precisa no dia a dia</h2>
               <p class="panel__hint panel__mono" id="instance-id">—</p>
             </div>
             <span class="badge badge--accent" id="instance-count">1 ativa</span>
           </div>
-          <p class="panel__note">
-            Este processo roda <strong>uma</strong> estratégia/instância. Trocar estratégia ou ativo exige alterar env no Coolify e redeploy — não há seletor a quente (protege capital e checkpoint).
-          </p>
-          <div class="control-cards" id="control-grid">
+          <div class="control-cards control-cards--primary" id="control-grid-primary">
             <button class="control-card btn--primary" data-action="arm" data-confirm="ARM" type="button">
-              <strong>Armar</strong>
-              <span>Libera novas entradas após preflight/reconciliação. Use quando quiser que o robô opere.</span>
+              <strong>1. Armar</strong>
+              <span>Liga o robô para abrir entradas (usa dinheiro em live). Roda preflight e reconciliação antes.</span>
             </button>
             <button class="control-card btn--warning" data-action="pause" data-confirm="PAUSE" type="button">
-              <strong>Pausar</strong>
-              <span>Bloqueia ENTER/REVERSE, mas continua feed e EXIT protetivo. Posição existente segue protegida.</span>
-            </button>
-            <button class="control-card btn--ghost" data-action="stop" data-confirm="STOP" type="button">
-              <strong>Parar entradas</strong>
-              <span>Marca operador como DISARMED. Mesmo efeito protetivo da pausa, com estado explícito “desarmado”.</span>
-            </button>
-            <button class="control-card btn--ghost" data-action="reconcile" data-confirm="RECONCILE" type="button">
-              <strong>Reconciliar</strong>
-              <span>Compara OMS × exchange. Se houver órfã ou pendência, desarma automaticamente.</span>
-            </button>
-            <button class="control-card btn--ghost" data-action="checkpoint" data-confirm="CHECKPOINT" type="button">
-              <strong>Checkpoint</strong>
-              <span>Grava estado (posição, risk, journal) no volume persistente para recovery.</span>
-            </button>
-            <button class="control-card btn--warning" data-action="cancel-all" data-confirm="CANCEL" type="button">
-              <strong>Cancelar ordens</strong>
-              <span>Cancela todas as ordens abertas na exchange (entradas e exits resting).</span>
-            </button>
-            <button class="control-card btn--danger" data-action="flatten" data-confirm="FLATTEN" data-typed="true" type="button">
-              <strong>Zerar posição</strong>
-              <span>Desarma, cancela entradas e envia EXIT FAK da posição aberta. Digite FLATTEN.</span>
-            </button>
-            <button class="control-card btn--danger" data-action="rollback" data-confirm="ROLLBACK" data-typed="true" type="button">
-              <strong>Rollback</strong>
-              <span>Só com operador DISARMED e sem ordens abertas. Restaura último checkpoint. Digite ROLLBACK.</span>
+              <strong>2. Pausar</strong>
+              <span>Para de abrir entradas. Continua protegendo posição com EXIT.</span>
             </button>
             <button class="control-card btn--danger btn--critical" data-action="kill" data-confirm="HALT" data-typed="true" type="button">
-              <strong>Kill switch</strong>
-              <span>HALTED imediato + cancela ordens. Exige reinício do processo Engine. Digite HALT.</span>
+              <strong>Emergência · Kill</strong>
+              <span>Para tudo e cancela ordens. Digite HALT. Depois precisa reiniciar a Engine.</span>
             </button>
           </div>
+          <details class="advanced-box">
+            <summary>Ações avançadas (raras)</summary>
+            <div class="control-cards" id="control-grid-advanced">
+              <button class="control-card btn--ghost" data-action="stop" data-confirm="STOP" type="button">
+                <strong>Parar entradas</strong>
+                <span>Marca operador como DISARMED (parecido com pausar).</span>
+              </button>
+              <button class="control-card btn--ghost" data-action="reconcile" data-confirm="RECONCILE" type="button">
+                <strong>Reconciliar</strong>
+                <span>Confere OMS × exchange. Desarma se houver órfã.</span>
+              </button>
+              <button class="control-card btn--ghost" data-action="checkpoint" data-confirm="CHECKPOINT" type="button">
+                <strong>Checkpoint</strong>
+                <span>Salva estado no disco para recovery.</span>
+              </button>
+              <button class="control-card btn--warning" data-action="cancel-all" data-confirm="CANCEL" type="button">
+                <strong>Cancelar ordens</strong>
+                <span>Cancela todas as ordens abertas na exchange.</span>
+              </button>
+              <button class="control-card btn--danger" data-action="flatten" data-confirm="FLATTEN" data-typed="true" type="button">
+                <strong>Zerar posição</strong>
+                <span>Vende a posição aberta (EXIT FAK). Digite FLATTEN.</span>
+              </button>
+              <button class="control-card btn--danger" data-action="rollback" data-confirm="ROLLBACK" data-typed="true" type="button">
+                <strong>Rollback</strong>
+                <span>Restaura último checkpoint. Só desarmado. Digite ROLLBACK.</span>
+              </button>
+            </div>
+          </details>
         </article>
 
         <article class="panel panel--wide" id="strategies">
