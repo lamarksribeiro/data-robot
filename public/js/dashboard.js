@@ -2,6 +2,8 @@ const $ = (id) => document.getElementById(id);
 const loginView = $('login-view');
 const dashboardView = $('dashboard-view');
 const alertBox = $('dashboard-alert');
+const menuButton = $('menu-button');
+const mobileNav = $('mobile-nav');
 let pollTimer = null;
 let actionRunning = false;
 
@@ -30,6 +32,21 @@ function showAlert(message, kind = 'error') {
 function clearAlert() {
   alertBox.classList.add('hidden');
   alertBox.textContent = '';
+}
+
+function showLoginMessage(message = '') {
+  const messageBox = $('login-message');
+  messageBox.textContent = message;
+  messageBox.classList.toggle('hidden', !message);
+}
+
+function setConnectionState(health) {
+  const dot = $('connection-dot');
+  const label = $('connection-label');
+  const ready = Boolean(health.ready);
+  const healthy = ready || Boolean(health.ok);
+  dot.className = `dot ${ready ? 'dot--ok' : healthy ? 'dot--warn' : 'dot--err'}`;
+  label.textContent = ready ? 'Engine pronta' : healthy ? 'Engine degradada' : 'Engine indisponível';
 }
 
 async function api(url, options = {}) {
@@ -165,6 +182,7 @@ function render(status, health, instances) {
   text('source-commit', status.deployment?.sourceCommit?.slice(0, 12));
   text('uptime', duration(status.uptimeMs));
   text('last-update', `Atualizado em ${new Date().toLocaleTimeString('pt-BR')}`);
+  setConnectionState(health);
   $('diagnostics').textContent = JSON.stringify(
     {
       health,
@@ -202,8 +220,10 @@ async function refresh() {
 }
 
 function showDashboard() {
+  (loginView.closest('.login-wrapper') ?? loginView).classList.add('hidden');
   loginView.classList.add('hidden');
   dashboardView.classList.remove('hidden');
+  document.body.classList.add('dashboard-active');
   refresh();
   clearInterval(pollTimer);
   pollTimer = setInterval(refresh, 5000);
@@ -211,8 +231,11 @@ function showDashboard() {
 
 function showLogin() {
   clearInterval(pollTimer);
+  closeMobileNav();
   dashboardView.classList.add('hidden');
+  document.body.classList.remove('dashboard-active');
   loginView.classList.remove('hidden');
+  (loginView.closest('.login-wrapper') ?? loginView).classList.remove('hidden');
 }
 
 async function runControl(button) {
@@ -242,33 +265,78 @@ async function runControl(button) {
 
 $('login-form').addEventListener('submit', async (event) => {
   event.preventDefault();
-  text('login-message', 'Autenticando…');
+  const submitButton = event.currentTarget.querySelector('button[type="submit"]');
+  showLoginMessage('');
+  submitButton.disabled = true;
+  submitButton.textContent = 'Entrando…';
   try {
     await api('/api/session', {
       method: 'POST',
       body: JSON.stringify({ username: $('username').value, password: $('password').value }),
     });
     $('password').value = '';
-    text('login-message', '');
+    showLoginMessage('');
     showDashboard();
   } catch (error) {
-    text(
-      'login-message',
+    showLoginMessage(
       error.message === 'DASHBOARD_CREDENTIALS_NOT_CONFIGURED'
         ? 'Configure DASHBOARD_USER e DASHBOARD_PASSWORD no servidor.'
         : 'Credenciais inválidas.',
     );
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = 'Entrar';
   }
 });
 
 $('refresh-button').addEventListener('click', refresh);
-$('logout-button').addEventListener('click', async () => {
-  await api('/api/session', { method: 'DELETE' }).catch(() => {});
-  showLogin();
-});
+for (const button of document.querySelectorAll('.logout-button')) {
+  button.addEventListener('click', async () => {
+    await api('/api/session', { method: 'DELETE' }).catch(() => {});
+    showLogin();
+  });
+}
 for (const button of document.querySelectorAll('#control-grid button')) {
   button.addEventListener('click', () => runControl(button));
 }
+
+function openMobileNav() {
+  menuButton.classList.add('is-open');
+  menuButton.setAttribute('aria-expanded', 'true');
+  mobileNav.classList.add('is-open');
+  mobileNav.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('nav-open');
+}
+
+function closeMobileNav() {
+  menuButton.classList.remove('is-open');
+  menuButton.setAttribute('aria-expanded', 'false');
+  mobileNav.classList.remove('is-open');
+  mobileNav.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('nav-open');
+}
+
+menuButton.addEventListener('click', () => {
+  if (mobileNav.classList.contains('is-open')) closeMobileNav();
+  else openMobileNav();
+});
+mobileNav.querySelector('.mobile-nav__backdrop').addEventListener('click', closeMobileNav);
+mobileNav.querySelector('.mobile-nav__close').addEventListener('click', closeMobileNav);
+for (const link of document.querySelectorAll('.navlink')) {
+  link.addEventListener('click', () => {
+    const href = link.getAttribute('href');
+    for (const peer of document.querySelectorAll(`.navlink[href="${href}"]`)) {
+      peer.classList.add('is-active');
+    }
+    for (const peer of document.querySelectorAll(`.navlink:not([href="${href}"])`)) {
+      peer.classList.remove('is-active');
+    }
+    closeMobileNav();
+  });
+}
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeMobileNav();
+});
 
 api('/api/session')
   .then((session) => (session.authenticated ? showDashboard() : showLogin()))

@@ -426,6 +426,11 @@ describe('dashboard autenticado', () => {
     cleanup.push(() => ui.stop());
     const base = `http://127.0.0.1:${ui.server.address().port}`;
 
+    const page = await (await fetch(base)).text();
+    assert.match(page, /src="\/js\/mascot\.js"/);
+    assert.match(page, /class="sidebar"/);
+    assert.match(page, /class="topbar"/);
+
     assert.equal((await fetch(`${base}/api/engine/status`)).status, 401);
     const login = await fetch(`${base}/api/session`, {
       method: 'POST',

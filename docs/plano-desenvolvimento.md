@@ -3,7 +3,7 @@
 **Revisado em:** 23/07/2026
 **Estado atual:** Control Plane P9 v1 publicado e validado no Giovanna. Canário deste ciclo = **só MIDAS, notional marketable e hard cap $2**.
 **URL oficial:** https://robot.fracta.online  
-**Pacote:** `data-robot` **1.11.0**
+**Pacote:** `data-robot` **1.11.1**
 **Estratégia deste ciclo:** MIDAS Carry V1 (`midas-carry-v1` / `btc-champion-v1`). Plugin, shadow ≥5, 3 micro-live e `danger_exit` live concluídos em 22/07. P9 está publicado em shadow/desarmado; late-flip live e janela longa ainda exigem evidência real.
 **Depois:** qualquer estratégia via o mesmo contrato (engine agnóstica). TFC V7 = helpers no código, fora do canário agora.
 
