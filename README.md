@@ -2,7 +2,7 @@
 
 Executor de trading real do ecossistema GoldenLens para mercados Polymarket (BTC 5 minutos), via `@polymarket/clob-client-v2` na Polygon Mainnet.
 
-**Status:** 1.11.0 — Control Plane P9 v1 com login, lifecycle, OMS ops, catálogo e auditoria. Falta validar o deploy e iniciar a campanha supervisionada.
+**Status:** 1.11.0 — Control Plane P9 v1 publicado e validado em `robot.fracta.online`, com login, lifecycle, OMS ops, catálogo e auditoria. Próximo gate: campanha shadow supervisionada.
 
 Estratégias aprovadas devem ficar disponíveis em um catálogo explícito e ser selecionadas por configuração. Instâncias de mercados distintos — por exemplo BTC 5m e ETH 5m — podem coexistir na mesma conta, desde que compartilhem coordenação global e durável de saldo, risk, OMS e recovery. Concorrência de estratégias no mesmo mercado exige um gate adicional de conflito/netting.
 
