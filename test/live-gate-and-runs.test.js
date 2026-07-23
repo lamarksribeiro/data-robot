@@ -51,11 +51,11 @@ describe('liveGate', () => {
     assert.match(r.stderr, /--live/);
   });
 
-  it('test:order sem --live sai com código 2', () => {
+  it('test:order sem parâmetros não acessa a rede e falha fechado', () => {
     const r = spawnSync(process.execPath, ['scripts/place-test-order.js'], {
       encoding: 'utf8',
     });
-    assert.equal(r.status, 2);
-    assert.match(r.stderr, /--live/);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /--market/);
   });
 });

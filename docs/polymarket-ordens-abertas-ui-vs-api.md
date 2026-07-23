@@ -170,11 +170,14 @@ Checklist mínimo:
 - [ ] `POLYMARKET_FUNDER_ADDRESS` = `proxyWallet` do perfil
 - [ ] Teste: enviar ordem pequena `postOnly` → conferir aba **Open** no site (F5 se necessário)
 
-Script atual no `data-robot`:
+Script atual no `data-robot` (simulação por padrão):
 
 ```bash
-npm run test:order -- --live --price 0.01 --size 5 --wait 15 --cancel
-# Fica aberta por 15s para inspeção e é cancelada pelo mesmo processo.
+npm run test:order -- --market=<condition-id> --token=<token-id> --side=BUY --price=0.01 --quantity=5
+
+# Após revisar o resumo:
+npm run test:order -- --market=<condition-id> --token=<token-id> --side=BUY --price=0.01 --quantity=5 --live --confirm=SEND_POLYMARKET_PASSIVE_TEST
+# Fica aberta por 10s para inspeção e é cancelada pelo mesmo processo.
 ```
 
 ### 4. Depois de enviar ordem pela API

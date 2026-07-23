@@ -15,11 +15,11 @@ Guia prático para configurar o `data-robot` sem o problema de ordens invisívei
 | `POLYMARKET_SIGNATURE_TYPE` | `1` para email/Magic; `2` Safe; `3` deposit wallet V2 |
 | `POLYMARKET_FUNDER_ADDRESS` | Endereço do perfil (proxy) — **não** o EOA |
 
-### Exemplo (valores fictícios)
+### Exemplo seguro
 
 ```env
 POLYMARKET_PRIVATE_KEY=0x...
-POLYMARKET_API_KEY=<REVOKED_POLYMARKET_L2_KEY>
+POLYMARKET_API_KEY=<SUA_API_KEY_L2>
 POLYMARKET_API_SECRET=...
 POLYMARKET_API_PASSPHRASE=...
 POLYMARKET_SIGNATURE_TYPE=1
@@ -72,7 +72,21 @@ cp .env.example .env
 npm run derive-key:write
 ```
 
-Isso grava no `.env` a **mesma API key** que o site cria no login (nonce 0).
+Isso grava no `.env` a credencial derivada da carteira (nonce 0). Ela só terá
+paridade com a interface se a sessão web também estiver usando essa mesma
+credencial L2; compartilhar signer e funder não unifica owners L2 diferentes.
+
+### Rotação de credencial L2
+
+Em 23/07/2026, a credencial exposta anteriormente neste documento foi revogada
+e substituída por um novo trio L2 criado de forma independente para o mesmo
+signer/funder DeltaGhost. A nova credencial é válida para a engine, mas **não
+garante paridade com a sessão web**: ordens abertas são escopadas pelo `owner`
+(API key L2), não apenas pelo funder/proxy wallet.
+
+Nunca coloque uma API key real em documentação, exemplos, commits ou logs.
+Use placeholders e mantenha key, secret e passphrase somente no gerenciador de
+segredos/environment.
 
 ### 5. Validar
 
@@ -100,14 +114,17 @@ Abra [polymarket.com/portfolio?tab=open](https://polymarket.com/portfolio?tab=op
 
 Se você limpou cookies ou fez login em outro PC:
 
-1. O browser pode regenerar credenciais em `poly_clob_api_key_map`
-2. Re rode no servidor do robô:
+1. O browser pode regenerar credenciais próprias.
+2. Se a operação exigir paridade visual, use um procedimento controlado de
+   alinhamento aprovado, sem copiar segredos para documentação ou logs.
+3. Para restaurar a credencial derivada padrão no robô:
 
 ```bash
 npm run derive-key:write
 ```
 
-3. Reinicie o processo do robô
+4. Reinicie o processo do robô e valide `owner`, autenticação L2 e visibilidade
+   com uma única ordem mínima post-only.
 
 Na maioria dos casos a key derivada (nonce 0) permanece estável para a mesma chave privada; só revalide se a UI parar de mostrar ordens de novo.
 

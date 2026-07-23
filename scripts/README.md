@@ -33,13 +33,22 @@ npm run test:connection -- --json
 
 ## place-test-order.js
 
-Envia ordem UP pequena (**exige `--live`**).
+Teste de sincronização com ordem LIMIT passiva. Exige mercado, token, lado,
+preço e quantidade explícitos. O padrão é simulação somente-leitura.
 
 ```bash
-npm run test:order -- --live --wait 15
-npm run test:order -- --live --wait 15 --cancel
-npm run test:order -- --live --price 0.01 --size 5 --no-post-only
+npm run test:order -- --market=<condition-id> --token=<token-id> --side=BUY --price=0.01 --quantity=5
+
+# Somente após revisar o resumo da simulação:
+npm run test:order -- --market=<condition-id> --token=<token-id> --side=BUY --price=0.01 --quantity=5 --live --confirm=SEND_POLYMARKET_PASSIVE_TEST
 ```
+
+Proteções live: revalidação do book no ponto de envio, `postOnly`, GTD de 120s,
+marca `DATA_ROBOT_SYNC_TEST` em `metadata`, janela de conferência de 10s e
+cancelamento automático. Limites fixos: 10 shares e US$ 1 de notional.
+Para uma conferência visual autorizada, `--keep-open` desativa o cancelamento
+automático e usa GTC. A ordem deve ser cancelada pelo operador ou encerrada com
+o mercado.
 
 ## fees/maker-vs-taker.js
 
