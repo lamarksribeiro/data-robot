@@ -105,7 +105,8 @@ FUTURO: outras estratégias no mesmo contrato (TFC, Apex, …)
 | **1 — código ✓** | **B** | Plugin MIDAS + paridade CI + harness `midas:micro-live` | registry + ≥100 sintéticos + script (CI verde 22/07) |
 | **2 — ✓** | **C'** | Shadow MIDAS curto | ≥5 ENTER (22/07 Giovanna); [evidência](./operacao/evidencia-midas-shadow-2026-07-22.md) |
 | **3 — ✓** | **E1** | 1º micro-live MIDAS | fill/reconcile 22/07 ([evidência](./operacao/evidencia-midas-micro-live-2026-07-22.md)) |
-| **4** | **E2** | +2 micros (cap $2) | 3 reconciliados, 0 órfã → **canário enter/hold** |
+| **4 — ✓** | **E2** | +2 micros (cap $2) | 3 reconciliados 22/07 ([evidência](./operacao/evidencia-midas-micro-live-2026-07-22.md)) |
+| **5** | **F** | EXIT live (danger/late-flip) | micro controlado |
 | **5** | **F'** | EXIT/danger live | antes de subir budget |
 | **6** | **G** | P9 + outras estratégias | depois do canário MIDAS estável |
 
