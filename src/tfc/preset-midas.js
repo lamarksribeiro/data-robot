@@ -228,9 +228,13 @@ export function resolveMidasScoopBudget(params, opts = {}) {
   return budget;
 }
 
-/** Canário MIDAS: Aggressive + sizing micro $2/$4. */
+/**
+ * Canário MIDAS: Aggressive + sizing micro $2/$4.
+ * MICRO_AGGRESSIVE fica por último de propósito: params de lab/UI (gates, exits)
+ * podem sobrescrever o núcleo, mas nunca o sizing/cap de microentrada.
+ */
 export function canaryMidasPreset(override = {}) {
-  return { ...MIDAS_AGGRESSIVE_V1, ...MICRO_AGGRESSIVE, ...override };
+  return { ...MIDAS_AGGRESSIVE_V1, ...override, ...MICRO_AGGRESSIVE };
 }
 
 /**

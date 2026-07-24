@@ -449,7 +449,9 @@ export function createStrategyLibrary(opts = {}) {
     return {
       active,
       restartRequired: true,
-      message: 'Estratégia marcada como ativa. Reinicie a Engine para aplicar.',
+      persistedUnder: activeFile,
+      message:
+        'Estratégia marcada como ativa (persistida em disco). Reinicie a Engine para aplicar no runtime.',
     };
   }
 

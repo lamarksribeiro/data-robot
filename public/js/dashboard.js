@@ -2572,7 +2572,7 @@ function renderStratStatusStrip(library) {
     : 'Nenhuma / default env';
   const nextLabel = active
     ? `${nextName || active.pluginId || active.strategyId || '—'}${nextBudget ? ` · ${nextBudget}` : ''}`
-    : 'env / default (sem active-strategy.json)';
+    : 'env / default (sem active-strategy persistido)';
   text('strat-status-running', runLabel);
   text(
     'strat-status-running-meta',
@@ -2604,7 +2604,7 @@ function renderStratStatusStrip(library) {
     !running
       ? 'Engine sem estratégia reportada.'
       : !active
-        ? 'Rodando via env/catálogo (não há active-strategy.json). No seletor: escolha o preset com o mesmo id.'
+        ? 'Rodando via env/catálogo (não há active-strategy persistido). No seletor: ative o preset desejado e reinicie.'
         : same
           ? 'Runtime e próxima boot estão alinhados.'
           : 'Runtime ≠ próxima boot — reinicie a Engine para aplicar a estratégia ativa.',

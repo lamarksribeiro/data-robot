@@ -33,8 +33,12 @@ const liveEnabled = process.env.ENGINE_LIVE_ENABLED === '1';
 const host = process.env.ENGINE_HOST || '0.0.0.0';
 const opsToken = process.env.ENGINE_OPS_TOKEN;
 const sourceKind = process.env.ENGINE_SNAPSHOT_SOURCE || 'fixture';
+const stateDir = process.env.ENGINE_STATE_DIR || 'runs';
+// active-strategy + custom presets sob o volume persistente (runs/), não em config/ efêmero da imagem.
+const strategyConfigDir =
+  process.env.STRATEGY_CONFIG_DIR || path.join(stateDir, 'strategy-config');
 const strategyLibrary = createStrategyLibrary({
-  rootDir: process.env.STRATEGY_CONFIG_DIR || 'config',
+  rootDir: strategyConfigDir,
 });
 const activeStrategy = strategyLibrary.loadActive();
 // Prioridade: active-strategy.json (UI) → env → fixture.
@@ -46,7 +50,6 @@ const strategyInstanceId =
   process.env.ENGINE_STRATEGY_INSTANCE_ID ||
   activeStrategy?.presetId ||
   `${strategyId}:primary`;
-const stateDir = process.env.ENGINE_STATE_DIR || 'runs';
 const catalogStore = createApprovalStore({
   file: process.env.STRATEGY_CATALOG_PATH || path.join('config', 'strategy-catalog.json'),
 });
@@ -156,7 +159,7 @@ function ensureCatalogEntry(resolvedPreset) {
         liveReverse: strategyId === MIDAS_V1_STRATEGY_ID,
       };
     })(),
-    evidence: activeStrategy ? ['config/active-strategy.json'] : [],
+    evidence: activeStrategy ? [`${strategyConfigDir}/active-strategy.json`] : [],
   };
   const next = {
     ...catalog,
@@ -200,10 +203,8 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
     console.error('[engine:serve] Recusa: MIDAS P9 exige ENGINE_SNAPSHOT_SOURCE=btc5m');
     process.exit(2);
   }
-  // Default canário se não houver active params de lab.
-  if (!activeStrategy?.params) {
-    preset = canaryMidasPreset(preset);
-  }
+  // Live/canário MIDAS sempre força micro $2/$4 (mesmo com params de lab/UI).
+  preset = canaryMidasPreset(preset);
   const maxCanaryBudget = resolveMidasCanaryCap(
     preset,
     process.env.ENGINE_CANARY_MAX_BUDGET,

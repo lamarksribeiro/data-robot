@@ -86,6 +86,20 @@ describe('MIDAS preset metadata (paridade backtest)', () => {
     assert.equal(resolveMidasCanaryCap(p, 5), 4);
     assert.equal(resolveMidasCanaryCap(p, 2), 2);
   });
+
+  it('canaryMidasPreset ignora override de sizing campeão ($10/$30)', () => {
+    const p = canaryMidasPreset({
+      entryBudget: 10,
+      maxEntryBudget: 30,
+      maxDistAbs: 35,
+      lateFlipReverseEnabled: false,
+    });
+    assert.equal(p.entryBudget, 2);
+    assert.equal(p.maxEntryBudget, 4);
+    assert.equal(p.maxDistAbs, 35);
+    assert.equal(p.lateFlipReverseEnabled, false);
+    assert.equal(p.entryOrderType, 'FAK');
+  });
 });
 
 describe('MIDAS V1 tier budget', () => {
