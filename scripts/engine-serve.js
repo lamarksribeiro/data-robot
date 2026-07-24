@@ -108,6 +108,14 @@ const marketScope =
   activeStrategy?.marketScope ||
   (sourceKind === 'btc5m' ? 'btc-updown-5m' : 'fixture');
 
+/** 0 = ilimitado na janela (1 ENTER/evento já vem de ONE_INTENT_PER_EVENT). */
+function resolveMaxEntriesPerControlWindow() {
+  const raw = process.env.ENGINE_CANARY_MAX_ENTRIES;
+  if (raw == null || raw === '') return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
 function buildCanaryStatus(strategyId, preset, presetId) {
   if (strategyId !== MIDAS_V1_STRATEGY_ID && strategyId !== TFC_V7_STRATEGY_ID) return null;
   const envCap = process.env.ENGINE_CANARY_MAX_BUDGET;
@@ -126,7 +134,7 @@ function buildCanaryStatus(strategyId, preset, presetId) {
     budgetLabel: midasDesc?.budgetLabel ?? null,
     backtestVersion: midasDesc?.backtestVersion ?? null,
     displayTitle: midasDesc?.displayTitle ?? presetId,
-    maxEntriesPerControlWindow: 1,
+    maxEntriesPerControlWindow: resolveMaxEntriesPerControlWindow(),
     controlWindowMs: Number(process.env.ENGINE_CONTROL_WINDOW_MS || 24 * 60 * 60 * 1000),
     liveReverse: strategyId === MIDAS_V1_STRATEGY_ID,
   };
@@ -154,7 +162,7 @@ function ensureCatalogEntry(resolvedPreset) {
       const c = buildCanaryStatus(strategyId, resolvedPreset, presetId);
       return {
         hardCapUsd: c?.hardCapUsd ?? Number(process.env.ENGINE_CANARY_MAX_BUDGET || MIDAS_CANARY_HARD_CAP_USD),
-        maxEntriesPerControlWindow: 1,
+        maxEntriesPerControlWindow: resolveMaxEntriesPerControlWindow(),
         controlWindowHours: 24,
         liveReverse: strategyId === MIDAS_V1_STRATEGY_ID,
       };
@@ -212,11 +220,12 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
   const controlWindowMs = Number(
     process.env.ENGINE_CONTROL_WINDOW_MS || 24 * 60 * 60 * 1000,
   );
+  const maxEntriesPerControlWindow = resolveMaxEntriesPerControlWindow();
   if (mode === 'live') {
     try {
       runtime = await prepareMidasCanaryRuntime({
         maxCanaryBudget,
-        maxEntriesPerControlWindow: 1,
+        maxEntriesPerControlWindow,
         controlWindowMs,
         allowLiveReverse: true,
         preset,
@@ -233,7 +242,7 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
       maxCanaryBudget,
       maxNotionalPerOrder: maxCanaryBudget,
       maxNotionalPerEvent: maxCanaryBudget,
-      maxEntriesPerControlWindow: 1,
+      maxEntriesPerControlWindow,
       controlWindowMs,
       allowLiveReverse: true,
     };
@@ -257,7 +266,7 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
     maxCanaryBudget: Number(process.env.ENGINE_CANARY_MAX_BUDGET || 2),
     maxNotionalPerOrder: Number(process.env.ENGINE_CANARY_MAX_BUDGET || 2),
     maxNotionalPerEvent: Number(process.env.ENGINE_CANARY_MAX_BUDGET || 2),
-    maxEntriesPerControlWindow: 1,
+    maxEntriesPerControlWindow: resolveMaxEntriesPerControlWindow(),
     controlWindowMs: Number(process.env.ENGINE_CONTROL_WINDOW_MS || 24 * 60 * 60 * 1000),
     allowLiveReverse: false,
   };

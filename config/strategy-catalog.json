@@ -12,7 +12,7 @@
       "approval": "canary-approved",
       "canary": {
         "hardCapUsd": 4,
-        "maxEntriesPerControlWindow": 1,
+        "maxEntriesPerControlWindow": 0,
         "controlWindowHours": 24,
         "liveReverse": true
       },
@@ -62,7 +62,7 @@
       "approval": "shadow-approved",
       "canary": {
         "hardCapUsd": 4,
-        "maxEntriesPerControlWindow": 1,
+        "maxEntriesPerControlWindow": 0,
         "controlWindowHours": 24,
         "liveReverse": true
       },

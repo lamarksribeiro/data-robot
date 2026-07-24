@@ -209,7 +209,7 @@ describe('isolamento de checkpoint', () => {
 });
 
 describe('proteção de rotação com posição live', () => {
-  it('faz settlement via Gamma e desarma quando o mercado fecha', async () => {
+  it('faz settlement via Gamma e continua ARMED no próximo evento', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p9-engine-'));
     cleanup.push(() => fs.rmSync(dir, { recursive: true, force: true }));
     const sink = {
@@ -263,9 +263,14 @@ describe('proteção de rotação com posição live', () => {
     assert.ok(app.engine.position.qty > 0);
     const result = await app.ingestSynthetic(fixtureSnapshot('market-b'));
     assert.notEqual(result?.reason, 'POSITION_REQUIRES_SETTLEMENT');
-    assert.equal(app.engine.position.qty, 0);
     assert.notEqual(app.engine.state, 'HALTED');
-    assert.equal(app.status().operatorState, 'DISARMED');
+    assert.equal(app.status().operatorState, 'ARMED');
+    assert.equal(app.status().entryEnabled, true);
+    // Continuidade: settlement do mercado A e segue operando o B (pode reentrar).
+    assert.ok(
+      app.engine.position.qty === 0 || app.engine.position.marketId === 'market-b',
+      'posição deve estar flat ou no mercado novo',
+    );
   });
 
   it('entra em HALTED se Gamma não resolve o mercado antigo', async () => {

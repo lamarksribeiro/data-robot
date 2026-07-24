@@ -64,6 +64,20 @@ export function createEngineApp(opts = {}) {
   let sourceStatus = snapshotSource
     ? { kind: snapshotSource.kind ?? 'custom', running: false, ok: false, reason: 'NOT_STARTED' }
     : { kind: 'manual', running: false, ok: null, reason: null };
+
+  function applyPreflight(next) {
+    latestPreflight = next ?? null;
+    const bal = Number(
+      latestPreflight?.checks?.balance?.balanceUsd ??
+        latestPreflight?.balanceUsd ??
+        latestPreflight?.wallet?.balanceUsd,
+    );
+    if (typeof engine.setAccountEquityUsd === 'function') {
+      engine.setAccountEquityUsd(Number.isFinite(bal) ? bal : null);
+    }
+    return latestPreflight;
+  }
+
   // Histerese: engine só degrada após falhas sustentadas de feed (não em blip de 1 tick).
   const feedHealthGate = createFeedHealthGate({
     failStreakToDegrade: Number(opts.feedFailStreakToDegrade ?? 5),
@@ -477,16 +491,29 @@ export function createEngineApp(opts = {}) {
           winner: resolution.winner,
           ...settled,
         });
-        // Após settlement: flat, mas sem novas entradas até o operador armar de novo.
-        engine.risk.setEntryEnabled(false);
-        operatorState = 'DISARMED';
-        operatorChangedAtMs = Date.now();
+        // Continuidade: flat e segue armada no próximo evento 5m.
+        // (ONE_INTENT_PER_EVENT já impede 2 ENTERs no mesmo marketId.)
+        engine.risk.setEntryEnabled(true);
+        if (operatorState !== 'ARMED') {
+          operatorState = 'ARMED';
+          operatorChangedAtMs = Date.now();
+        }
         logger.info('position_settled_on_rotation', {
           fromMarketId,
           toMarketId: snapshot.marketId,
           pnlDelta: settled.pnlDelta,
           settlementPrice: resolution.settlementPrice,
+          operatorState,
         });
+        // Atualiza saldo exibido quando houver revalidate (live).
+        if (typeof opts.beforeArm === 'function') {
+          try {
+            const next = await opts.beforeArm();
+            if (next) applyPreflight(next);
+          } catch {
+            /* mantém preflight anterior */
+          }
+        }
         // segue o ingest no mercado novo (flat)
       } else {
         if (engine.state === 'HALTED') {
@@ -698,16 +725,7 @@ export function createEngineApp(opts = {}) {
     ingestMarketSnapshot,
     /** Atualiza snapshot de preflight/carteira (ex.: leitura CLOB em shadow). */
     setPreflight(next) {
-      latestPreflight = next ?? null;
-      const bal = Number(
-        latestPreflight?.checks?.balance?.balanceUsd ??
-          latestPreflight?.balanceUsd ??
-          latestPreflight?.wallet?.balanceUsd,
-      );
-      if (typeof engine.setAccountEquityUsd === 'function') {
-        engine.setAccountEquityUsd(Number.isFinite(bal) ? bal : null);
-      }
-      return latestPreflight;
+      return applyPreflight(next);
     },
     getPreflight() {
       return latestPreflight;
