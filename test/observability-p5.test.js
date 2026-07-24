@@ -171,6 +171,39 @@ describe('control HTTP', () => {
 
     await new Promise((resolve) => server.server.close(resolve));
   });
+
+  it('GET /audit e /strategy-library exigem token quando configurado', async () => {
+    const server = createControlServer({
+      host: '127.0.0.1',
+      port: 0,
+      opsToken: 'secret',
+      getHealth: () => ({ ok: true }),
+      getStatus: () => ({}),
+      getMetrics: () => ({}),
+      getAudit: () => [{ type: 'test' }],
+      getStrategyLibrary: () => ({ families: ['midas'] }),
+    });
+    await new Promise((resolve) => server.server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.server.address();
+
+    const deniedAudit = await fetchJson(port, '/audit');
+    assert.equal(deniedAudit.reason, 'UNAUTHORIZED');
+
+    const okAudit = await fetchJson(port, '/audit', {
+      headers: { 'x-ops-token': 'secret' },
+    });
+    assert.equal(okAudit[0].type, 'test');
+
+    const deniedLib = await fetchJson(port, '/strategy-library');
+    assert.equal(deniedLib.reason, 'UNAUTHORIZED');
+
+    const okLib = await fetchJson(port, '/strategy-library', {
+      headers: { 'x-ops-token': 'secret' },
+    });
+    assert.deepEqual(okLib.families, ['midas']);
+
+    await new Promise((resolve) => server.server.close(resolve));
+  });
 });
 
 describe('engine app + soak', () => {

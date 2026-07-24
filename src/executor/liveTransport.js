@@ -3,6 +3,81 @@
  * Sem client → use createLiveTransportStub.
  */
 
+import { redactError } from '../runs/schema.js';
+
+const SUBMIT_TIMEOUT_MS = 8_000;
+const CANCEL_TIMEOUT_MS = 8_000;
+const RECONCILE_TIMEOUT_MS = 10_000;
+const CANCEL_ALL_TIMEOUT_MS = 10_000;
+const RETRY_MAX_ATTEMPTS = 3;
+const RETRY_BASE_MS = 300;
+const CIRCUIT_FAILURE_THRESHOLD = 5;
+const CIRCUIT_COOLDOWN_MS = 30_000;
+
+function errorMessage(err) {
+  return err?.message || String(err);
+}
+
+function raceTimeout(promise, ms, label) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label}_TIMEOUT`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function retryDelayMs(attempt) {
+  return RETRY_BASE_MS * 2 ** attempt + Math.floor(Math.random() * 100);
+}
+
+async function withRetry(fn, { label, maxAttempts = RETRY_MAX_ATTEMPTS, timeoutMs }) {
+  let lastErr;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const result = await raceTimeout(fn(), timeoutMs, label);
+      return result;
+    } catch (err) {
+      lastErr = err;
+      if (attempt === maxAttempts - 1) break;
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs(attempt)));
+    }
+  }
+  throw lastErr;
+}
+
+function createCircuitBreaker() {
+  let consecutiveFailures = 0;
+  let openUntilMs = 0;
+
+  return {
+    check() {
+      if (Date.now() < openUntilMs) {
+        return { blocked: true, reason: 'CIRCUIT_OPEN' };
+      }
+      return { blocked: false };
+    },
+    recordSuccess() {
+      consecutiveFailures = 0;
+      openUntilMs = 0;
+    },
+    recordFailure() {
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD) {
+        openUntilMs = Date.now() + CIRCUIT_COOLDOWN_MS;
+        consecutiveFailures = 0;
+      }
+    },
+  };
+}
+
 /**
  * @param {object} opts
  * @param {object} opts.client — ClobClient (ou mock) com createAndPostOrder / cancelOrder / getOpenOrders
@@ -27,6 +102,7 @@ export function createLiveTransport(opts) {
     ((tokenSide, request) => request.tokenId ?? null);
   const postOnly = opts.postOnly === true;
   const log = [];
+  const circuit = createCircuitBreaker();
 
   function mapOrderType(name) {
     const key = String(name || 'GTC').toUpperCase();
@@ -103,19 +179,43 @@ export function createLiveTransport(opts) {
         };
       }
 
+      const gate = circuit.check();
+      if (gate.blocked) {
+        return {
+          accepted: false,
+          exchangeOrderId: null,
+          events: [
+            {
+              eventId: `live-circuit-${order.intentId}`,
+              intentId: order.intentId,
+              type: 'REJECT',
+              qty: 0,
+              price: null,
+              reason: gate.reason,
+              tsMs,
+            },
+          ],
+        };
+      }
+
       try {
-        const resp = await client.createAndPostOrder(
-          {
-            tokenID: tokenId,
-            price: request.price,
-            side: mapTradeSide(request.tradeSide),
-            size: request.size,
-          },
-          undefined,
-          mapOrderType(request.orderType),
-          postOnly,
-          false,
+        const resp = await raceTimeout(
+          client.createAndPostOrder(
+            {
+              tokenID: tokenId,
+              price: request.price,
+              side: mapTradeSide(request.tradeSide),
+              size: request.size,
+            },
+            undefined,
+            mapOrderType(request.orderType),
+            postOnly,
+            false,
+          ),
+          SUBMIT_TIMEOUT_MS,
+          'submit',
         );
+        circuit.recordSuccess();
 
         log.push({
           action: 'submit',
@@ -170,7 +270,14 @@ export function createLiveTransport(opts) {
           },
         };
       } catch (err) {
-        log.push({ action: 'submit_error', intentId: order.intentId, error: err.message, tsMs });
+        circuit.recordFailure();
+        log.push({
+          action: 'submit_error',
+          intentId: order.intentId,
+          error: errorMessage(err),
+          detail: redactError(err),
+          tsMs,
+        });
         return {
           accepted: false,
           exchangeOrderId: null,
@@ -181,7 +288,7 @@ export function createLiveTransport(opts) {
               type: 'REJECT',
               qty: 0,
               price: null,
-              reason: err.message || 'CLOB_ERROR',
+              reason: errorMessage(err) || 'CLOB_ERROR',
               tsMs,
             },
           ],
@@ -210,7 +317,11 @@ export function createLiveTransport(opts) {
       }
 
       try {
-        const resp = await client.cancelOrder({ orderID: exchangeOrderId });
+        const resp = await raceTimeout(
+          client.cancelOrder({ orderID: exchangeOrderId }),
+          CANCEL_TIMEOUT_MS,
+          'cancel',
+        );
         const ok =
           resp?.success === true ||
           (Array.isArray(resp?.canceled) && resp.canceled.includes(exchangeOrderId));
@@ -241,7 +352,7 @@ export function createLiveTransport(opts) {
               type: 'REJECT',
               qty: 0,
               price: null,
-              reason: err.message || 'CANCEL_ERROR',
+              reason: errorMessage(err) || 'CANCEL_ERROR',
               tsMs,
             },
           ],
@@ -259,8 +370,16 @@ export function createLiveTransport(opts) {
       if (!order?.exchangeOrderId || typeof client.getOrder !== 'function') {
         return { ok: false, events: [], reason: 'GET_ORDER_UNAVAILABLE' };
       }
+      const gate = circuit.check();
+      if (gate.blocked) {
+        return { ok: false, events: [], reason: gate.reason };
+      }
       try {
-        const remote = await client.getOrder(order.exchangeOrderId);
+        const remote = await withRetry(
+          () => client.getOrder(order.exchangeOrderId),
+          { label: 'reconcile', timeoutMs: RECONCILE_TIMEOUT_MS },
+        );
+        circuit.recordSuccess();
         const original = Number(remote?.original_size ?? order.qty) || Number(order.qty) || 0;
         const matched = Number(remote?.size_matched ?? 0) || 0;
         const already = Number(order.qtyFilled ?? 0) || 0;
@@ -339,17 +458,35 @@ export function createLiveTransport(opts) {
 
         return { ok: true, events, remote };
       } catch (err) {
-        return { ok: false, events: [], reason: err.message || 'RECONCILE_ERROR' };
+        circuit.recordFailure();
+        return { ok: false, events: [], reason: errorMessage(err) || 'RECONCILE_ERROR' };
       }
     },
 
     async cancelAll() {
       if (typeof client.cancelAll !== 'function') return { canceled: [], notCanceled: {} };
-      const response = await client.cancelAll();
-      return {
-        canceled: response?.canceled ?? [],
-        notCanceled: response?.not_canceled ?? {},
-      };
+      const gate = circuit.check();
+      if (gate.blocked) {
+        return { canceled: [], notCanceled: {}, reason: gate.reason };
+      }
+      try {
+        const response = await withRetry(() => client.cancelAll(), {
+          label: 'cancelAll',
+          timeoutMs: CANCEL_ALL_TIMEOUT_MS,
+        });
+        circuit.recordSuccess();
+        return {
+          canceled: response?.canceled ?? [],
+          notCanceled: response?.not_canceled ?? {},
+        };
+      } catch (err) {
+        circuit.recordFailure();
+        return {
+          canceled: [],
+          notCanceled: {},
+          reason: errorMessage(err) || 'CANCEL_ALL_ERROR',
+        };
+      }
     },
 
     async startHeartbeat(onFailure, intervalMs = 5000) {

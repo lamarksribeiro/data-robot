@@ -9,6 +9,7 @@ export const RUN_SCHEMA_VERSION = 1;
 const SECRET_KEY_RE =
   /^(private[_-]?key|api[_-]?(key|secret|passphrase)|passphrase|secret|ops[_-]?token|access[_-]?token|refresh[_-]?token|mnemonic|seed)$/i;
 const SECRET_VALUE_RE = /0x[a-fA-F0-9]{64}|sk_[a-zA-Z0-9]+/g;
+const AUTH_HEADER_RE = /^(authorization|poly_[a-z_]+)$/i;
 
 /**
  * @param {unknown} value
@@ -22,7 +23,7 @@ export function redactValue(value) {
   if (value && typeof value === 'object') {
     const out = {};
     for (const [k, v] of Object.entries(value)) {
-      if (SECRET_KEY_RE.test(k)) {
+      if (SECRET_KEY_RE.test(k) || AUTH_HEADER_RE.test(k)) {
         out[k] = '[REDACTED]';
         continue;
       }
@@ -31,6 +32,24 @@ export function redactValue(value) {
     return out;
   }
   return value;
+}
+
+/**
+ * Sanitiza Error (ex.: axios) antes de logar ou persistir.
+ * @param {unknown} err
+ */
+export function redactError(err) {
+  if (err == null) return err;
+  if (typeof err !== 'object') return redactValue(err);
+  const out = {
+    name: err.name,
+    code: err.code,
+    message: redactValue(err.message),
+  };
+  if (err.response?.status != null) out.status = err.response.status;
+  if (err.config?.url) out.url = err.config.url;
+  if (err.config?.headers) out.headers = redactValue(err.config.headers);
+  return out;
 }
 
 /**

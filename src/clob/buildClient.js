@@ -1,3 +1,4 @@
+import '../net/httpBootstrap.js';
 import { ClobClient } from '@polymarket/clob-client-v2';
 import config from '../config.js';
 import { resolveSignatureType } from './signatureType.js';

@@ -2,7 +2,7 @@
  * Logger estruturado JSON com redaction (sem secrets).
  */
 
-import { redactValue } from '../runs/schema.js';
+import { redactValue, redactError } from '../runs/schema.js';
 
 /**
  * @param {object} [opts]
@@ -38,5 +38,6 @@ export function createLogger(opts = {}) {
     info: (msg, fields) => log('info', msg, fields),
     warn: (msg, fields) => log('warn', msg, fields),
     error: (msg, fields) => log('error', msg, fields),
+    redactError,
   };
 }

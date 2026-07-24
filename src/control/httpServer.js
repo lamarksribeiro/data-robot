@@ -18,7 +18,7 @@ import http from 'node:http';
  * @param {(body:object) => object|Promise<object>} [opts.onSaveStrategyPreset]
  * @param {(body:object) => object|Promise<object>} [opts.onActivateStrategy]
  * @param {() => Promise<object>|object} [opts.onKill]
- * @param {string} [opts.opsToken] — se setado, POST /control/* exige header x-ops-token
+ * @param {string} [opts.opsToken] — se setado, rotas operacionais exigem header x-ops-token
  * @param {number} [opts.port]
  * @param {string} [opts.host]
  */
@@ -30,6 +30,17 @@ export function createControlServer(opts) {
     if (!opts.opsToken) return true;
     return req.headers['x-ops-token'] === opts.opsToken;
   }
+
+  /** GETs operacionais (exceto probes /health e /ready). */
+  const protectedGetPaths = new Set([
+    '/status',
+    '/metrics',
+    '/catalog',
+    '/instances',
+    '/audit',
+    '/strategy-library',
+    '/strategy-active',
+  ]);
 
   function send(res, code, body) {
     const json = JSON.stringify(body);
@@ -76,6 +87,9 @@ export function createControlServer(opts) {
       if (req.method === 'GET' && pathName === '/ready') {
         const h = opts.getHealth();
         return send(res, h.ready ? 200 : 503, { ready: h.ready, state: h.state });
+      }
+      if (req.method === 'GET' && protectedGetPaths.has(pathName)) {
+        if (!authorize(req)) return send(res, 401, { ok: false, reason: 'UNAUTHORIZED' });
       }
       if (req.method === 'GET' && pathName === '/status') {
         return send(res, 200, opts.getStatus());

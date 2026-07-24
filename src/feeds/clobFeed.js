@@ -172,7 +172,12 @@ export function createClobFeed(state, opts = {}) {
     const empty =
       (state.up.bestAsk == null && state.up.bestBid == null) ||
       (state.down.bestAsk == null && state.down.bestBid == null);
-    if (empty || lag >= STALE_RESEED_MS) void seedBooksFromRest();
+    if (empty) {
+      void seedBooksFromRest();
+      return;
+    }
+    if (state.wsClobConnected) return;
+    if (lag >= STALE_RESEED_MS) void seedBooksFromRest();
   }
 
   function sendSubscribe() {

@@ -288,6 +288,7 @@ describe('live transport mock', () => {
     const channel = mockWsChannel();
     const sink = createOmsSink({
       mode: 'live',
+      userDisconnectHaltMs: 40,
       transport: createLiveTransport({ client, Side, OrderType }),
       userChannel: channel,
     });
@@ -300,7 +301,8 @@ describe('live transport mock', () => {
     await sink.start();
     engine.start();
     channel.simulateDisconnect();
-    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(engine.state, 'ARMED');
+    await new Promise((resolve) => setTimeout(resolve, 80));
     assert.equal(engine.state, 'HALTED');
     sink.dispose();
   });
@@ -428,5 +430,53 @@ describe('micro-live report + parity', () => {
     assert.ok(pkg.scripts['tfc:micro-live']);
     assert.equal(hasLiveFlag(['node', 'x']), false);
     assert.equal(hasLiveFlag(['node', 'x', '--live']), true);
+  });
+});
+
+describe('liveTransport resiliência', () => {
+  it('submit falha com timeout explícito sem retry', async () => {
+    const client = {
+      async createAndPostOrder() {
+        await new Promise(() => {});
+      },
+    };
+    const transport = createLiveTransport({ client, Side, OrderType });
+    const started = Date.now();
+    const result = await transport.submit(
+      { tokenSide: 'UP', price: 0.5, size: 1, tradeSide: 'BUY', orderType: 'GTC', tokenId: 't1' },
+      { intentId: 'i-timeout', tokenSide: 'UP' },
+    );
+    const elapsed = Date.now() - started;
+    assert.equal(result.accepted, false);
+    assert.match(result.events[0].reason, /submit_TIMEOUT/);
+    assert.ok(elapsed < 12_000);
+  });
+
+  it('circuit breaker bloqueia após falhas consecutivas', async () => {
+    let calls = 0;
+    const client = {
+      async createAndPostOrder() {
+        calls += 1;
+        throw new Error('429 rate limit');
+      },
+    };
+    const transport = createLiveTransport({ client, Side, OrderType });
+    const request = {
+      tokenSide: 'UP',
+      price: 0.5,
+      size: 1,
+      tradeSide: 'BUY',
+      orderType: 'GTC',
+      tokenId: 't1',
+    };
+    const order = { intentId: 'i-circuit', tokenSide: 'UP' };
+    for (let i = 0; i < 5; i += 1) {
+      const result = await transport.submit(request, { ...order, intentId: `i-circuit-${i}` });
+      assert.equal(result.accepted, false);
+    }
+    assert.ok(calls >= 5);
+    const blocked = await transport.submit(request, { ...order, intentId: 'i-circuit-blocked' });
+    assert.equal(blocked.events[0].reason, 'CIRCUIT_OPEN');
+    assert.equal(calls, 5);
   });
 });

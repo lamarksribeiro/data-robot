@@ -10,6 +10,7 @@
  */
 
 import 'dotenv/config';
+import '../src/net/httpBootstrap.js';
 import path from 'node:path';
 import { createEngineApp } from '../src/control/engineApp.js';
 import { createSnapshotSource } from '../src/market/snapshotSources.js';
