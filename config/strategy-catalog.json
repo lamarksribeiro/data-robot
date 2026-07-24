@@ -33,6 +33,16 @@
       "evidence": []
     },
     {
+      "strategyId": "apex-triad-v1",
+      "version": "1.0.0",
+      "presetId": "btc-candidate-v1",
+      "marketScope": [
+        "btc-updown-5m"
+      ],
+      "approval": "registered",
+      "evidence": []
+    },
+    {
       "strategyId": "fixture-price-cross",
       "version": "1.0.0",
       "presetId": "fixture-price-cross",

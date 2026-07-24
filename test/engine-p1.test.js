@@ -96,9 +96,10 @@ describe('conformance fixtures', () => {
 });
 
 describe('registry + bootstrap', () => {
-  it('lista fixtures + tfc-v7 + midas', () => {
+  it('lista fixtures + tfc-v7 + midas + apex', () => {
     const ids = createDefaultRegistry().list().map((m) => m.id).sort();
     assert.deepEqual(ids, [
+      'apex-triad-v1',
       'fixture-price-cross',
       'fixture-spread-wide',
       'midas-carry-v1',

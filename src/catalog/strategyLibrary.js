@@ -172,10 +172,9 @@ export function builtInLibrary() {
       {
         familyId: 'apex',
         label: 'APEX Triad',
-        description:
-          'Edge + terminal. Plugin ainda não está no runtime da engine — biblioteca para preparar versão futura.',
+        description: 'Edge antecipado + núcleo terminal TFC (reversão e danger floor).',
         pluginId: 'apex-triad-v1',
-        runnable: false,
+        runnable: true,
         marketScope: ['btc-updown-5m'],
         versions: [
           {
@@ -186,7 +185,7 @@ export function builtInLibrary() {
                 presetId: 'btc-candidate-v1',
                 name: 'BTC Candidate V1',
                 role: 'candidate',
-                source: 'catalog',
+                source: 'runtime',
                 params: {
                   edgeEnabled: true,
                   edgeWindowStart: 105,
@@ -228,7 +227,7 @@ export function builtInLibrary() {
                 presetId: 'btc-candidate-v2',
                 name: 'BTC Candidate V2',
                 role: 'candidate',
-                source: 'catalog',
+                source: 'runtime',
                 params: {
                   edgeEnabled: true,
                   edgeWindowStart: 100,
@@ -427,14 +426,6 @@ export function createStrategyLibrary(opts = {}) {
     if (!hit) throw new Error('PRESET_NOT_FOUND');
     const params = { ...hit.preset.params, ...(input.params || {}) };
     delete params.walletSize;
-    if (hit.family.runnable !== true && input.force !== true) {
-      const err = new Error('PLUGIN_NOT_RUNNABLE');
-      err.detail = {
-        pluginId: hit.family.pluginId,
-        message: 'APEX ainda não está no runtime da engine; salve o preset e aguarde o plugin.',
-      };
-      throw err;
-    }
     const active = saveActive({
       familyId: hit.family.familyId,
       pluginId: hit.family.pluginId,
