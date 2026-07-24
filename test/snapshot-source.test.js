@@ -278,7 +278,7 @@ describe('btc5m snapshot source', () => {
     await source.stop();
   });
 
-  it('mantém a fonte saudável quando apenas a janela tática terminou', async () => {
+  it('mantém a fonte saudável quando apenas a janela tática de entrada terminou', async () => {
     let nowMs = 1_800_000_000_000;
     const currentEvent = eventAt(nowMs, 'late-window');
     const source = createBtc5mSnapshotSource({
@@ -311,10 +311,65 @@ describe('btc5m snapshot source', () => {
     source.state.clobLastAt = nowMs;
     await source.pollNow();
 
+    // Hard eligibility permanece ok; só a entrada (minSecsLeft) fica bloqueada.
     assert.equal(source.status.ok, true);
     assert.equal(source.status.reason, null);
-    assert.equal(source.status.eligible, false);
+    assert.equal(source.status.eligible, true);
+    assert.equal(source.status.entryEligible, false);
     assert.equal(source.status.eligibilityReason, 'BELOW_MIN_SECS_LEFT');
+    await source.stop();
+  });
+
+  it('entra em cadência hot antes da janela de entrada (pré-30s)', async () => {
+    let nowMs = 1_800_000_000_000;
+    // Slot de 5m; após +260s → τ=40 ≤ preEntryHotSecs=45 → hot
+    const currentEvent = {
+      title: 'BTC 5m pre-entry-hot',
+      slug: 'btc-updown-5m-pre-entry-hot',
+      conditionId: 'condition-pre-entry-hot',
+      upTokenId: 'up-pre-entry-hot',
+      downTokenId: 'down-pre-entry-hot',
+      eventStart: new Date(nowMs),
+      eventEnd: new Date(nowMs + 300_000),
+      acceptingOrders: true,
+    };
+    const source = createBtc5mSnapshotSource({
+      clock: () => nowMs,
+      idleIntervalMs: 500,
+      hotIntervalMs: 50,
+      preEntryHotSecs: 45,
+      resolveEvent: async () => currentEvent,
+      fetchPtb: async () => 100,
+      startRtds: (state) => {
+        state.btc = 101;
+        state.wsRtdsConnected = true;
+        state.rtdsReceivedAt = nowMs;
+        return () => {};
+      },
+      createClob: (state) => ({
+        subscribe(upTokenId, downTokenId) {
+          state.upTokenId = upTokenId;
+          state.downTokenId = downTokenId;
+          state.wsClobConnected = true;
+          state.clobLastAt = nowMs;
+          state.up = { bestBid: 0.5, bestAsk: 0.51, bids: [], asks: [] };
+          state.down = { bestBid: 0.48, bestAsk: 0.49, bids: [], asks: [] };
+        },
+        stop() {},
+      }),
+    });
+
+    await source.start({ onSnapshot: async () => {} });
+    assert.equal(source.status.cadenceMode, 'idle');
+    assert.equal(source.status.intervalMs, 500);
+
+    nowMs += 260_000;
+    source.state.rtdsReceivedAt = nowMs;
+    source.state.clobLastAt = nowMs;
+    await source.pollNow();
+
+    assert.equal(source.status.cadenceMode, 'hot');
+    assert.equal(source.status.intervalMs, 50);
     await source.stop();
   });
 

@@ -82,8 +82,13 @@ if (!['127.0.0.1', 'localhost', '::1'].includes(host) && !opsToken) {
 let snapshotSource;
 try {
   snapshotSource = createSnapshotSource(sourceKind, {
-    // RTDS/CLOB acordam a engine por evento; este timer é apenas watchdog/fallback.
-    intervalMs: Number(process.env.ENGINE_SOURCE_INTERVAL_MS || 100),
+    // RTDS/CLOB acordam a engine por evento; o timer é watchdog + cadência adaptativa.
+    // idle: longe do slot; hot: pré-entrada (antes dos 30s) até o fim do evento.
+    intervalMs: Number(process.env.ENGINE_SOURCE_HOT_INTERVAL_MS || 50),
+    idleIntervalMs: Number(process.env.ENGINE_SOURCE_IDLE_INTERVAL_MS || 500),
+    hotIntervalMs: Number(process.env.ENGINE_SOURCE_HOT_INTERVAL_MS || 50),
+    /** τ ≤ este valor → hot (default 45 = antes da janela maxSecondsLeft=30). */
+    preEntryHotSecs: Number(process.env.ENGINE_SOURCE_PRE_ENTRY_SECS || 45),
     syncIntervalMs: Number(process.env.ENGINE_MARKET_SYNC_MS || 15_000),
     retryMs: Number(process.env.ENGINE_SOURCE_RETRY_MS || 2000),
   });

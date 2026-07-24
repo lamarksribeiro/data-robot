@@ -150,6 +150,80 @@ describe('risk limits + audit', () => {
     assert.equal(decision.allow, true);
   });
 
+  it('paridade GLS: BELOW_MIN_SECS_LEFT bloqueia ENTER mas não REVERSE/EXIT', () => {
+    const nowMs = 1000;
+    const risk = createRiskEngine({
+      liveEnabled: true,
+      allowLiveReverse: true,
+      tacticalFloorSec: 4,
+      clock: () => nowMs,
+      maxNotionalPerOrder: 5,
+      maxNotionalPerEvent: 5,
+    });
+    const eligibility = {
+      eligible: true,
+      reasons: [],
+      entryReasons: ['BELOW_MIN_SECS_LEFT'],
+      entryEligible: false,
+    };
+    const ctx = {
+      mode: 'live',
+      health: { ok: true },
+      position: { side: 'DOWN', qty: 3, avgPrice: 0.53, realizedPnl: 0 },
+      openIntents: [],
+      snapshot: { secsLeft: 4.5, feeds: { healthy: true } },
+      eligibility,
+    };
+    const enter = risk.evaluate(
+      {
+        intentId: 'enter-blocked',
+        kind: 'ENTER',
+        side: 'UP',
+        marketId: 'm',
+        strategyInstanceId: 's',
+        budget: 2,
+        maxPrice: 0.6,
+        deadlineMs: nowMs + 1000,
+        reason: 'midas_core_entry',
+      },
+      ctx,
+    );
+    assert.equal(enter.allow, false);
+    assert.equal(enter.reasonCode, RISK_REASON.PREFLIGHT_ELIGIBILITY);
+
+    const reverse = risk.evaluate(
+      {
+        intentId: 'reverse-ok-late',
+        kind: 'REVERSE',
+        side: 'UP',
+        marketId: 'm',
+        strategyInstanceId: 's',
+        budget: 2,
+        maxPrice: 0.83,
+        deadlineMs: nowMs + 1000,
+        reason: 'late_flip_reverse',
+      },
+      ctx,
+    );
+    assert.equal(reverse.allow, true);
+
+    const exit = risk.evaluate(
+      {
+        intentId: 'exit-ok-late',
+        kind: 'EXIT',
+        side: 'DOWN',
+        marketId: 'm',
+        strategyInstanceId: 's',
+        quantity: 3,
+        minPrice: 0.1,
+        deadlineMs: nowMs + 1000,
+        reason: 'late_flip_exit',
+      },
+      ctx,
+    );
+    assert.equal(exit.allow, true);
+  });
+
   it('bloqueia notional acima do limite com reason code', async () => {
     const risk = createRiskEngine({ maxNotionalPerOrder: 1 });
     const engine = bootstrapEngine({

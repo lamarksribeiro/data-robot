@@ -35,7 +35,11 @@ function normalizeHandlers(handlers) {
 }
 
 function createLoopController(opts) {
-  const intervalMs = positiveMs(opts.intervalMs, 1000);
+  const defaultIntervalMs = positiveMs(opts.intervalMs, 1000);
+  const resolveIntervalMs =
+    typeof opts.getIntervalMs === 'function'
+      ? () => positiveMs(opts.getIntervalMs(), defaultIntervalMs)
+      : () => defaultIntervalMs;
   let running = false;
   let timer = null;
   let inFlight = null;
@@ -64,19 +68,23 @@ function createLoopController(opts) {
 
   function schedule() {
     if (!running) return;
+    const waitMs = resolveIntervalMs();
     timer = setTimeout(async () => {
       try {
         await poll();
       } finally {
         schedule();
       }
-    }, intervalMs);
+    }, waitMs);
     timer.unref?.();
   }
 
   return {
     get running() {
       return running;
+    },
+    get intervalMs() {
+      return resolveIntervalMs();
     },
     async start() {
       if (running) return;
@@ -219,7 +227,13 @@ export function createFixtureSnapshotSource(opts = {}) {
  */
 export function createBtc5mSnapshotSource(opts = {}) {
   const clock = opts.clock ?? (() => Date.now());
-  const intervalMs = positiveMs(opts.intervalMs, 1000);
+  // Watchdog: RTDS/CLOB já disparam pollNow. Hot = pré-entrada/tático; idle = longe do slot.
+  const idleIntervalMs = positiveMs(opts.idleIntervalMs, 500);
+  const hotIntervalMs = positiveMs(opts.hotIntervalMs, 50);
+  /** Antes de maxSecondsLeft (30): já entra em hot para não atrasar ENTER. */
+  const preEntryHotSecs = Number.isFinite(Number(opts.preEntryHotSecs))
+    ? Math.max(0, Number(opts.preEntryHotSecs))
+    : 45;
   const syncIntervalMs = positiveMs(opts.syncIntervalMs, 15_000);
   const resolveEvent = opts.resolveEvent ?? findActiveBtc5mEvent;
   const fetchPtb = opts.fetchPtb ?? fetchPriceToBeat;
@@ -239,6 +253,7 @@ export function createBtc5mSnapshotSource(opts = {}) {
   let clob = null;
   let subscribedMarketId = null;
   let nextSyncAtMs = 0;
+  let cadenceMode = 'idle';
   let status = {
     kind: 'btc5m',
     running: false,
@@ -252,7 +267,10 @@ export function createBtc5mSnapshotSource(opts = {}) {
     errors: 0,
     rotations: 0,
     eligible: false,
+    entryEligible: false,
     eligibilityReason: null,
+    cadenceMode: 'idle',
+    intervalMs: idleIntervalMs,
     lastSnapshotAtMs: null,
     lastSyncAtMs: null,
   };
@@ -260,6 +278,24 @@ export function createBtc5mSnapshotSource(opts = {}) {
   function emitStatus(patch = {}) {
     status = { ...status, ...patch };
     handlers?.onStatus({ ...status });
+  }
+
+  function resolveSecsLeft(nowMs) {
+    const end = hub.event?.eventEnd;
+    if (!end) return null;
+    const endMs = end instanceof Date ? end.getTime() : Number(end);
+    if (!Number.isFinite(endMs)) return null;
+    return (endMs - nowMs) / 1000;
+  }
+
+  function resolveCadence(nowMs) {
+    const secsLeft = resolveSecsLeft(nowMs);
+    const hot =
+      secsLeft != null && Number.isFinite(secsLeft) && secsLeft >= 0 && secsLeft <= preEntryHotSecs;
+    const mode = hot ? 'hot' : 'idle';
+    const intervalMs = hot ? hotIntervalMs : idleIntervalMs;
+    cadenceMode = mode;
+    return { mode, intervalMs, secsLeft };
   }
 
   async function syncMarket(nowMs) {
@@ -272,6 +308,7 @@ export function createBtc5mSnapshotSource(opts = {}) {
         ok: false,
         reason: synced.reason ?? 'MARKET_SYNC_FAILED',
         eligible: false,
+        entryEligible: false,
         eligibilityReason: synced.reason ?? 'MARKET_SYNC_FAILED',
         marketId: null,
         syncFailures: status.syncFailures + 1,
@@ -291,6 +328,7 @@ export function createBtc5mSnapshotSource(opts = {}) {
         reason: state.priceToBeat == null ? 'PRICE_TO_BEAT_UNAVAILABLE' : 'AWAITING_FEEDS',
         ok: false,
         eligible: false,
+        entryEligible: false,
         eligibilityReason: 'AWAITING_FEEDS',
       });
     } else {
@@ -313,9 +351,11 @@ export function createBtc5mSnapshotSource(opts = {}) {
   }
 
   const loop = createLoopController({
-    intervalMs,
+    intervalMs: idleIntervalMs,
+    getIntervalMs: () => resolveCadence(clock()).intervalMs,
     tick: async () => {
       const nowMs = clock();
+      const cadence = resolveCadence(nowMs);
       try {
         if (shouldSync(nowMs)) await syncMarket(nowMs);
         const captured = hub.capture({
@@ -329,7 +369,10 @@ export function createBtc5mSnapshotSource(opts = {}) {
             ok: false,
             reason,
             eligible: false,
+            entryEligible: false,
             eligibilityReason: reason,
+            cadenceMode: cadence.mode,
+            intervalMs: cadence.intervalMs,
           });
           return;
         }
@@ -351,6 +394,12 @@ export function createBtc5mSnapshotSource(opts = {}) {
             captured.snapshot.health?.reasons?.[0] ??
             captured.reasons?.[0] ??
             'SOURCE_NOT_READY';
+        const entryEligible = captured.entryEligible !== false;
+        const eligibilityReason = !captured.eligible
+          ? captured.reasons?.[0] ?? 'NOT_ELIGIBLE'
+          : !entryEligible
+            ? captured.entryReasons?.[0] ?? 'BELOW_MIN_SECS_LEFT'
+            : null;
         emitStatus({
           running: true,
           ok: sourceOk,
@@ -358,9 +407,10 @@ export function createBtc5mSnapshotSource(opts = {}) {
           processOk,
           reason: sourceReason,
           eligible: captured.eligible,
-          eligibilityReason: captured.eligible
-            ? null
-            : captured.reasons?.[0] ?? 'NOT_ELIGIBLE',
+          entryEligible,
+          eligibilityReason,
+          cadenceMode: cadence.mode,
+          intervalMs: cadence.intervalMs,
           marketId: captured.snapshot.marketId,
           snapshots: status.snapshots + 1,
           eligibleSnapshots: status.eligibleSnapshots + (captured.eligible ? 1 : 0),
@@ -377,6 +427,8 @@ export function createBtc5mSnapshotSource(opts = {}) {
           reason: 'SOURCE_ERROR',
           errors: status.errors + 1,
           lastError: message,
+          cadenceMode: cadence.mode,
+          intervalMs: cadence.intervalMs,
         });
         handlers.onError(error);
       }
@@ -407,6 +459,7 @@ export function createBtc5mSnapshotSource(opts = {}) {
             reason: reason ?? 'RTDS_STALE_RECONNECT',
             // elegibilidade de trade pode cair; processo pode permanecer ok
             eligible: keepOk ? status.eligible : false,
+            entryEligible: keepOk ? status.entryEligible : false,
             eligibilityReason: reason ?? 'RTDS_STALE_RECONNECT',
             lastStaleReconnectAtMs: now,
             lastStaleReconnectLagMs: lagMs ?? null,

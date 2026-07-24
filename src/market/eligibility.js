@@ -1,5 +1,10 @@
 /**
  * Elegibilidade de snapshot para decisão (fail-closed).
+ *
+ * Paridade com backtest/GLS:
+ * - `reasons` / `eligible` = gates duros (feed, PTB, acceptingOrders, …)
+ * - `entryReasons` / `entryEligible` = só bloqueiam ENTER (ex. minSecsLeft=5)
+ * - EXIT/REVERSE usam o piso tático do risk/plugin (lateFlipMinSec=4), não minSecsLeft
  */
 
 import { evaluateClockSkew, evaluateFeedHealth, STALENESS } from './health.js';
@@ -11,11 +16,12 @@ import { evaluateClockSkew, evaluateFeedHealth, STALENESS } from './health.js';
  * @param {string|null} [opts.expectedUpTokenId]
  * @param {string|null} [opts.expectedDownTokenId]
  * @param {boolean} [opts.requireAcceptingOrders]
- * @param {number} [opts.minSecsLeft] — default 5 (plano: sem entrada &lt;5s)
+ * @param {number} [opts.minSecsLeft] — default 5; só afeta entryEligible
  * @param {object} [opts.healthLimits]
  */
 export function evaluateSnapshotEligibility(snapshot, opts = {}) {
   const reasons = [];
+  const entryReasons = [];
   const limits = opts.healthLimits ?? STALENESS;
 
   if (!snapshot?.marketId) reasons.push('NO_MARKET_ID');
@@ -53,12 +59,15 @@ export function evaluateSnapshotEligibility(snapshot, opts = {}) {
 
   const minSecsLeft = opts.minSecsLeft ?? 5;
   if (snapshot.secsLeft != null && snapshot.secsLeft < minSecsLeft) {
-    reasons.push('BELOW_MIN_SECS_LEFT');
+    entryReasons.push('BELOW_MIN_SECS_LEFT');
   }
 
+  const eligible = reasons.length === 0;
   return {
-    eligible: reasons.length === 0,
+    eligible,
     reasons,
+    entryReasons,
+    entryEligible: eligible && entryReasons.length === 0,
     health,
     clock,
   };

@@ -139,15 +139,31 @@ export function createMarketHub(opts = {}) {
       snapshot.eligibility = {
         eligible: gate.eligible,
         reasons: gate.reasons,
+        entryReasons: gate.entryReasons ?? [],
+        entryEligible: gate.entryEligible !== false,
       };
 
+      // Rejeição dura (feed/PTB/…): não entrega como elegível.
+      // BELOW_MIN_SECS_LEFT fica só em entryReasons — snapshot segue para EXIT/REVERSE.
       if (!gate.eligible) {
         noteReject(gate.reasons);
-        return { eligible: false, reasons: gate.reasons, snapshot };
+        return {
+          eligible: false,
+          entryEligible: false,
+          reasons: gate.reasons,
+          entryReasons: gate.entryReasons ?? [],
+          snapshot,
+        };
       }
 
       stats.eligible += 1;
-      return { eligible: true, reasons: [], snapshot };
+      return {
+        eligible: true,
+        entryEligible: gate.entryEligible !== false,
+        reasons: [],
+        entryReasons: gate.entryReasons ?? [],
+        snapshot,
+      };
     },
   };
 }

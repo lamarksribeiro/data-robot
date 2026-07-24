@@ -156,6 +156,29 @@ describe('eligibility', () => {
       expectedDownTokenId: 'down-1',
     });
     assert.equal(gate.eligible, true);
+    assert.equal(gate.entryEligible, true);
+  });
+
+  it('BELOW_MIN_SECS_LEFT só afeta entryEligible (paridade GLS)', () => {
+    const nowMs = 1_700_000_000_000;
+    const event = sampleEvent(nowMs);
+    // eventEnd = now+300s no sample; forçar τ baixo
+    event.eventEnd = new Date(nowMs + 4_000);
+    const snap = buildMarketSnapshot({
+      state: freshState(nowMs),
+      event,
+      nowMs,
+    });
+    const gate = evaluateSnapshotEligibility(snap, {
+      expectedMarketId: 'btc-updown-5m-test',
+      expectedUpTokenId: 'up-1',
+      expectedDownTokenId: 'down-1',
+      minSecsLeft: 5,
+    });
+    assert.equal(gate.eligible, true);
+    assert.equal(gate.entryEligible, false);
+    assert.ok(gate.entryReasons.includes('BELOW_MIN_SECS_LEFT'));
+    assert.ok(!gate.reasons.includes('BELOW_MIN_SECS_LEFT'));
   });
 
   it('rejeita acceptingOrders ausente em modo fail-closed', () => {

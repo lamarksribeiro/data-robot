@@ -160,8 +160,19 @@ export function createRiskEngine(opts = {}) {
       );
     }
 
-    if (ctx.eligibility && ctx.eligibility.eligible === false && intent.kind !== 'CANCEL') {
-      return deny(RISK_REASON.PREFLIGHT_ELIGIBILITY, ctx.eligibility, meta);
+    // Elegibilidade dura (feed/PTB/…) bloqueia tudo exceto CANCEL.
+    // BELOW_MIN_SECS_LEFT / entryReasons só bloqueiam ENTER — paridade GLS:
+    // late-flip reverse/exit operam até o piso tático (4s), não até minSecsLeft=5.
+    if (intent.kind !== 'CANCEL' && ctx.eligibility) {
+      const hardFail = ctx.eligibility.eligible === false;
+      const entryFail =
+        intent.kind === 'ENTER' &&
+        (ctx.eligibility.entryEligible === false ||
+          (Array.isArray(ctx.eligibility.entryReasons) &&
+            ctx.eligibility.entryReasons.length > 0));
+      if (hardFail || entryFail) {
+        return deny(RISK_REASON.PREFLIGHT_ELIGIBILITY, ctx.eligibility, meta);
+      }
     }
 
     // Perda diária

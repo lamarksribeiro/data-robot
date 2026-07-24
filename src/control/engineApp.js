@@ -568,21 +568,29 @@ export function createEngineApp(opts = {}) {
     if (decisionResult?.acceptedCount) {
       metrics.inc('intents_accepted', decisionResult.acceptedCount);
     }
-    // Auditoria: só intent aceito pelo risk ou mudança de estado da engine.
-    // Reavaliações negadas (ex. canário) não poluem o JSONL.
+    // Auditoria: intent aceito, mudança de estado, ou deny de proteção (EXIT/REVERSE).
+    // Negadas só de ENTER (canário/cap) continuam fora do JSONL para não poluir.
+    const deniedProtective = (decisionResult?.denied ?? []).filter(
+      (d) => d?.kind === 'EXIT' || d?.kind === 'REVERSE',
+    );
     const shouldAuditDecision =
-      (decisionResult?.acceptedCount ?? 0) > 0 || decisionResult?.stateChanged === true;
+      (decisionResult?.acceptedCount ?? 0) > 0 ||
+      decisionResult?.stateChanged === true ||
+      deniedProtective.length > 0;
     if (shouldAuditDecision) {
       const acceptedKinds = (decisionResult.accepted ?? [])
         .map((a) => a.kind)
         .filter(Boolean);
+      const deniedKinds = deniedProtective.map((d) => d.kind).filter(Boolean);
       executionAudit.append('decision', {
         marketId: snapshot.marketId,
         ok: (decisionResult.acceptedCount ?? 0) > 0 ? true : null,
         action:
           (decisionResult.acceptedCount ?? 0) > 0
             ? acceptedKinds.join('+') || 'accepted'
-            : 'state_change',
+            : deniedProtective.length > 0
+              ? `denied:${deniedKinds.join('+')}`
+              : 'state_change',
         intentCount: decisionResult.intentCount ?? 0,
         acceptedCount: decisionResult.acceptedCount ?? 0,
         deniedCount: decisionResult.deniedCount ?? 0,
