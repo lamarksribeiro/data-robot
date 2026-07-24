@@ -1385,6 +1385,8 @@ table { min-width: 920px; }
 }
 .chart-legend__item--btc { color: #10b981; }
 .chart-legend__item--ptb { color: #f59e0b; }
+.chart-legend__item--z { color: #38bdf8; }
+.chart-legend__item--minz { color: #f59e0b; }
 
 .kpi-card--wallet {
   background: linear-gradient(145deg, rgba(56, 189, 248, 0.1), rgba(8, 12, 24, 0.5));

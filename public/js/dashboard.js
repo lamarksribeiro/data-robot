@@ -19,6 +19,8 @@ const series = {
   btc: [],
   ptb: [],
   signedDist: [],
+  z: [],
+  minEntryZ: [],
   ask: [],
   bid: [],
   pnl: [],
@@ -35,6 +37,8 @@ function pushSeries(sample) {
   series.btc.push(sample.btc);
   series.ptb.push(sample.ptb);
   series.signedDist.push(sample.signedDist);
+  series.z.push(sample.z);
+  series.minEntryZ.push(sample.minEntryZ);
   series.ask.push(sample.ask);
   series.bid.push(sample.bid);
   series.pnl.push(sample.pnl);
@@ -42,6 +46,27 @@ function pushSeries(sample) {
   while (series.ts.length > SERIES_MAX) {
     for (const key of Object.keys(series)) series[key].shift();
   }
+}
+
+/** Extrai minEntryZ numérico do gate (limit "≥0.5" / "off" / value). */
+function parseMinEntryZ(entry) {
+  const gate = entry?.gates?.minEntryZ;
+  if (!gate) return null;
+  const limitRaw = gate.limit != null ? String(gate.limit) : '';
+  if (/off/i.test(limitRaw)) return null;
+  const fromLimit = limitRaw.match(/(\d+(?:\.\d+)?)/);
+  if (fromLimit) {
+    const n = Number(fromLimit[1]);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  const detailRaw = gate.detail != null ? String(gate.detail) : '';
+  if (/off/i.test(detailRaw)) return null;
+  // detail típico: "1.234 / ≥0.50" — pegar o trecho após "/"
+  const afterSlash = detailRaw.includes('/') ? detailRaw.split('/').pop() : detailRaw;
+  const fromDetail = String(afterSlash).match(/(\d+(?:\.\d+)?)/);
+  if (!fromDetail) return null;
+  const n = Number(fromDetail[1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 function prepareCanvas(canvas) {
@@ -102,6 +127,12 @@ function drawMultiChart(canvas, lines, opts = {}) {
   }
   let min = Math.min(...all);
   let max = Math.max(...all);
+  for (const band of opts.bands ?? []) {
+    if (Number.isFinite(band.y)) {
+      min = Math.min(min, band.y);
+      max = Math.max(max, band.y);
+    }
+  }
   if (opts.zeroLine) {
     min = Math.min(min, 0);
     max = Math.max(max, 0);
@@ -157,13 +188,19 @@ function drawMultiChart(canvas, lines, opts = {}) {
   for (const band of opts.bands ?? []) {
     if (!Number.isFinite(band.y)) continue;
     const by = yAt(band.y);
-    ctx.strokeStyle = band.color || 'rgba(245,158,11,0.35)';
+    ctx.strokeStyle = band.color || 'rgba(245,158,11,0.55)';
     ctx.setLineDash([3, 3]);
     ctx.beginPath();
     ctx.moveTo(pad.l, by);
     ctx.lineTo(pad.l + w, by);
     ctx.stroke();
     ctx.setLineDash([]);
+    if (band.label) {
+      ctx.fillStyle = band.color || '#f59e0b';
+      ctx.font = '10px JetBrains Mono, monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(band.label, pad.l + 4, by - 4);
+    }
   }
 
   // draw lines
@@ -292,6 +329,8 @@ function renderCharts() {
   const btc = lastFinite(series.btc);
   const ptb = lastFinite(series.ptb);
   const dist = lastFinite(series.signedDist);
+  const z = lastFinite(series.z);
+  const minZ = lastFinite(series.minEntryZ);
   const ask = lastFinite(series.ask);
   const bid = lastFinite(series.bid);
   const pnl = lastFinite(series.pnl);
@@ -304,8 +343,10 @@ function renderCharts() {
   text('chart-cross-badge', crossLabel);
   text('chart-cross-market-badge', crossLabel);
   text(
-    'chart-dist-badge',
-    dist != null ? `${dist >= 0 ? '+' : ''}${dist.toFixed(2)}` : '—',
+    'chart-z-badge',
+    z != null
+      ? `z ${z.toFixed(3)}${minZ != null ? ` · min ${minZ.toFixed(2)}` : ' · min off'}`
+      : '—',
   );
   text(
     'chart-dist-pos-badge',
@@ -334,10 +375,14 @@ function renderCharts() {
     digits: 1,
   });
 
+  const zBands =
+    minZ != null
+      ? [{ y: minZ, color: 'rgba(245,158,11,0.7)', label: `min ${minZ.toFixed(2)}` }]
+      : [];
   drawMultiChart(
-    $('chart-dist'),
-    [{ values: series.signedDist, color: '#38bdf8', width: 2.3, fill: true }],
-    { zeroLine: true, zeroCrosses: true, emptyId: 'chart-dist-empty', digits: 2 },
+    $('chart-z'),
+    [{ values: series.z, color: '#38bdf8', width: 2.3, fill: true }],
+    { zeroLine: true, emptyId: 'chart-z-empty', digits: 3, bands: zBands },
   );
   drawMultiChart(
     $('chart-dist-pos'),
@@ -1972,6 +2017,8 @@ function render(status, health, instances) {
     signedDist: Number.isFinite(Number(market.signedDistance))
       ? Number(market.signedDistance)
       : null,
+    z: Number.isFinite(Number(entry?.z)) ? Number(entry.z) : null,
+    minEntryZ: parseMinEntryZ(entry),
     ask: Number.isFinite(Number(market.ask)) ? Number(market.ask) : null,
     bid: Number.isFinite(Number(market.bid)) ? Number(market.bid) : null,
     pnl: Number.isFinite(Number(pos.realizedPnl)) ? Number(pos.realizedPnl) : null,

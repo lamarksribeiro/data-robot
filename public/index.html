@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Login · Data Robot</title>
 
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.16.7">
-  <link rel="apple-touch-icon" href="/favicon.svg?v=1.16.7">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.16.8">
+  <link rel="apple-touch-icon" href="/favicon.svg?v=1.16.8">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/styles.css?v=1.16.7">
+  <link rel="stylesheet" href="/styles.css?v=1.16.8">
 
-  <script src="/js/dashboard.js?v=1.16.7" defer></script>
-  <script src="/js/mascot.js?v=1.16.7" defer></script>
+  <script src="/js/dashboard.js?v=1.16.8" defer></script>
+  <script src="/js/mascot.js?v=1.16.8" defer></script>
 </head>
 <body>
   <!-- Inline icon sprite (stroke icons, consistent weight) -->
@@ -263,14 +263,18 @@
           <article class="panel chart-panel">
             <div class="panel__header">
               <div>
-                <p class="panel__kicker">Sinal da posição</p>
-                <h2>Distância assinada</h2>
-                <p class="panel__hint">Acima de 0 = a favor do lado; cruzar o zero = flip contra.</p>
+                <p class="panel__kicker">Edge da estratégia</p>
+                <h2>Z-score</h2>
+                <p class="panel__hint">|BTC−PTB| / (σ√τ). Acima do limiar = edge forte o bastante para minEntryZ.</p>
               </div>
-              <span class="badge" id="chart-dist-badge">—</span>
+              <div class="chart-legend">
+                <span class="chart-legend__item chart-legend__item--z">Z</span>
+                <span class="chart-legend__item chart-legend__item--minz">minEntryZ</span>
+                <span class="badge" id="chart-z-badge">—</span>
+              </div>
             </div>
-            <canvas id="chart-dist" class="chart-canvas chart-canvas--lg" width="640" height="220" aria-label="Distância assinada"></canvas>
-            <p class="chart-empty" id="chart-dist-empty">Coletando distância…</p>
+            <canvas id="chart-z" class="chart-canvas chart-canvas--lg" width="640" height="220" aria-label="Z-score da estratégia"></canvas>
+            <p class="chart-empty" id="chart-z-empty">Coletando z-score…</p>
           </article>
         </div>
 
