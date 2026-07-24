@@ -8,11 +8,13 @@ export function createUserChannel(opts = {}) {
   const kind = opts.kind ?? 'sim';
   const listeners = new Set();
   const disconnectListeners = new Set();
+  const reconnectListeners = new Set();
   const clock = opts.clock ?? (() => Date.now());
   let heartbeatTimer = null;
   let reconnectTimer = null;
   let lastHeartbeatMs = null;
   let connected = false;
+  let everConnected = false;
   let socket = null;
   let stopped = true;
   let reconnectAttempt = 0;
@@ -24,6 +26,10 @@ export function createUserChannel(opts = {}) {
 
   function notifyDisconnect(detail) {
     for (const fn of disconnectListeners) fn(detail);
+  }
+
+  function notifyReconnect(detail) {
+    for (const fn of reconnectListeners) fn(detail);
   }
 
   function subscription() {
@@ -65,7 +71,9 @@ export function createUserChannel(opts = {}) {
   function attachSocketHandlers(sock, resolve, reject, timeout) {
     sock.once('open', () => {
       clearTimeout(timeout);
+      const isReconnect = everConnected;
       connected = true;
+      everConnected = true;
       reconnectAttempt = 0;
       lastHeartbeatMs = clock();
       try {
@@ -74,6 +82,7 @@ export function createUserChannel(opts = {}) {
         reject(new Error(`user WS subscribe: ${err.message}`));
         return;
       }
+      if (isReconnect) notifyReconnect({ tsMs: clock() });
       resolve({ ok: true, kind });
     });
 
@@ -164,6 +173,11 @@ export function createUserChannel(opts = {}) {
     onDisconnect(fn) {
       disconnectListeners.add(fn);
       return () => disconnectListeners.delete(fn);
+    },
+
+    onReconnect(fn) {
+      reconnectListeners.add(fn);
+      return () => reconnectListeners.delete(fn);
     },
 
     /** Injeta evento em sim/testes. */

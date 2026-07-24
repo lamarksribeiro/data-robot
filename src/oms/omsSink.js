@@ -40,6 +40,8 @@ export function createOmsSink(opts = {}) {
   let clobHeartbeatStop = null;
   let lastChannelError = null;
   let lastRemoteOrphans = [];
+  let userDisconnectHaltTimer = null;
+  const userDisconnectHaltMs = Number(opts.userDisconnectHaltMs ?? 60_000);
 
   function notifyExecution(event) {
     for (const listener of executionListeners) {
@@ -50,6 +52,13 @@ export function createOmsSink(opts = {}) {
   function notifyCritical(detail) {
     for (const listener of criticalListeners) {
       Promise.resolve(listener(detail)).catch(() => {});
+    }
+  }
+
+  function clearUserDisconnectHaltTimer() {
+    if (userDisconnectHaltTimer) {
+      clearTimeout(userDisconnectHaltTimer);
+      userDisconnectHaltTimer = null;
     }
   }
 
@@ -64,11 +73,28 @@ export function createOmsSink(opts = {}) {
       for (const event of normalizeUserMessage(message, oms, clock)) applyExternalEvent(event);
     });
     userChannel.onDisconnect?.((detail) => {
+      // Blip de WS: cancela resting e degrada readiness, mas NÃO halt imediato.
+      // O user channel reconecta com backoff; halt só se ficar down tempo demais.
       lastChannelError = { reason: 'USER_CHANNEL_DISCONNECTED', detail };
       if (mode === 'live') {
         void transport.cancelAll?.().catch(() => {});
-        notifyCritical(lastChannelError);
+        clearUserDisconnectHaltTimer();
+        if (userDisconnectHaltMs > 0) {
+          userDisconnectHaltTimer = setTimeout(() => {
+            userDisconnectHaltTimer = null;
+            if (userChannel?.connected) return;
+            notifyCritical(lastChannelError ?? { reason: 'USER_CHANNEL_DISCONNECTED' });
+          }, userDisconnectHaltMs);
+          userDisconnectHaltTimer.unref?.();
+        }
       }
+    });
+    userChannel.onReconnect?.((detail) => {
+      clearUserDisconnectHaltTimer();
+      if (lastChannelError?.reason === 'USER_CHANNEL_DISCONNECTED') {
+        lastChannelError = null;
+      }
+      void detail;
     });
     if (userChannel.kind === 'sim') userChannel.connect();
   }
@@ -300,6 +326,7 @@ export function createOmsSink(opts = {}) {
     },
 
     dispose() {
+      clearUserDisconnectHaltTimer();
       wsHeartbeatStop?.();
       clobHeartbeatStop?.();
       transport.stopHeartbeat?.();
@@ -311,6 +338,7 @@ export function createOmsSink(opts = {}) {
 
     /** Para reusar o sink entre engines (ex.: rotação de mercado no micro-live). */
     detachEngineListeners() {
+      clearUserDisconnectHaltTimer();
       executionListeners.clear();
       criticalListeners.clear();
       lastChannelError = null;
