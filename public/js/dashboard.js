@@ -400,60 +400,49 @@ const SECTION_TITLES = {
   system: 'Sistema',
 };
 
-/** Metadados dos 9 gates de evaluateEntryGates (MIDAS/TFC). */
+/** Metadados dos 10 gates de evaluateEntryGates (MIDAS/TFC). */
 const GATE_META = {
   terminalWindow: {
     label: 'Janela terminal',
-    group: 'timing',
-    need: 'secsLeft entre 5s e 30s',
+    need: 'secsLeft na janela terminal',
   },
   distance: {
     label: 'Distância BTC↔PTB',
-    group: 'spot',
-    need: '|btc−ptb| < 40',
+    need: '|btc−ptb| abaixo do máximo',
   },
   flips: {
     label: 'Flips do favorito',
-    group: 'spot',
-    need: 'flips ≥ min (MIDAS: 0)',
+    need: 'flips ≥ mínimo do preset',
   },
   favoriteSide: {
     label: 'Lado favorito',
-    group: 'spot',
     need: 'UP ou DOWN definido',
   },
   velocity: {
     label: 'Velocidade adversa',
-    group: 'spot',
-    need: '|Δspot| em 5s ≤ 8',
+    need: '|Δspot| no lookback ≤ máximo',
   },
   askBand: {
     label: 'Faixa de ask',
-    group: 'book',
-    need: 'ask entre 0.55 e 0.94',
+    need: 'ask na banda do preset',
   },
   spread: {
     label: 'Spread',
-    group: 'book',
-    need: 'ask−bid ≤ 0.03',
+    need: 'ask−bid ≤ máximo',
   },
   oddsSum: {
     label: 'Soma das odds',
-    group: 'book',
-    need: 'upAsk+downAsk ∈ [0.98, 1.06]',
+    need: 'upAsk+downAsk na faixa',
   },
   obi: {
     label: 'OBI (book imbalance)',
-    group: 'book',
-    need: 'obi ≥ 0 (MIDAS)',
+    need: 'obi ≥ mínimo do preset',
+  },
+  minEntryZ: {
+    label: 'minEntryZ',
+    need: 'z ≥ mínimo (0 = off)',
   },
 };
-
-const GATE_GROUPS = [
-  { id: 'timing', title: '1 · Timing da janela 5m' },
-  { id: 'spot', title: '2 · Spot BTC × Price-to-Beat' },
-  { id: 'book', title: '3 · Book Polymarket (lado favorito)' },
-];
 
 const GATE_LABELS = Object.fromEntries(
   Object.entries(GATE_META).map(([k, v]) => [k, v.label]),
@@ -469,6 +458,7 @@ const ENTRY_GATE_ORDER = [
   'spread',
   'oddsSum',
   'obi',
+  'minEntryZ',
 ];
 
 const TERMINAL_ORDER_STATES = new Set(['MATCHED', 'CANCELED', 'CANCELLED', 'REJECTED', 'EXPIRED']);
@@ -999,13 +989,52 @@ function gateLabel(key) {
   return GATE_META[key]?.label || GATE_LABELS[key] || key;
 }
 
-function renderGatesList(listEl, entry, { rich = false, limit = null, emptyMessage = null } = {}) {
+function formatGateValue(g) {
+  if (g?.value == null || g.value === '') return null;
+  if (typeof g.value === 'number' && Number.isFinite(g.value)) {
+    // Inteiros pequenos (flips) sem casas; demais com precisão útil
+    if (Number.isInteger(g.value) || Math.abs(g.value) >= 100) {
+      return Number.isInteger(g.value) ? String(g.value) : g.value.toFixed(2);
+    }
+    if (Math.abs(g.value) >= 1) return g.value.toFixed(2);
+    return g.value.toFixed(3);
+  }
+  return String(g.value);
+}
+
+function formatGatePrimary(g) {
+  if (typeof g?.detail === 'string' && g.detail.length) {
+    const cut = g.detail.search(/\s+[·/]\s+/);
+    if (cut > 0) return g.detail.slice(0, cut).trim();
+    // favoriteSide / msgs sem separador
+    if (g.limit == null || !g.detail.includes(String(g.limit))) return g.detail;
+  }
+  return formatGateValue(g) ?? (g?.pass ? 'ok' : 'falhou');
+}
+
+function formatGateLimit(g, key) {
+  if (g?.limit != null && g.limit !== '') return String(g.limit);
+  return GATE_META[key]?.need || '';
+}
+
+function renderGatesList(listEl, entry, { limit = null, emptyMessage = null } = {}) {
   if (!listEl) return { pass: 0, total: 0 };
   listEl.replaceChildren();
   const gates = entry?.gates ?? {};
   const knownKeys = ENTRY_GATE_ORDER.filter((k) => k in gates);
   const extraKeys = Object.keys(gates).filter((k) => !ENTRY_GATE_ORDER.includes(k));
-  let keys = [...knownKeys, ...extraKeys];
+  const ordered = [...knownKeys, ...extraKeys];
+  const orderIndex = new Map(ordered.map((k, i) => [k, i]));
+  let keys = [...ordered];
+
+  // Fails primeiro para escanear bloqueios
+  keys.sort((a, b) => {
+    const aFail = gates[a]?.pass ? 1 : 0;
+    const bFail = gates[b]?.pass ? 1 : 0;
+    if (aFail !== bFail) return aFail - bFail;
+    return (orderIndex.get(a) ?? 0) - (orderIndex.get(b) ?? 0);
+  });
+
   if (limit != null) keys = keys.slice(0, limit);
 
   let pass = 0;
@@ -1015,95 +1044,56 @@ function renderGatesList(listEl, entry, { rich = false, limit = null, emptyMessa
   const total = Object.keys(gates).length;
 
   if (!keys.length) {
-    if (rich) {
-      const empty = document.createElement('div');
-      empty.className = 'gates-list__empty';
-      empty.textContent =
-        emptyMessage ||
-        'Sem avaliação de gates neste tick (feed stale, skip ou estratégia sem gates).';
-      listEl.append(empty);
-    } else {
-      const li = document.createElement('li');
-      li.className = 'gates-list__empty';
-      li.textContent =
-        emptyMessage ||
-        'Sem avaliação de gates neste tick (fora da janela, feed stale ou estratégia sem gates).';
-      listEl.append(li);
-    }
+    const li = document.createElement('li');
+    li.className = 'gates-list__empty';
+    li.textContent =
+      emptyMessage ||
+      'Sem avaliação de gates neste tick (fora da janela, feed stale ou estratégia sem gates).';
+    listEl.append(li);
     return { pass: 0, total: 0 };
   }
 
-  if (rich) {
-    for (const group of GATE_GROUPS) {
-      const groupKeys = keys.filter((k) => (GATE_META[k]?.group || 'book') === group.id);
-      if (!groupKeys.length) continue;
-      const section = document.createElement('section');
-      section.className = 'gates-group';
-      const title = document.createElement('h4');
-      title.className = 'gates-group__title';
-      const gPass = groupKeys.filter((k) => gates[k]?.pass).length;
-      title.textContent = `${group.title} · ${gPass}/${groupKeys.length}`;
-      section.append(title);
-      const grid = document.createElement('div');
-      grid.className = 'gates-group__grid';
-      for (const key of groupKeys) {
-        const g = gates[key] ?? {};
-        const card = document.createElement('article');
-        card.className = `gate-card ${g.pass ? 'gate--ok' : 'gate--fail'}`;
-        card.innerHTML = `
-          <div class="gate-head">
-            <span class="gate-name">${gateLabel(key)}</span>
-            <span class="gate-status">${g.pass ? 'OK' : 'BLOQUEIA'}</span>
-          </div>
-          <p class="gate-need">${GATE_META[key]?.need || ''}</p>
-          <span class="gate-detail">${g.detail ?? (g.pass ? 'critério satisfeito' : 'falhou')}</span>
-        `;
-        grid.append(card);
-      }
-      section.append(grid);
-      listEl.append(section);
-    }
-    // unknown keys
-    const unknown = keys.filter((k) => !GATE_META[k]);
-    if (unknown.length) {
-      const section = document.createElement('section');
-      section.className = 'gates-group';
-      section.innerHTML = `<h4 class="gates-group__title">Outros</h4>`;
-      const grid = document.createElement('div');
-      grid.className = 'gates-group__grid';
-      for (const key of unknown) {
-        const g = gates[key] ?? {};
-        const card = document.createElement('article');
-        card.className = `gate-card ${g.pass ? 'gate--ok' : 'gate--fail'}`;
-        card.innerHTML = `
-          <div class="gate-head">
-            <span class="gate-name">${gateLabel(key)}</span>
-            <span class="gate-status">${g.pass ? 'OK' : 'BLOQUEIA'}</span>
-          </div>
-          <span class="gate-detail">${g.detail ?? '—'}</span>
-        `;
-        grid.append(card);
-      }
-      section.append(grid);
-      listEl.append(section);
-    }
-    return { pass, total };
-  }
-
-  // compact list (overview)
   for (const key of keys) {
     const g = gates[key] ?? {};
     const li = document.createElement('li');
     li.className = g.pass ? 'gate--ok' : 'gate--fail';
-    li.innerHTML = `<strong>${gateLabel(key)}</strong><span>${g.detail ?? (g.pass ? 'ok' : 'falhou')}</span>`;
+    const valueText = formatGatePrimary(g);
+    const limitText = formatGateLimit(g, key);
+    li.innerHTML = `<strong>${gateLabel(key)}</strong><span class="gate-value">${valueText}</span>${
+      limitText ? `<em class="gate-limit">${limitText}</em>` : ''
+    }`;
     listEl.append(li);
   }
   return { pass, total };
 }
 
+function applyGatesMeter(barId, textId, entry, stats, emptyMessage) {
+  const total = stats.total;
+  const pass = stats.pass;
+  const pct = total ? Math.round((pass / total) * 100) : 0;
+  const bar = $(barId);
+  if (bar) {
+    bar.style.width = `${pct}%`;
+    bar.classList.toggle('is-fail', total > 0 && pass < total);
+  }
+  text(
+    textId,
+    total
+      ? entry?.ok
+        ? `Todos os ${total} critérios satisfeitos — entrada liberada.`
+        : `${pass} de ${total} critérios ok · ${total - pass} bloqueando a entrada.`
+      : emptyMessage || 'Aguardando avaliação de gates neste tick…',
+  );
+}
+
 function renderGates(entry, emptyMessage = null) {
-  // market view uses #gates-list as grouped container
-  const stats = renderGatesList($('gates-list'), entry, { rich: true, emptyMessage });
+  const listEl = $('gates-list');
+  if (listEl) {
+    listEl.classList.add('gates-list', 'gates-list--tiles');
+  }
+  const stats = renderGatesList(listEl, entry, { emptyMessage });
+  applyGatesMeter('market-gates-bar', 'market-gates-text', entry, stats, emptyMessage);
+
   const score = stats.total ? `${stats.pass}/${stats.total}` : '—';
   text('gates-pass-count', stats.total ? `${score} ok` : '—');
   text('gates-pass-count-main', stats.total ? score : '—');
@@ -1132,33 +1122,18 @@ function renderGates(entry, emptyMessage = null) {
   text(
     'gates-board-hint',
     watchOnly
-      ? 'Posição aberta: critérios de entrada em modo watch (não dispara ENTER). Os 9 gates MIDAS continuam sendo avaliados a cada tick.'
-      : 'Os 9 gates de evaluateEntryGates — entrada só se todos estiverem OK e a conta estiver flat.',
+      ? 'Posição aberta: critérios de entrada em modo watch (não dispara ENTER). Os 10 gates MIDAS continuam sendo avaliados a cada tick.'
+      : 'Os 10 gates de evaluateEntryGates — entrada só se todos estiverem OK e a conta estiver flat.',
   );
   return stats;
 }
 
 function renderOverviewGates(entry, emptyMessage = null) {
-  const stats = renderGatesList($('overview-gates-list'), entry, { rich: false, emptyMessage });
-  const total = stats.total;
-  const pass = stats.pass;
-  const pct = total ? Math.round((pass / total) * 100) : 0;
-  const bar = $('overview-gates-bar');
-  if (bar) {
-    bar.style.width = `${pct}%`;
-    bar.classList.toggle('is-fail', total > 0 && pass < total);
-  }
-  text(
-    'overview-gates-text',
-    total
-      ? entry?.ok
-        ? `Todos os ${total} critérios satisfeitos — entrada liberada.`
-        : `${pass} de ${total} critérios ok · ${total - pass} bloqueando a entrada.`
-      : emptyMessage || 'Aguardando avaliação de gates neste tick…',
-  );
+  const stats = renderGatesList($('overview-gates-list'), entry, { emptyMessage });
+  applyGatesMeter('overview-gates-bar', 'overview-gates-text', entry, stats, emptyMessage);
   const badge = $('overview-entry-badge');
   if (badge) {
-    badge.textContent = entry?.ok ? 'PASSAM' : total ? 'BLOQUEADOS' : '—';
+    badge.textContent = entry?.ok ? 'PASSAM' : stats.total ? 'BLOQUEADOS' : '—';
     badge.className = `badge ${entry?.ok ? 'badge--accent' : 'badge--warn'}`;
   }
 }
@@ -1244,12 +1219,15 @@ function renderGuide(status, health) {
   const halted = status.state === 'HALTED' || health?.halted === true;
   const bal = status.preflight?.checks?.balance?.balanceUsd;
   const cta = $('guide-cta');
+  const gotoControls = $('guide-goto-controls');
+  const nextWrap = $('guide-next-wrap');
   const card = $('guide-card');
 
   let title;
   let body;
   let next;
   let showCta = false;
+  let showControlsLink = false;
   let tone = 'ok';
 
   if (halted) {
@@ -1258,16 +1236,18 @@ function renderGuide(status, health) {
     title = 'HALTED';
     if (haltReason.includes('market-rotated') || haltReason.includes('position')) {
       body = 'Mercado fechou com posição aberta — reinicie a Engine após settlement.';
-      next = 'Restart Engine → Armar';
+      next = 'Reinicie a Engine e depois arme de novo';
     } else {
       body = 'Parado por emergência. Reinício da Engine necessário.';
-      next = 'Restart Engine → Armar';
+      next = 'Reinicie a Engine e depois arme de novo';
     }
+    showControlsLink = true;
   } else if (!live) {
     tone = 'warn';
     title = 'Simulação (shadow)';
     body = 'Decisões reais, sem ordens na exchange.';
-    next = 'Live na Engine + Armar para capital real';
+    next = 'Para capital real: Engine em live + Armar';
+    showControlsLink = true;
   } else if (!armed) {
     tone = 'warn';
     title = 'Live · desarmado';
@@ -1282,7 +1262,8 @@ function renderGuide(status, health) {
     body = `Entradas liberadas · cap ${
       status.canary?.hardCapUsd != null ? `$${Number(status.canary.hardCapUsd).toFixed(0)}` : '$3'
     }/ordem`;
-    next = 'Pausar para parar entradas';
+    next = 'Use Pausar em Controles para parar novas entradas';
+    showControlsLink = true;
   }
 
   card.dataset.tone = tone;
@@ -1294,9 +1275,13 @@ function renderGuide(status, health) {
     'wallet-balance-banner',
     live ? (Number.isFinite(Number(bal)) ? money(bal) : 'aguarde Armar') : 'n/a shadow',
   );
+  if (nextWrap) nextWrap.classList.toggle('is-cta', showCta);
   if (cta) {
     cta.hidden = !showCta;
     cta.disabled = actionRunning || halted;
+  }
+  if (gotoControls) {
+    gotoControls.hidden = !showControlsLink;
   }
 }
 
@@ -1563,6 +1548,24 @@ function render(status, health, instances) {
   text('market-interval', market.window);
   text('market-id-full', market.marketId || status.lastMarketId);
   text('market-secs', market.secsLeft != null ? `${number(market.secsLeft, 1)} s` : '—');
+  text('market-btc', market.btc != null ? number(market.btc, 2) : '—');
+  text('market-ptb', market.priceToBeat != null ? number(market.priceToBeat, 2) : '—');
+  {
+    const signed = market.signedDistance;
+    const absDist = entry?.dist;
+    if (signed != null && Number.isFinite(Number(signed))) {
+      const s = Number(signed);
+      text('market-dist', `${s >= 0 ? '+' : ''}${number(s, 2)}`);
+    } else if (absDist != null && Number.isFinite(Number(absDist))) {
+      text('market-dist', `|${number(absDist, 2)}|`);
+    } else {
+      text('market-dist', '—');
+    }
+  }
+  text(
+    'market-z',
+    entry?.z != null && Number.isFinite(Number(entry.z)) ? number(entry.z, 3) : '—',
+  );
   text('market-fav', market.favoriteSide);
   text(
     'market-ask',
@@ -1570,6 +1573,37 @@ function render(status, health, instances) {
       ? `${number(market.ask, 3)}${market.bid != null ? ` / ${number(market.bid, 3)}` : ''}`
       : '—',
   );
+  text(
+    'market-up-book',
+    market.upAsk != null || market.upBid != null
+      ? `${market.upAsk != null ? number(market.upAsk, 3) : '—'} / ${
+          market.upBid != null ? number(market.upBid, 3) : '—'
+        }`
+      : '—',
+  );
+  text(
+    'market-down-book',
+    market.downAsk != null || market.downBid != null
+      ? `${market.downAsk != null ? number(market.downAsk, 3) : '—'} / ${
+          market.downBid != null ? number(market.downBid, 3) : '—'
+        }`
+      : '—',
+  );
+  {
+    const scoop = status.diagnostics?.scoop;
+    if (!scoop) {
+      text('market-scoop', '—');
+    } else if (scoop.ok === true) {
+      text(
+        'market-scoop',
+        `OK${scoop.z != null ? ` · z ${number(scoop.z, 3)}` : ''}${
+          scoop.ask != null ? ` · ask ${number(scoop.ask, 3)}` : ''
+        }`,
+      );
+    } else {
+      text('market-scoop', scoop.reason || 'bloqueado');
+    }
+  }
   text('market-bid', number(market.bid, 3));
   text(
     'market-entry-ok',

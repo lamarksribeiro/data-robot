@@ -84,4 +84,50 @@ describe('evaluateEntryGates V7', () => {
     assert.equal(result.gates.terminalWindow.pass, false);
     assert.equal(result.ok, false);
   });
+
+  it('emite value/limit/detail legíveis em todos os gates', () => {
+    const nowMs = Date.now();
+    const history = [
+      { ts: nowMs - 5000, btc: 100.0 },
+      { ts: nowMs, btc: 100.5 },
+    ];
+    const result = evaluateEntryGates(
+      {
+        nowMs,
+        btc: 100.5,
+        priceToBeat: 100,
+        secsLeft: 20,
+        book,
+      },
+      TFC_V7,
+      history,
+    );
+    const expectedKeys = [
+      'terminalWindow',
+      'distance',
+      'flips',
+      'favoriteSide',
+      'velocity',
+      'askBand',
+      'spread',
+      'oddsSum',
+      'obi',
+      'minEntryZ',
+    ];
+    assert.deepEqual(Object.keys(result.gates).sort(), [...expectedKeys].sort());
+    for (const key of expectedKeys) {
+      const g = result.gates[key];
+      assert.equal(typeof g.pass, 'boolean', `${key}.pass`);
+      assert.equal(typeof g.detail, 'string', `${key}.detail`);
+      assert.ok(g.detail.length > 0, `${key}.detail non-empty`);
+      assert.ok('limit' in g, `${key}.limit`);
+      assert.ok('value' in g, `${key}.value`);
+    }
+    assert.equal(result.gates.terminalWindow.limit, `[${TFC_V7.minSecondsLeft}, ${TFC_V7.maxSecondsLeft})`);
+    assert.equal(result.gates.distance.limit, `<${TFC_V7.maxDistAbs}`);
+    assert.equal(result.gates.askBand.limit, `[${TFC_V7.minAsk}, ${TFC_V7.maxAsk}]`);
+    assert.equal(result.gates.distance.value, 0.5);
+    assert.match(result.gates.terminalWindow.detail, /20\.0s/);
+    assert.match(result.gates.distance.detail, /0\.50/);
+  });
 });

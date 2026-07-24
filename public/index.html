@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Login · Data Robot</title>
 
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.16.3">
-  <link rel="apple-touch-icon" href="/favicon.svg?v=1.16.3">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.16.5">
+  <link rel="apple-touch-icon" href="/favicon.svg?v=1.16.5">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/styles.css?v=1.16.3">
+  <link rel="stylesheet" href="/styles.css?v=1.16.5">
 
-  <script src="/js/dashboard.js?v=1.16.3" defer></script>
-  <script src="/js/mascot.js?v=1.16.3" defer></script>
+  <script src="/js/dashboard.js?v=1.16.5" defer></script>
+  <script src="/js/mascot.js?v=1.16.5" defer></script>
 </head>
 <body>
   <!-- Inline icon sprite (stroke icons, consistent weight) -->
@@ -169,7 +169,7 @@
           </div>
         </header>
 
-        <!-- Status operacional compacto (substitui guide + mode banners gigantes) -->
+        <!-- Status operacional compacto -->
         <section class="ops-bar" id="guide-card" aria-live="polite">
           <div class="ops-bar__state">
             <span class="ops-bar__chip" id="guide-eyebrow">Estado</span>
@@ -183,10 +183,19 @@
             <div><dt>Entradas</dt><dd id="entry-enabled">—</dd></div>
             <div><dt>Carteira</dt><dd id="wallet-balance-banner">—</dd></div>
           </dl>
-          <div class="ops-bar__next">
-            <span class="ops-bar__chip">Próximo</span>
-            <strong id="guide-next">—</strong>
-            <button class="btn btn--primary btn--sm" id="guide-cta" type="button" hidden>Armar</button>
+          <div class="ops-bar__next" id="guide-next-wrap">
+            <div class="ops-bar__next-copy">
+              <span class="ops-bar__chip">Próximo passo</span>
+              <strong id="guide-next">—</strong>
+            </div>
+            <div class="ops-bar__next-actions">
+              <button class="btn btn--primary ops-bar__cta" id="guide-cta" type="button" hidden>
+                Armar agora
+              </button>
+              <button class="btn btn--ghost btn--sm ops-bar__link" id="guide-goto-controls" type="button" data-goto="controls" hidden>
+                Ver controles
+              </button>
+            </div>
           </div>
           <p class="ops-bar__explain hidden" id="mode-explain"></p>
         </section>
@@ -348,7 +357,7 @@
 
       <!-- ═══════════════ VIEW: MERCADO & GATES ═══════════════ -->
       <section class="view" id="view-market" data-view="market" aria-labelledby="hdr-market" hidden>
-        <header class="page-header">
+        <header class="page-header page-header--compact">
           <div>
             <p class="eyebrow">Feed ao vivo</p>
             <h1 id="hdr-market">Mercado em operação</h1>
@@ -375,8 +384,15 @@
             <div><dt>Janela</dt><dd id="market-interval">—</dd></div>
             <div><dt>Market ID</dt><dd id="market-id-full">—</dd></div>
             <div><dt>Tempo restante</dt><dd id="market-secs">—</dd></div>
+            <div><dt>BTC spot</dt><dd id="market-btc">—</dd></div>
+            <div><dt>Price-to-Beat</dt><dd id="market-ptb">—</dd></div>
+            <div><dt>Distância</dt><dd id="market-dist">—</dd></div>
+            <div><dt>z</dt><dd id="market-z">—</dd></div>
             <div><dt>Lado favorito</dt><dd id="market-fav">—</dd></div>
             <div><dt>Ask / Bid favorito</dt><dd id="market-ask">—</dd></div>
+            <div><dt>UP ask / bid</dt><dd id="market-up-book">—</dd></div>
+            <div><dt>DOWN ask / bid</dt><dd id="market-down-book">—</dd></div>
+            <div><dt>Scoop</dt><dd id="market-scoop">—</dd></div>
             <div><dt>Gates de entrada</dt><dd id="market-entry-ok">—</dd></div>
             <div><dt>Fonte de snapshot</dt><dd id="market-source">—</dd></div>
           </dl>
@@ -397,17 +413,23 @@
                 <p class="panel__kicker">Checklist de entrada · MIDAS</p>
                 <h3 class="gates-board__title">Critérios que precisam passar juntos</h3>
                 <p class="panel__hint" id="gates-board-hint">
-                  Os 9 gates de <code>evaluateEntryGates</code> — entrada só se todos estiverem OK e flat.
+                  Os 10 gates de <code>evaluateEntryGates</code> — entrada só se todos estiverem OK e flat.
                 </p>
               </div>
               <div class="gates-board__score">
-                <strong id="gates-pass-count-main">0/9</strong>
+                <strong id="gates-pass-count-main">0/10</strong>
                 <span id="gates-verdict">—</span>
               </div>
             </div>
-            <div class="gates-groups" id="gates-list"></div>
+            <div class="gates-summary" id="market-gates-summary">
+              <div class="gates-meter" id="market-gates-meter">
+                <span class="gates-meter__bar" id="market-gates-bar"></span>
+              </div>
+              <p class="gates-summary__text" id="market-gates-text">Aguardando avaliação…</p>
+            </div>
+            <ul class="gates-list gates-list--tiles" id="gates-list"></ul>
             <div class="gates-post" id="gates-post">
-              <p class="panel__kicker">Pós-gates (só se os 9 passarem)</p>
+              <p class="panel__kicker">Pós-gates (só se os 10 passarem)</p>
               <div class="gates-post__row">
                 <div class="gate-card gate-card--meta"><span>Liquidez book</span><strong id="post-liq">—</strong></div>
                 <div class="gate-card gate-card--meta"><span>Tier / budget</span><strong id="post-tier">—</strong></div>
@@ -459,7 +481,7 @@
 
       <!-- ═══════════════ VIEW: POSIÇÃO & PNL ═══════════════ -->
       <section class="view" id="view-position" data-view="position" aria-labelledby="hdr-position" hidden>
-        <header class="page-header">
+        <header class="page-header page-header--compact">
           <div>
             <p class="eyebrow">Conta da estratégia</p>
             <h1 id="hdr-position">Posição &amp; PnL</h1>
@@ -564,7 +586,7 @@
 
       <!-- ═══════════════ VIEW: ORDENS ═══════════════ -->
       <section class="view" id="view-orders" data-view="orders" aria-labelledby="hdr-orders" hidden>
-        <header class="page-header">
+        <header class="page-header page-header--compact">
           <div>
             <p class="eyebrow">OMS</p>
             <h1 id="hdr-orders">Ordens</h1>
@@ -620,7 +642,7 @@
 
       <!-- ═══════════════ VIEW: CONTROLES ═══════════════ -->
       <section class="view" id="view-controls" data-view="controls" aria-labelledby="hdr-controls" hidden>
-        <header class="page-header">
+        <header class="page-header page-header--compact">
           <div>
             <p class="eyebrow">Controle operacional</p>
             <h1 id="hdr-controls">Controles</h1>
@@ -641,16 +663,16 @@
           </div>
           <div class="control-cards control-cards--primary" id="control-grid-primary">
             <button class="control-card btn--primary" data-action="arm" data-confirm="ARM" type="button">
-              <strong>1. Armar</strong>
-              <span>Liga o robô para abrir entradas (usa dinheiro em live). Roda preflight e reconciliação antes.</span>
+              <strong>Armar</strong>
+              <span>Libera entradas após preflight e reconciliação. Em live, usa capital real.</span>
             </button>
             <button class="control-card btn--warning" data-action="pause" data-confirm="PAUSE" type="button">
-              <strong>2. Pausar</strong>
-              <span>Para de abrir entradas. Continua protegendo posição com EXIT.</span>
+              <strong>Pausar</strong>
+              <span>Bloqueia novas entradas. Continua protegendo posição aberta com EXIT.</span>
             </button>
             <button class="control-card btn--danger btn--critical" data-action="kill" data-confirm="HALT" data-typed="true" type="button">
               <strong>Emergência · Kill</strong>
-              <span>Para tudo e cancela ordens. Digite HALT. Depois precisa reiniciar a Engine.</span>
+              <span>Para tudo e cancela ordens. Digite HALT. Depois reinicie a Engine.</span>
             </button>
           </div>
           <details class="advanced-box">
@@ -782,7 +804,7 @@
 
       <!-- ═══════════════ VIEW: AUDITORIA ═══════════════ -->
       <section class="view" id="view-audit" data-view="audit" aria-labelledby="hdr-audit" hidden>
-        <header class="page-header">
+        <header class="page-header page-header--compact">
           <div>
             <p class="eyebrow">Trilha imutável</p>
             <h1 id="hdr-audit">Auditoria operacional</h1>
@@ -805,7 +827,7 @@
 
       <!-- ═══════════════ VIEW: SISTEMA ═══════════════ -->
       <section class="view" id="view-system" data-view="system" aria-labelledby="hdr-system" hidden>
-        <header class="page-header">
+        <header class="page-header page-header--compact">
           <div>
             <p class="eyebrow">Observabilidade</p>
             <h1 id="hdr-system">Sistema</h1>

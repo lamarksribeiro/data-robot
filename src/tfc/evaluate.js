@@ -73,78 +73,126 @@ export function ptbFlipCount(history, lookbackSecs, nowMs, priceToBeat) {
 }
 
 /**
- * @returns {{ ok: boolean, fav: string|null, gates: Record<string, { pass: boolean, detail?: string }>, ask: number|null, bid: number|null }}
+ * @returns {{
+ *   ok: boolean,
+ *   fav: string|null,
+ *   gates: Record<string, { pass: boolean, detail?: string, value?: number|string|null, limit?: string|null }>,
+ *   ask: number|null,
+ *   bid: number|null,
+ * }}
  */
 export function evaluateEntryGates(snapshot, params, history = []) {
   const gates = {};
   const { btc, priceToBeat, secsLeft, book } = snapshot;
 
+  const minSec = params.minSecondsLeft;
+  const maxSec = params.maxSecondsLeft;
+  const secsVal = Number.isFinite(secsLeft) ? secsLeft : null;
+  const winLimit = `[${minSec}, ${maxSec})`;
   gates.terminalWindow = {
-    pass: secsLeft >= params.minSecondsLeft && secsLeft < params.maxSecondsLeft,
-    detail: `secsLeft=${secsLeft?.toFixed?.(1) ?? secsLeft ?? '?'}`,
+    pass: secsVal != null && secsVal >= minSec && secsVal < maxSec,
+    value: secsVal,
+    limit: winLimit,
+    detail:
+      secsVal != null
+        ? `${secsVal.toFixed(1)}s · ${winLimit}`
+        : `secsLeft=? · ${winLimit}`,
   };
 
   const dist = Number.isFinite(btc) && Number.isFinite(priceToBeat) ? Math.abs(btc - priceToBeat) : null;
+  const distLimit = `<${params.maxDistAbs}`;
   gates.distance = {
     pass: dist != null && dist < params.maxDistAbs,
-    detail: dist != null ? `|btc-ptb|=${dist.toFixed(2)}` : 'btc/ptb indisponível',
+    value: dist,
+    limit: distLimit,
+    detail: dist != null ? `${dist.toFixed(2)} / ${distLimit}` : `btc/ptb indisponível · ${distLimit}`,
   };
 
   const flips = ptbFlipCount(history, params.flipWindowSecs ?? 60, snapshot.nowMs, priceToBeat);
   const minFlips = params.minFlips ?? 0;
+  const flipsLimit = `≥${minFlips}`;
   gates.flips = {
     pass: flips >= minFlips,
-    detail: `flips=${flips} min=${minFlips}`,
+    value: flips,
+    limit: flipsLimit,
+    detail: `${flips} / ${flipsLimit}`,
   };
 
   const fav = favoriteSide(btc, priceToBeat);
   const ask = fav ? book?.[fav.toLowerCase()]?.bestAsk : null;
   const bid = fav ? book?.[fav.toLowerCase()]?.bestBid : null;
 
-  gates.favoriteSide = { pass: !!fav, detail: fav ?? 'n/a' };
+  gates.favoriteSide = {
+    pass: !!fav,
+    value: fav ?? null,
+    limit: 'UP|DOWN',
+    detail: fav ?? 'n/a',
+  };
 
+  const askLimit = `[${params.minAsk}, ${params.maxAsk}]`;
   gates.askBand = {
     pass: ask != null && ask >= params.minAsk && ask <= params.maxAsk,
-    detail: ask != null ? `ask=${ask.toFixed(3)}` : 'ask indisponível',
+    value: ask,
+    limit: askLimit,
+    detail: ask != null ? `${ask.toFixed(3)} · ${askLimit}` : `ask indisponível · ${askLimit}`,
   };
 
   const spread = ask != null && bid != null ? ask - bid : null;
+  const spreadLimit = `≤${params.maxSpread}`;
   gates.spread = {
     pass: spread != null && spread <= params.maxSpread,
-    detail: spread != null ? `spread=${spread.toFixed(3)}` : 'spread indisponível',
+    value: spread,
+    limit: spreadLimit,
+    detail: spread != null ? `${spread.toFixed(3)} / ${spreadLimit}` : `spread indisponível · ${spreadLimit}`,
   };
 
   const upAsk = book?.up?.bestAsk;
   const downAsk = book?.down?.bestAsk;
   const oddsSum = upAsk != null && downAsk != null ? upAsk + downAsk : null;
+  const oddsLimit = `[${params.minOddsSum}, ${params.maxOddsSum}]`;
   gates.oddsSum = {
     pass: oddsSum != null && oddsSum >= params.minOddsSum && oddsSum <= params.maxOddsSum,
-    detail: oddsSum != null ? `sum=${oddsSum.toFixed(3)}` : 'odds indisponíveis',
+    value: oddsSum,
+    limit: oddsLimit,
+    detail: oddsSum != null ? `${oddsSum.toFixed(3)} · ${oddsLimit}` : `odds indisponíveis · ${oddsLimit}`,
   };
 
-  const vel = spotVelocity(history, params.velocityLookbackSecs, snapshot.nowMs);
+  const velLookback = params.velocityLookbackSecs;
+  const maxAdverse = params.maxAdverseSpotChange;
+  const vel = spotVelocity(history, velLookback, snapshot.nowMs);
   let adverse = false;
   if (vel && fav) {
-    if (fav === 'UP' && vel.change < -params.maxAdverseSpotChange) adverse = true;
-    if (fav === 'DOWN' && vel.change > params.maxAdverseSpotChange) adverse = true;
+    if (fav === 'UP' && vel.change < -maxAdverse) adverse = true;
+    if (fav === 'DOWN' && vel.change > maxAdverse) adverse = true;
   }
+  const velLimit = `|Δ|≤${maxAdverse} em ${velLookback}s`;
   gates.velocity = {
     pass: !adverse,
-    detail: vel ? `Δ${vel.change.toFixed(2)} em ${params.velocityLookbackSecs}s` : 'histórico insuficiente',
+    value: vel ? vel.change : null,
+    limit: velLimit,
+    detail: vel
+      ? `Δ${vel.change.toFixed(2)} · ${velLimit}`
+      : `histórico insuficiente · ${velLimit}`,
   };
 
   const obi = fav ? orderBookImbalance(fav, book, params.obiLevels) : null;
+  const obiLimit = `≥${params.minObi}`;
   gates.obi = {
     pass: obi == null || obi >= params.minObi,
-    detail: obi != null ? `obi=${obi.toFixed(3)}` : 'book shallow',
+    value: obi,
+    limit: obiLimit,
+    detail: obi != null ? `${obi.toFixed(3)} / ${obiLimit}` : `book shallow · ${obiLimit}`,
   };
 
   // minEntryZ (0 = desligado). z físico |dist|/(σ_ps√τ).
   const minZ = Number(params.minEntryZ ?? 0);
   const { z } = physicalZScore(dist ?? 0, history, params, secsLeft, snapshot.nowMs);
+  const zLimit = minZ > 0 ? `≥${minZ}` : 'off';
   gates.minEntryZ = {
     pass: !(minZ > 0) || z >= minZ,
-    detail: `z=${z.toFixed(3)} min=${Number.isFinite(minZ) ? minZ : 0}`,
+    value: z,
+    limit: zLimit,
+    detail: `${z.toFixed(3)} / ${zLimit}`,
   };
 
   const ok = Object.values(gates).every((g) => g.pass);
