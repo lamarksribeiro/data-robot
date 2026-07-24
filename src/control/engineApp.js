@@ -527,6 +527,12 @@ export function createEngineApp(opts = {}) {
           position: engine.position,
           resolution,
         });
+        // Bloqueia novas entradas até o Gamma resolver; settlement automático rearma.
+        engine.risk.setEntryEnabled(false);
+        if (operatorState !== 'HALTED') {
+          operatorState = 'HALTED';
+          operatorChangedAtMs = Date.now();
+        }
         await engine.safeShutdown(reason);
         return { skipped: true, reason: 'POSITION_REQUIRES_SETTLEMENT' };
       }

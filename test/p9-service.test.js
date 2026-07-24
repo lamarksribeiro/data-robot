@@ -325,6 +325,8 @@ describe('proteção de rotação com posição live', () => {
     assert.equal(result.reason, 'POSITION_REQUIRES_SETTLEMENT');
     assert.equal(app.engine.state, 'HALTED');
     assert.equal(app.engine.getStatus().haltReason, 'market-rotated-with-position');
+    assert.equal(app.status().operatorState, 'HALTED');
+    assert.equal(app.status().entryEnabled, false);
   });
 });
 

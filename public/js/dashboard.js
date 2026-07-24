@@ -1704,13 +1704,20 @@ function renderGuide(status, health) {
   let tone = 'ok';
 
   if (halted) {
-    tone = 'err';
     const haltReason = String(status.haltReason || health?.haltReason || '');
-    title = 'HALTED';
-    if (haltReason.includes('market-rotated') || haltReason.includes('position')) {
-      body = 'Mercado fechou com posição aberta — reinicie a Engine após settlement.';
-      next = 'Reinicie a Engine e depois ative as entradas';
+    const awaitingSettlement =
+      haltReason.includes('market-rotated') ||
+      haltReason.includes('position') ||
+      haltReason.includes('POSITION_REQUIRES_SETTLEMENT');
+    if (awaitingSettlement) {
+      tone = 'warn';
+      title = 'HALTED · aguardando settlement';
+      body =
+        'O evento 5m virou com posição aberta. A Engine espera o Gamma fechar o mercado (1–2 min), liquida o PnL e segue armada no próximo evento — sem reiniciar.';
+      next = 'Aguarde o settlement automático. Não reinicie a Engine.';
     } else {
+      tone = 'err';
+      title = 'HALTED';
       body = 'Parado por emergência. Reinício da Engine necessário.';
       next = 'Reinicie a Engine e depois ative as entradas';
     }
@@ -1787,6 +1794,7 @@ function formatOperatorState(state) {
   if (state === 'ARMED') return 'Entradas ativas';
   if (state === 'PAUSED') return 'Pausado';
   if (state === 'DISARMED') return 'Entradas bloqueadas';
+  if (state === 'HALTED') return 'Aguardando / parado';
   return state || '—';
 }
 
