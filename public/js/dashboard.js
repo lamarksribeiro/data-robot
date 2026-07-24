@@ -2352,15 +2352,27 @@ function renderStratSelects() {
   const presetSel = $('strat-preset');
   if (!family || !versionSel || !presetSel) return;
 
+  const running = stratStudio.library?.running;
+  const runningPresetId = running?.presetId || null;
+  const runningVersion = running?.version || null;
+  const runningIsThisFamily = running?.strategyId && running.strategyId === family.pluginId;
+
   versionSel.replaceChildren();
   for (const v of family.versions || []) {
     const opt = document.createElement('option');
     opt.value = v.version;
-    opt.textContent = `${v.version}${v.label ? ` · ${v.label}` : ''}`;
+    const runMark =
+      runningIsThisFamily && runningVersion === v.version ? ' · em execução' : '';
+    opt.textContent = `${v.version}${v.label ? ` · ${v.label}` : ''}${runMark}`;
     versionSel.append(opt);
   }
   if (!stratStudio.version || !family.versions.some((v) => v.version === stratStudio.version)) {
-    stratStudio.version = family.versions[0]?.version || null;
+    stratStudio.version =
+      (runningIsThisFamily &&
+        family.versions.some((v) => v.version === runningVersion) &&
+        runningVersion) ||
+      family.versions[0]?.version ||
+      null;
   }
   versionSel.value = stratStudio.version || '';
 
@@ -2369,11 +2381,20 @@ function renderStratSelects() {
   for (const p of version?.presets || []) {
     const opt = document.createElement('option');
     opt.value = p.presetId;
-    opt.textContent = `${p.name}${p.custom ? ' · custom' : ''}${p.role ? ` (${p.role})` : ''}`;
+    const runMark =
+      runningIsThisFamily && runningPresetId === p.presetId ? ' · em execução' : '';
+    const role = p.role ? ` · ${p.role}` : '';
+    const custom = p.custom ? ' · custom' : '';
+    opt.textContent = `${p.name} (${p.presetId})${role}${custom}${runMark}`;
     presetSel.append(opt);
   }
   if (!stratStudio.presetId || !version?.presets?.some((p) => p.presetId === stratStudio.presetId)) {
-    stratStudio.presetId = version?.presets?.[0]?.presetId || null;
+    stratStudio.presetId =
+      (runningIsThisFamily &&
+        version?.presets?.some((p) => p.presetId === runningPresetId) &&
+        runningPresetId) ||
+      version?.presets?.[0]?.presetId ||
+      null;
   }
   presetSel.value = stratStudio.presetId || '';
 
@@ -2384,10 +2405,14 @@ function renderStratSelects() {
   if ($('strat-runnable-badge')) {
     $('strat-runnable-badge').className = `badge ${family.runnable ? 'badge--accent' : 'badge--warn'}`;
   }
+  const runningNote =
+    runningIsThisFamily && runningPresetId === preset?.presetId
+      ? ' · em execução agora'
+      : '';
   text(
     'strat-preset-meta',
     preset
-      ? `${preset.presetId} · ${preset.source || 'lab'}${preset.parentPresetId ? ` · base ${preset.parentPresetId}` : ''}`
+      ? `${preset.presetId} · ${preset.source || 'lab'}${preset.parentPresetId ? ` · base ${preset.parentPresetId}` : ''}${runningNote}`
       : '—',
   );
   renderStratParams(preset);
@@ -2408,10 +2433,21 @@ function renderStratFamilies() {
     btn.innerHTML = `<strong>${family.label}</strong><span>${family.pluginId}</span><em>${runLabel} · ${(family.versions || []).length} ver.</em>`;
     btn.addEventListener('click', () => {
       stratStudio.familyId = family.familyId;
-      stratStudio.version = family.versions?.[0]?.version || null;
-      stratStudio.presetId = family.versions?.[0]?.presets?.[0]?.presetId || null;
       stratStudio.paramSearch = '';
       if ($('strat-param-search')) $('strat-param-search').value = '';
+      const running = stratStudio.library?.running;
+      if (running?.strategyId === family.pluginId) {
+        const hit = findLibraryPreset(stratStudio.library, {
+          pluginId: running.strategyId,
+          version: running.version,
+          presetId: running.presetId,
+        });
+        stratStudio.version = hit?.version?.version || family.versions?.[0]?.version || null;
+        stratStudio.presetId = hit?.preset?.presetId || family.versions?.[0]?.presets?.[0]?.presetId || null;
+      } else {
+        stratStudio.version = family.versions?.[0]?.version || null;
+        stratStudio.presetId = family.versions?.[0]?.presets?.[0]?.presetId || null;
+      }
       renderStratFamilies();
       renderStratSelects();
     });
@@ -2422,16 +2458,40 @@ function renderStratFamilies() {
 function renderStratStatusStrip(library) {
   const running = library?.running;
   const active = library?.active;
+  const runningHit = findLibraryPreset(library, {
+    pluginId: running?.strategyId,
+    version: running?.version,
+    presetId: running?.presetId,
+  });
+  const activeHit = findLibraryPreset(library, {
+    pluginId: active?.pluginId || active?.strategyId,
+    version: active?.version,
+    presetId: active?.presetId,
+  });
+  const runName = runningHit?.preset?.name || running?.name || null;
+  const nextName = activeHit?.preset?.name || active?.name || null;
   const runLabel = running
-    ? `${running.strategyId || '—'} · ${running.presetId || running.version || '—'}`
+    ? `${runName || running.strategyId} · ${running.presetId || running.version || '—'}`
     : 'Nenhuma / default env';
   const nextLabel = active
-    ? `${active.pluginId || active.strategyId || '—'} · ${active.presetId || active.version || '—'}`
-    : 'env / default';
+    ? `${nextName || active.pluginId || active.strategyId || '—'} · ${active.presetId || active.version || '—'}`
+    : 'env / default (sem active-strategy.json)';
   text('strat-status-running', runLabel);
-  text('strat-status-running-meta', running?.name || 'runtime atual da Engine');
+  text(
+    'strat-status-running-meta',
+    running
+      ? `${running.strategyId}${running.version ? ` · v${running.version}` : ''}${
+          runName && runName !== running.presetId ? ` · ${running.presetId}` : ''
+        }`
+      : 'runtime atual da Engine',
+  );
   text('strat-status-next', nextLabel);
-  text('strat-status-next-meta', active?.name || 'ativa no disco após restart');
+  text(
+    'strat-status-next-meta',
+    active
+      ? `${active.pluginId || active.strategyId || '—'} · v${active.version || '—'}`
+      : 'próxima boot = env / catálogo padrão',
+  );
 
   const same =
     running &&
@@ -2440,34 +2500,95 @@ function renderStratStatusStrip(library) {
     String(running.presetId || '') === String(active.presetId || '');
   const strip = $('strat-status');
   if (strip) {
-    strip.dataset.tone = !running || !active ? 'warn' : same ? 'ok' : 'warn';
+    strip.dataset.tone = !running ? 'warn' : !active || same ? 'ok' : 'warn';
   }
   text(
     'strat-status-hint',
-    same || (!running && !active)
-      ? 'Runtime e próxima boot estão alinhados (ou sem override).'
-      : 'Runtime ≠ próxima boot — reinicie a Engine para aplicar a estratégia ativa.',
+    !running
+      ? 'Engine sem estratégia reportada.'
+      : !active
+        ? 'Rodando via env/catálogo (não há active-strategy.json). No seletor: escolha o preset com o mesmo id.'
+        : same
+          ? 'Runtime e próxima boot estão alinhados.'
+          : 'Runtime ≠ próxima boot — reinicie a Engine para aplicar a estratégia ativa.',
   );
 
   text(
     'strategy-running-badge',
-    running ? `rodando ${running.strategyId} · ${running.presetId || '—'}` : 'rodando —',
+    running
+      ? `rodando ${runName || running.presetId || running.strategyId}`
+      : 'rodando —',
   );
   text(
     'strategy-active-badge',
-    active ? `próxima ${active.pluginId} · ${active.presetId}` : 'próxima = env/default',
+    active
+      ? `próxima ${nextName || active.presetId}`
+      : 'próxima = env/default',
   );
+}
+
+/** Localiza preset na biblioteca (plugin/version/presetId). */
+function findLibraryPreset(library, query = {}) {
+  if (!library?.families?.length) return null;
+  for (const family of library.families) {
+    if (query.pluginId && family.pluginId !== query.pluginId) continue;
+    if (query.familyId && family.familyId !== query.familyId) continue;
+    for (const version of family.versions || []) {
+      if (query.version && version.version !== query.version) continue;
+      for (const preset of version.presets || []) {
+        if (query.presetId && preset.presetId !== query.presetId) continue;
+        if (query.presetId || (!query.presetId && !query.version)) {
+          if (query.presetId && preset.presetId === query.presetId) {
+            return { family, version, preset };
+          }
+        }
+      }
+      if (!query.presetId && query.version && version.version === query.version) {
+        return { family, version, preset: version.presets?.[0] || null };
+      }
+    }
+  }
+  // fallback: só por presetId em qualquer versão
+  if (query.presetId) {
+    for (const family of library.families) {
+      if (query.pluginId && family.pluginId !== query.pluginId) continue;
+      for (const version of family.versions || []) {
+        const preset = (version.presets || []).find((p) => p.presetId === query.presetId);
+        if (preset) return { family, version, preset };
+      }
+    }
+  }
+  return null;
+}
+
+function syncStudioToRunning(library) {
+  const running = library?.running;
+  if (!running?.strategyId && !running?.presetId) return false;
+  const hit = findLibraryPreset(library, {
+    pluginId: running.strategyId,
+    version: running.version,
+    presetId: running.presetId,
+  });
+  if (!hit) return false;
+  stratStudio.familyId = hit.family.familyId;
+  stratStudio.version = hit.version.version;
+  stratStudio.presetId = hit.preset.presetId;
+  return true;
 }
 
 function renderStrategyStudio(library) {
   if (!library?.families?.length) return;
   stratStudio.library = library;
-  if (!stratStudio.familyId) {
-    const runningPlugin = library.running?.strategyId;
-    const match = library.families.find((f) => f.pluginId === runningPlugin);
-    stratStudio.familyId = match?.familyId || library.families[0].familyId;
-    if (library.running?.version) stratStudio.version = library.running.version;
-    if (library.running?.presetId) stratStudio.presetId = library.running.presetId;
+  if (!stratStudio.dirty) {
+    if (!stratStudio.familyId || !stratStudio.loaded) {
+      if (!syncStudioToRunning(library)) {
+        stratStudio.familyId = library.families[0].familyId;
+        stratStudio.version = library.families[0].versions?.[0]?.version || null;
+        stratStudio.presetId = library.families[0].versions?.[0]?.presets?.[0]?.presetId || null;
+      }
+    } else if (!stratStudio.presetId) {
+      syncStudioToRunning(library);
+    }
   }
   renderStratStatusStrip(library);
   if (!stratStudio.dirty || !stratStudio.loaded) {
