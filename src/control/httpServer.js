@@ -12,7 +12,7 @@ import http from 'node:http';
  * @param {() => object} opts.getMetrics
  * @param {() => object} [opts.getCatalog]
  * @param {() => object} [opts.getInstances]
- * @param {(limit:number) => object[]} [opts.getAudit]
+ * @param {(limitOrOpts:number|object) => object[]} [opts.getAudit]
  * @param {() => object} [opts.getStrategyLibrary]
  * @param {() => object|null} [opts.getActiveStrategy]
  * @param {(body:object) => object|Promise<object>} [opts.onSaveStrategyPreset]
@@ -90,9 +90,18 @@ export function createControlServer(opts) {
         return send(res, 200, opts.getInstances?.() ?? []);
       }
       if (req.method === 'GET' && pathName === '/audit') {
-        const requested = Number(url.searchParams.get('limit') ?? 100);
-        const limit = Number.isFinite(requested) ? Math.max(1, Math.min(500, requested)) : 100;
-        return send(res, 200, opts.getAudit?.(limit) ?? []);
+        const requested = Number(url.searchParams.get('limit') ?? 200);
+        const limit = Number.isFinite(requested) ? Math.max(1, Math.min(1000, requested)) : 200;
+        const query = {
+          limit,
+          types: url.searchParams.get('types') ?? url.searchParams.get('type') ?? undefined,
+          excludeTypes:
+            url.searchParams.get('excludeTypes') ?? url.searchParams.get('exclude') ?? undefined,
+          action: url.searchParams.get('action') ?? undefined,
+          ok: url.searchParams.get('ok') ?? undefined,
+          q: url.searchParams.get('q') ?? undefined,
+        };
+        return send(res, 200, opts.getAudit?.(query) ?? []);
       }
       if (req.method === 'GET' && pathName === '/strategy-library') {
         return send(res, 200, opts.getStrategyLibrary?.() ?? { families: [] });

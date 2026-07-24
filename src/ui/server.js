@@ -197,9 +197,8 @@ export function createUiServer(opts = {}) {
       }
       if (req.method === 'GET' && url.pathname === '/api/engine/audit') {
         if (!requireSession(req, res)) return;
-        const requested = Number(url.searchParams.get('limit') ?? 100);
-        const limit = Number.isFinite(requested) ? Math.max(1, Math.min(500, requested)) : 100;
-        return proxyEngine(req, res, `/audit?limit=${limit}`);
+        const qs = url.searchParams.toString();
+        return proxyEngine(req, res, qs ? `/audit?${qs}` : '/audit');
       }
 
       const controlRoutes = new Map([

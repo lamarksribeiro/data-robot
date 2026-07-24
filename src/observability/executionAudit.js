@@ -3,6 +3,64 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+function parseCsv(value) {
+  if (value == null || value === '') return [];
+  if (Array.isArray(value)) return value.map(String).filter(Boolean);
+  return String(value)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function normalizeListOpts(limitOrOpts = 100) {
+  if (limitOrOpts != null && typeof limitOrOpts === 'object' && !Array.isArray(limitOrOpts)) {
+    const opts = limitOrOpts;
+    const requested = Number(opts.limit ?? 200);
+    return {
+      limit: Number.isFinite(requested) ? Math.max(1, Math.min(1000, requested)) : 200,
+      types: new Set(parseCsv(opts.types ?? opts.type)),
+      excludeTypes: new Set(parseCsv(opts.excludeTypes ?? opts.exclude)),
+      action: opts.action != null && opts.action !== '' ? String(opts.action) : null,
+      ok:
+        opts.ok === true || opts.ok === 'true'
+          ? true
+          : opts.ok === false || opts.ok === 'false'
+            ? false
+            : null,
+      q: opts.q != null && String(opts.q).trim() !== '' ? String(opts.q).trim().toLowerCase() : null,
+    };
+  }
+  const requested = Number(limitOrOpts ?? 100);
+  return {
+    limit: Number.isFinite(requested) ? Math.max(1, Math.min(1000, requested)) : 100,
+    types: new Set(),
+    excludeTypes: new Set(),
+    action: null,
+    ok: null,
+    q: null,
+  };
+}
+
+function rowMatches(row, filters) {
+  const type = String(row?.type ?? '');
+  if (filters.types.size && !filters.types.has(type)) return false;
+  if (filters.excludeTypes.size && filters.excludeTypes.has(type)) return false;
+  if (filters.action != null) {
+    if (String(row?.action ?? '') !== filters.action) return false;
+  }
+  if (filters.ok != null) {
+    if (row?.ok !== filters.ok) return false;
+  }
+  if (filters.q) {
+    try {
+      if (!JSON.stringify(row).toLowerCase().includes(filters.q)) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function createExecutionAudit(opts = {}) {
   const dir = path.resolve(opts.dir ?? path.join('runs', 'execution-audit'));
   const clock = opts.clock ?? (() => Date.now());
@@ -25,8 +83,11 @@ export function createExecutionAudit(opts = {}) {
     return row;
   }
 
-  function listRecent(limit = 100) {
-    const max = Math.min(500, Math.max(1, Number(limit) || 100));
+  /**
+   * @param {number|{limit?:number,types?:string|string[],excludeTypes?:string|string[],action?:string,ok?:boolean|string,q?:string}} [limitOrOpts]
+   */
+  function listRecent(limitOrOpts = 100) {
+    const filters = normalizeListOpts(limitOrOpts);
     if (!fs.existsSync(dir)) return [];
     const files = fs
       .readdirSync(dir)
@@ -41,12 +102,15 @@ export function createExecutionAudit(opts = {}) {
         .filter(Boolean)
         .reverse();
       for (const line of lines) {
+        let row;
         try {
-          rows.push(JSON.parse(line));
+          row = JSON.parse(line);
         } catch {
-          rows.push({ type: 'audit_parse_error', file: name });
+          row = { type: 'audit_parse_error', file: name };
         }
-        if (rows.length >= max) return rows;
+        if (!rowMatches(row, filters)) continue;
+        rows.push(row);
+        if (rows.length >= filters.limit) return rows;
       }
     }
     return rows;

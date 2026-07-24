@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Login · Data Robot</title>
 
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.16.5">
-  <link rel="apple-touch-icon" href="/favicon.svg?v=1.16.5">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.16.6">
+  <link rel="apple-touch-icon" href="/favicon.svg?v=1.16.6">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/styles.css?v=1.16.5">
+  <link rel="stylesheet" href="/styles.css?v=1.16.6">
 
-  <script src="/js/dashboard.js?v=1.16.5" defer></script>
-  <script src="/js/mascot.js?v=1.16.5" defer></script>
+  <script src="/js/dashboard.js?v=1.16.6" defer></script>
+  <script src="/js/mascot.js?v=1.16.6" defer></script>
 </head>
 <body>
   <!-- Inline icon sprite (stroke icons, consistent weight) -->
@@ -808,20 +808,105 @@
           <div>
             <p class="eyebrow">Trilha imutável</p>
             <h1 id="hdr-audit">Auditoria operacional</h1>
-            <p class="page-header__sub">Ações do operador e eventos críticos da Engine</p>
+            <p class="page-header__sub">Logs da Engine com filtros — ações, decisões, settlements e falhas</p>
           </div>
           <div class="page-header__badges">
-            <span id="audit-count" class="badge">0</span>
+            <span id="audit-count" class="badge">0 eventos</span>
+            <span id="audit-fail-count" class="badge badge--warn">0 falhas</span>
           </div>
         </header>
 
-        <article class="panel panel--solo" id="audit">
+        <div class="audit-stats" id="audit-stats" aria-label="Resumo da auditoria">
+          <div class="audit-stat"><span>Carregados</span><strong id="audit-stat-total">0</strong></div>
+          <div class="audit-stat"><span>OK</span><strong id="audit-stat-ok">0</strong></div>
+          <div class="audit-stat"><span>Falhas</span><strong id="audit-stat-fail">0</strong></div>
+          <div class="audit-stat audit-stat--types"><span>Tipos</span><strong id="audit-stat-types">—</strong></div>
+        </div>
+
+        <article class="panel panel--solo audit-panel" id="audit">
+          <form class="audit-toolbar" id="audit-filters" autocomplete="off">
+            <label class="audit-field">
+              <span>Preset</span>
+              <select id="audit-preset" name="preset">
+                <option value="operational" selected>Operacional</option>
+                <option value="decisions">Decisões</option>
+                <option value="all">Tudo</option>
+              </select>
+            </label>
+            <label class="audit-field">
+              <span>Tipo</span>
+              <select id="audit-type" name="type">
+                <option value="">Todos</option>
+                <option value="operator_action">Operador</option>
+                <option value="engine_started">Engine start</option>
+                <option value="engine_stopped">Engine stop</option>
+                <option value="decision">Decisão</option>
+                <option value="checkpoint">Checkpoint</option>
+                <option value="rollback">Rollback</option>
+                <option value="position_settled">Settlement</option>
+                <option value="protective_halt">Halt protetivo</option>
+              </select>
+            </label>
+            <label class="audit-field">
+              <span>Ação</span>
+              <select id="audit-action" name="action">
+                <option value="">Todas</option>
+                <option value="arm">arm</option>
+                <option value="pause">pause</option>
+                <option value="disarm">disarm</option>
+                <option value="reconcile">reconcile</option>
+                <option value="cancel_all">cancel_all</option>
+                <option value="checkpoint">checkpoint</option>
+                <option value="rollback">rollback</option>
+                <option value="flatten">flatten</option>
+                <option value="kill">kill</option>
+              </select>
+            </label>
+            <label class="audit-field">
+              <span>Resultado</span>
+              <select id="audit-ok" name="ok">
+                <option value="">Todos</option>
+                <option value="true">OK</option>
+                <option value="false">Falha</option>
+              </select>
+            </label>
+            <label class="audit-field audit-field--search">
+              <span>Busca</span>
+              <input id="audit-q" name="q" type="search" placeholder="marketId, reason, strategy…" />
+            </label>
+            <label class="audit-field audit-field--limit">
+              <span>Limite</span>
+              <select id="audit-limit" name="limit">
+                <option value="100">100</option>
+                <option value="200" selected>200</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+              </select>
+            </label>
+            <div class="audit-toolbar__actions">
+              <button class="btn btn--primary btn--sm" type="submit" id="audit-refresh">Atualizar</button>
+              <button class="btn btn--ghost btn--sm" type="button" id="audit-reset">Limpar</button>
+            </div>
+          </form>
+
           <div class="table-wrap table-wrap--audit">
-            <table>
-              <thead><tr><th>Horário</th><th>Evento</th><th>Ação</th><th>Resultado</th><th>Detalhe</th></tr></thead>
+            <table class="audit-table">
+              <thead>
+                <tr>
+                  <th>Horário</th>
+                  <th>Tipo</th>
+                  <th>Ação</th>
+                  <th>Resultado</th>
+                  <th>Resumo</th>
+                </tr>
+              </thead>
               <tbody id="audit-body"><tr><td colspan="5" class="empty">Nenhum evento</td></tr></tbody>
             </table>
           </div>
+          <details class="audit-detail" id="audit-detail" hidden>
+            <summary>Detalhe do evento selecionado</summary>
+            <pre class="console-box console-box--audit" id="audit-detail-json">—</pre>
+          </details>
         </article>
       </section>
 
@@ -831,7 +916,7 @@
           <div>
             <p class="eyebrow">Observabilidade</p>
             <h1 id="hdr-system">Sistema</h1>
-            <p class="page-header__sub">Saúde das dependências e diagnóstico bruto</p>
+            <p class="page-header__sub">Saúde das dependências, métricas e diagnóstico estruturado</p>
           </div>
           <div class="page-header__badges">
             <span id="slo-badge" class="badge">SLO</span>
@@ -839,33 +924,62 @@
           </div>
         </header>
 
-        <div class="panel-grid">
+        <section class="sys-hero" id="sys-hero" aria-label="Status operacional" data-tone="idle">
+          <div class="sys-hero__item" data-key="ready"><span class="dot" id="sys-dot-ready"></span><div><em>Ready</em><strong id="sys-ready">—</strong></div></div>
+          <div class="sys-hero__item" data-key="armed"><span class="dot" id="sys-dot-armed"></span><div><em>Armed</em><strong id="sys-armed">—</strong></div></div>
+          <div class="sys-hero__item" data-key="live"><span class="dot" id="sys-dot-live"></span><div><em>Live</em><strong id="sys-live">—</strong></div></div>
+          <div class="sys-hero__item" data-key="halted"><span class="dot" id="sys-dot-halted"></span><div><em>Halted</em><strong id="sys-halted">—</strong></div></div>
+        </section>
+
+        <div class="sys-deps" id="sys-deps" aria-label="Dependências"></div>
+
+        <div class="sys-metrics" aria-label="Métricas">
+          <div class="sys-metric"><span>Disponibilidade</span><strong id="health-availability">—</strong></div>
+          <div class="sys-metric"><span>Órfãs / abertas</span><strong id="health-orphans">—</strong></div>
+          <div class="sys-metric"><span>User WS</span><strong id="health-userws">—</strong></div>
+          <div class="sys-metric"><span>Recovery</span><strong id="health-recovery">—</strong></div>
+          <div class="sys-metric"><span>Modo</span><strong id="sys-mode">—</strong></div>
+          <div class="sys-metric"><span>Operador</span><strong id="sys-operator">—</strong></div>
+        </div>
+
+        <div class="panel-grid panel-grid--system">
           <article class="panel" id="health-panel">
             <div class="panel__header">
               <div>
-                <p class="panel__kicker">Dependências</p>
-                <h2>Saúde do sistema</h2>
+                <p class="panel__kicker">Checklist</p>
+                <h2>Dependências detalhadas</h2>
               </div>
             </div>
             <ul class="health-list" id="health-list"></ul>
-            <dl class="facts facts--dense" style="margin-top:14px">
-              <div><dt>Disponibilidade</dt><dd id="health-availability">—</dd></div>
-              <div><dt>Órfãs / abertas</dt><dd id="health-orphans">—</dd></div>
-              <div><dt>User WS</dt><dd id="health-userws">—</dd></div>
-              <div><dt>Recovery</dt><dd id="health-recovery">—</dd></div>
-            </dl>
+            <p class="panel__hint" id="sys-feed-note">—</p>
           </article>
 
           <article class="panel" id="diagnostics-panel">
             <div class="panel__header">
               <div>
-                <p class="panel__kicker">Debug</p>
-                <h2>Diagnóstico bruto</h2>
+                <p class="panel__kicker">Runtime</p>
+                <h2>Diagnóstico estruturado</h2>
               </div>
             </div>
-            <pre class="console-box" id="diagnostics">Aguardando dados…</pre>
+            <dl class="facts facts--dense" id="sys-diag-facts">
+              <div><dt>Mercado</dt><dd id="sys-diag-market">—</dd></div>
+              <div><dt>Fonte</dt><dd id="sys-diag-source">—</dd></div>
+              <div><dt>Skip</dt><dd id="sys-diag-skip">—</dd></div>
+              <div><dt>Danger</dt><dd id="sys-diag-danger">—</dd></div>
+              <div><dt>Late flip</dt><dd id="sys-diag-lateflip">—</dd></div>
+              <div><dt>Liquidez</dt><dd id="sys-diag-liq">—</dd></div>
+              <div><dt>Preflight</dt><dd id="sys-diag-preflight">—</dd></div>
+              <div><dt>Entradas</dt><dd id="sys-diag-entry">—</dd></div>
+              <div><dt>Halt reason</dt><dd id="sys-diag-halt">—</dd></div>
+              <div><dt>Audit dir</dt><dd id="sys-diag-auditdir">—</dd></div>
+            </dl>
           </article>
         </div>
+
+        <details class="sys-raw" id="sys-raw">
+          <summary>JSON bruto (debug)</summary>
+          <pre class="console-box" id="diagnostics">Aguardando dados…</pre>
+        </details>
       </section>
     </main>
   </div>

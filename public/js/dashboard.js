@@ -921,27 +921,352 @@ function renderCatalog(catalog = {}, activeStrategyId = null, activePresetId = n
   }
 }
 
-function renderAudit(rows = []) {
-  const body = $('audit-body');
-  body.replaceChildren();
-  text('audit-count', rows.length);
-  if (!rows.length) return emptyRow(body, 5, 'Nenhum evento');
-  for (const entry of rows) {
-    const row = document.createElement('tr');
+const AUDIT_TYPE_LABELS = {
+  operator_action: 'Operador',
+  engine_started: 'Engine start',
+  engine_stopped: 'Engine stop',
+  decision: 'Decisão',
+  checkpoint: 'Checkpoint',
+  rollback: 'Rollback',
+  position_settled: 'Settlement',
+  protective_halt: 'Halt protetivo',
+  audit_parse_error: 'Parse error',
+};
+
+const AUDIT_PRESETS = {
+  operational: { excludeTypes: 'decision,checkpoint' },
+  decisions: { types: 'decision' },
+  all: {},
+};
+
+let auditRowsCache = [];
+let auditFetchSeq = 0;
+
+function auditTypeLabel(type) {
+  return AUDIT_TYPE_LABELS[type] || type || '—';
+}
+
+function auditSummary(entry) {
+  if (!entry || typeof entry !== 'object') return '—';
+  const bits = [];
+  if (entry.reason) bits.push(String(entry.reason));
+  if (entry.marketId) bits.push(`mkt ${String(entry.marketId).slice(0, 18)}`);
+  if (entry.fromMarketId && entry.toMarketId) {
+    bits.push(`${String(entry.fromMarketId).slice(0, 10)}→${String(entry.toMarketId).slice(0, 10)}`);
+  }
+  if (entry.strategyId) bits.push(entry.strategyId);
+  if (entry.mode) bits.push(entry.mode);
+  if (entry.operatorState) bits.push(entry.operatorState);
+  if (entry.intentCount != null) bits.push(`${entry.intentCount} intents`);
+  if (entry.pnlDelta != null) bits.push(`Δpnl ${entry.pnlDelta}`);
+  if (entry.side && entry.qty != null) bits.push(`${entry.side}×${entry.qty}`);
+  if (entry.state) bits.push(entry.state);
+  if (!bits.length) {
     const detail = { ...entry };
     delete detail.schemaVersion;
     delete detail.tsMs;
     delete detail.type;
     delete detail.action;
-    appendCells(row, [
-      entry.tsMs ? new Date(entry.tsMs).toLocaleString('pt-BR') : '—',
-      entry.type,
-      entry.action,
-      entry.ok == null ? '—' : entry.ok ? 'OK' : 'FALHA',
-      JSON.stringify(detail),
-    ]);
+    delete detail.ok;
+    const keys = Object.keys(detail);
+    if (!keys.length) return '—';
+    return keys
+      .slice(0, 3)
+      .map((k) => `${k}=${typeof detail[k] === 'object' ? '…' : detail[k]}`)
+      .join(' · ');
+  }
+  return bits.slice(0, 4).join(' · ');
+}
+
+function readAuditFilters() {
+  const preset = $('audit-preset')?.value || 'operational';
+  const type = $('audit-type')?.value || '';
+  const action = $('audit-action')?.value || '';
+  const ok = $('audit-ok')?.value || '';
+  const q = ($('audit-q')?.value || '').trim();
+  const limit = $('audit-limit')?.value || '200';
+  const params = new URLSearchParams();
+  params.set('limit', limit);
+
+  if (type) {
+    params.set('types', type);
+  } else {
+    const presetCfg = AUDIT_PRESETS[preset] || AUDIT_PRESETS.operational;
+    if (presetCfg.types) params.set('types', presetCfg.types);
+    if (presetCfg.excludeTypes) params.set('excludeTypes', presetCfg.excludeTypes);
+  }
+  if (action) params.set('action', action);
+  if (ok === 'true' || ok === 'false') params.set('ok', ok);
+  if (q) params.set('q', q);
+  return params;
+}
+
+function updateAuditStats(rows) {
+  let ok = 0;
+  let fail = 0;
+  const byType = new Map();
+  for (const row of rows) {
+    if (row.ok === true) ok += 1;
+    if (row.ok === false) fail += 1;
+    const t = row.type || '?';
+    byType.set(t, (byType.get(t) || 0) + 1);
+  }
+  text('audit-stat-total', rows.length);
+  text('audit-stat-ok', ok);
+  text('audit-stat-fail', fail);
+  text('audit-count', `${rows.length} eventos`);
+  text('audit-fail-count', `${fail} falhas`);
+  if ($('audit-fail-count')) {
+    $('audit-fail-count').className = `badge ${fail ? 'badge--warn' : 'badge--accent'}`;
+  }
+  const typeParts = [...byType.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([t, n]) => `${auditTypeLabel(t)} ${n}`);
+  text('audit-stat-types', typeParts.length ? typeParts.join(' · ') : '—');
+}
+
+function showAuditDetail(entry) {
+  const box = $('audit-detail');
+  const pre = $('audit-detail-json');
+  if (!box || !pre) return;
+  box.hidden = false;
+  box.open = true;
+  pre.textContent = JSON.stringify(entry, null, 2);
+}
+
+function renderAudit(rows = []) {
+  auditRowsCache = Array.isArray(rows) ? rows : [];
+  const body = $('audit-body');
+  if (!body) return;
+  body.replaceChildren();
+  updateAuditStats(auditRowsCache);
+  if (!auditRowsCache.length) {
+    emptyRow(body, 5, 'Nenhum evento com estes filtros');
+    const detail = $('audit-detail');
+    if (detail) detail.hidden = true;
+    return;
+  }
+  for (const entry of auditRowsCache) {
+    const row = document.createElement('tr');
+    row.className = 'audit-row';
+    if (entry.ok === false) row.classList.add('audit-row--fail');
+    else if (entry.ok === true) row.classList.add('audit-row--ok');
+    row.tabIndex = 0;
+    row.title = 'Clique para ver o JSON completo';
+
+    const tdTime = document.createElement('td');
+    tdTime.textContent = entry.tsMs ? new Date(entry.tsMs).toLocaleString('pt-BR') : '—';
+
+    const tdType = document.createElement('td');
+    tdType.innerHTML = `<span class="audit-chip audit-chip--type">${auditTypeLabel(entry.type)}</span>`;
+
+    const tdAction = document.createElement('td');
+    tdAction.textContent = entry.action || '—';
+
+    const tdOk = document.createElement('td');
+    if (entry.ok == null) {
+      tdOk.innerHTML = '<span class="audit-chip audit-chip--idle">—</span>';
+    } else if (entry.ok) {
+      tdOk.innerHTML = '<span class="audit-chip audit-chip--ok">OK</span>';
+    } else {
+      tdOk.innerHTML = '<span class="audit-chip audit-chip--fail">FALHA</span>';
+    }
+
+    const tdSum = document.createElement('td');
+    tdSum.className = 'audit-summary';
+    tdSum.textContent = auditSummary(entry);
+
+    row.append(tdTime, tdType, tdAction, tdOk, tdSum);
+    row.addEventListener('click', () => {
+      for (const r of body.querySelectorAll('.audit-row.is-selected')) {
+        r.classList.remove('is-selected');
+      }
+      row.classList.add('is-selected');
+      showAuditDetail(entry);
+    });
+    row.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        row.click();
+      }
+    });
     body.append(row);
   }
+}
+
+async function refreshAudit({ silent = false } = {}) {
+  const seq = ++auditFetchSeq;
+  const params = readAuditFilters();
+  try {
+    const rows = await api(`/api/engine/audit?${params.toString()}`);
+    if (seq !== auditFetchSeq) return;
+    renderAudit(rows);
+  } catch (error) {
+    if (error.status === 401) return showLogin();
+    if (!silent) showAlert(`Auditoria indisponível: ${error.message}`);
+  }
+}
+
+function resetAuditFilters() {
+  if ($('audit-preset')) $('audit-preset').value = 'operational';
+  if ($('audit-type')) $('audit-type').value = '';
+  if ($('audit-action')) $('audit-action').value = '';
+  if ($('audit-ok')) $('audit-ok').value = '';
+  if ($('audit-q')) $('audit-q').value = '';
+  if ($('audit-limit')) $('audit-limit').value = '200';
+}
+
+function wireAuditFilters() {
+  const form = $('audit-filters');
+  if (!form || form.dataset.wired === '1') return;
+  form.dataset.wired = '1';
+  form.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    refreshAudit();
+  });
+  $('audit-reset')?.addEventListener('click', () => {
+    resetAuditFilters();
+    refreshAudit();
+  });
+  for (const id of ['audit-preset', 'audit-type', 'audit-action', 'audit-ok', 'audit-limit']) {
+    $(id)?.addEventListener('change', () => refreshAudit());
+  }
+  let qTimer = null;
+  $('audit-q')?.addEventListener('input', () => {
+    clearTimeout(qTimer);
+    qTimer = setTimeout(() => refreshAudit({ silent: true }), 320);
+  });
+}
+
+function setSysDot(id, ok, idle = false) {
+  const el = $(id);
+  if (!el) return;
+  el.className = `dot ${idle ? 'dot--idle' : ok ? 'dot--ok' : 'dot--err'}`;
+}
+
+function renderSystemBoard(status = {}, health = {}) {
+  const mode = String(status.mode || health.mode || 'shadow').toLowerCase();
+  const isLive = mode === 'live';
+  const ready = health.ready === true;
+  const armed = health.armed === true;
+  const live = isLive && health.live === true;
+  const halted = health.halted === true || status.state === 'HALTED';
+
+  text('sys-ready', ready ? 'sim' : 'não');
+  text('sys-armed', armed ? 'sim' : 'não');
+  text('sys-live', isLive ? (live ? 'ATIVO' : 'falha') : 'shadow');
+  text('sys-halted', halted ? 'SIM' : 'não');
+  setSysDot('sys-dot-ready', ready);
+  setSysDot('sys-dot-armed', armed);
+  setSysDot('sys-dot-live', live, !isLive);
+  setSysDot('sys-dot-halted', !halted);
+
+  const hero = $('sys-hero');
+  if (hero) {
+    hero.dataset.tone = halted ? 'err' : !ready ? 'warn' : live || !isLive ? 'ok' : 'warn';
+  }
+
+  text('sys-mode', mode);
+  text('sys-operator', status.operatorState || health.operatorState || '—');
+
+  const deps = $('sys-deps');
+  if (deps) {
+    deps.replaceChildren();
+    const cards = [
+      {
+        label: 'Feeds RTDS/CLOB',
+        ok: health.feedsOk === true,
+        note: health.tradingFeedsOk === false ? 'trading gate' : health.feedsOk ? 'saudável' : 'atenção',
+      },
+      {
+        label: 'Recovery',
+        ok: health.recoveryOk === true,
+        note: health.recoveryOk ? 'ok' : 'falha',
+      },
+      {
+        label: 'User channel WS',
+        ok: health.userChannelOk === true,
+        note:
+          health.userChannelFailStreak != null
+            ? `streak ${health.userChannelFailStreak}`
+            : health.userChannelOk
+              ? 'conectado'
+              : 'down',
+      },
+      {
+        label: 'Pronto / Armado',
+        ok: ready && armed,
+        note: `${ready ? 'ready' : 'not ready'} · ${armed ? 'armed' : 'disarmed'}`,
+      },
+    ];
+    for (const card of cards) {
+      const el = document.createElement('article');
+      el.className = `sys-dep ${card.ok ? 'sys-dep--ok' : 'sys-dep--bad'}`;
+      el.innerHTML = `<span class="dot ${card.ok ? 'dot--ok' : 'dot--err'}"></span><div><strong>${card.label}</strong><em>${card.note}</em></div>`;
+      deps.append(el);
+    }
+  }
+
+  const feedNote = [];
+  if (health.feedGate) feedNote.push(`feedGate=${health.feedGate}`);
+  if (health.processFeedsOk != null) feedNote.push(`process=${health.processFeedsOk ? 'ok' : 'bad'}`);
+  if (health.snapshotSource?.kind) {
+    feedNote.push(
+      `source ${health.snapshotSource.kind}${
+        health.snapshotSource.ok === false ? ` · ${health.snapshotSource.reason || 'fail'}` : ''
+      }`,
+    );
+  }
+  text('sys-feed-note', feedNote.length ? feedNote.join(' · ') : 'Sem notas extras de feed.');
+
+  const market = status.market ?? {};
+  const diag = status.diagnostics ?? {};
+  text(
+    'sys-diag-market',
+    [market.asset, market.window, market.secsLeft != null ? `${Number(market.secsLeft).toFixed(0)}s` : null]
+      .filter(Boolean)
+      .join(' · ') || '—',
+  );
+  text(
+    'sys-diag-source',
+    `${market.sourceKind ?? health.snapshotSource?.kind ?? '—'} · ${
+      market.sourceOk === true || health.snapshotSource?.ok === true
+        ? 'OK'
+        : market.sourceReason || health.snapshotSource?.reason || '—'
+    }`,
+  );
+  text('sys-diag-skip', diag.skip || '—');
+  text(
+    'sys-diag-danger',
+    diag.danger?.active ? `ATIVO · ${diag.danger.reason || 'danger'}` : diag.danger ? 'inativo' : '—',
+  );
+  text(
+    'sys-diag-lateflip',
+    diag.lateFlip?.action && diag.lateFlip.action !== 'HOLD'
+      ? String(diag.lateFlip.action)
+      : diag.lateFlip
+        ? 'HOLD'
+        : '—',
+  );
+  const liq = diag.liquidity;
+  text(
+    'sys-diag-liq',
+    liq
+      ? `${liq.ok === false ? 'baixa' : 'ok'} · depth ${number(liq.liq, 2)}`
+      : '—',
+  );
+  const pf = status.preflight;
+  text(
+    'sys-diag-preflight',
+    pf?.ok === true ? 'OK' : pf?.ok === false ? pf.reason || 'FALHA' : pf ? '—' : 'sem preflight',
+  );
+  text(
+    'sys-diag-entry',
+    status.entryEnabled === false ? 'bloqueadas' : status.entryEnabled === true ? 'liberadas' : '—',
+  );
+  text('sys-diag-halt', status.haltReason || health.haltReason || '—');
+  text('sys-diag-auditdir', status.auditDir || '—');
 }
 
 /** Monta mapa de gates a partir de entry.gates ou diagnostics de fixture. */
@@ -1681,26 +2006,29 @@ function render(status, health, instances) {
   text('canary-preset', status.canary?.presetId || status.catalog?.presetId || '—');
 
   renderHealth(health, status.slos, status.mode);
+  renderSystemBoard(status, health);
   renderOpenOrders(openOrders, 'open-orders-body', 10);
   renderOpenOrders(openOrders, 'overview-open-orders-body', 6);
   renderOrders(status.orders ?? []);
   setConnectionState(health);
-  $('diagnostics').textContent = JSON.stringify(
-    {
-      health,
-      market: status.market,
-      source: health?.snapshotSource,
-      diagnostics: status.diagnostics,
-      riskMetrics: status.riskMetrics,
-      accountExposure: status.accountExposure,
-      preflight: status.preflight,
-      slos: status.slos,
-      haltReason: status.haltReason,
-      openOrders,
-    },
-    null,
-    2,
-  );
+  if ($('diagnostics')) {
+    $('diagnostics').textContent = JSON.stringify(
+      {
+        health,
+        market: status.market,
+        source: health?.snapshotSource,
+        diagnostics: status.diagnostics,
+        riskMetrics: status.riskMetrics,
+        accountExposure: status.accountExposure,
+        preflight: status.preflight,
+        slos: status.slos,
+        haltReason: status.haltReason,
+        openOrders,
+      },
+      null,
+      2,
+    );
+  }
   updateControls(status);
 }
 
@@ -2011,18 +2339,17 @@ function wireStrategyStudio() {
 
 async function refresh() {
   try {
-    const [status, health, instances, catalog, audit] = await Promise.all([
+    const [status, health, instances, catalog] = await Promise.all([
       api('/api/engine/status'),
       api('/api/engine/health', { acceptError: true }),
       api('/api/engine/instances'),
       api('/api/engine/catalog'),
-      api('/api/engine/audit?limit=100'),
     ]);
     clearAlert();
     const healthView = status.health ?? health;
     render(status, healthView, instances);
     renderCatalog(catalog, status.strategyId, status.canary?.presetId || status.catalog?.presetId);
-    renderAudit(audit);
+    if (currentView === 'audit') await refreshAudit({ silent: true });
     if (currentView === 'strategies') await loadStrategyStudio();
   } catch (error) {
     if (error.status === 401) return showLogin();
@@ -2061,6 +2388,7 @@ function showView(viewId, { pushHash = true } = {}) {
   // reflow canvas after view becomes visible
   requestAnimationFrame(() => renderCharts());
   if (id === 'strategies') loadStrategyStudio();
+  if (id === 'audit') refreshAudit({ silent: true });
 }
 
 window.addEventListener('resize', () => {
@@ -2230,6 +2558,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 wireStrategyStudio();
+wireAuditFilters();
 
 api('/api/session')
   .then((session) => (session.authenticated ? showDashboard() : showLogin()))

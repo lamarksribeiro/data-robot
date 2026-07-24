@@ -627,7 +627,7 @@ export function createEngineApp(opts = {}) {
         active: started,
       },
     ],
-    getAudit: (limit) => executionAudit.listRecent(limit),
+    getAudit: (limitOrOpts) => executionAudit.listRecent(limitOrOpts),
     getStrategyLibrary: opts.getStrategyLibrary,
     getActiveStrategy: opts.getActiveStrategy,
     onSaveStrategyPreset: opts.onSaveStrategyPreset,
