@@ -57,6 +57,8 @@ export function buildStrategyContext(parts) {
     preset,
     strategyInstanceId,
     allowedExposure = null,
+    /** Saldo de conta em USD (CLOB/preflight). null = estratégia usa fallback entry+pnl. */
+    accountEquityUsd = null,
   } = parts;
 
   return Object.freeze({
@@ -69,6 +71,10 @@ export function buildStrategyContext(parts) {
     preset: Object.freeze({ ...preset }),
     strategyInstanceId,
     allowedExposure,
+    accountEquityUsd:
+      accountEquityUsd == null || !Number.isFinite(Number(accountEquityUsd))
+        ? null
+        : Number(accountEquityUsd),
   });
 }
 

@@ -9,6 +9,11 @@ export {
   evaluateLateFlip,
   evaluateLateFlipAction,
   evaluateDangerExit,
+  evaluateDangerExitContinuous,
+  evaluateEarlyWarnExit,
+  evaluateScoopEntry,
+  physicalZScore,
+  sigmaBudgetFactor,
   favoriteSide,
   oppositeSide,
   signedDistance,
@@ -107,6 +112,9 @@ export {
   CANARY_LIMITS as MIDAS_CANARY_LIMITS,
   canaryMidasPreset,
   resolveMidasEntryBudget,
+  resolveMidasScoopBudget,
+  resolveMidasEquityUsd,
+  resolveMidasEquityRawBudget,
 } from './tfc/preset-midas.js';
 export { defaultPresetFor } from './composition/presets.js';
 export { bootstrapTfcCanaryEngine } from './composition/tfcCanary.js';

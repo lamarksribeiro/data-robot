@@ -139,9 +139,17 @@ export function evaluateEntryGates(snapshot, params, history = []) {
     detail: obi != null ? `obi=${obi.toFixed(3)}` : 'book shallow',
   };
 
+  // minEntryZ (0 = desligado). z físico |dist|/(σ_ps√τ).
+  const minZ = Number(params.minEntryZ ?? 0);
+  const { z } = physicalZScore(dist ?? 0, history, params, secsLeft, snapshot.nowMs);
+  gates.minEntryZ = {
+    pass: !(minZ > 0) || z >= minZ,
+    detail: `z=${z.toFixed(3)} min=${Number.isFinite(minZ) ? minZ : 0}`,
+  };
+
   const ok = Object.values(gates).every((g) => g.pass);
 
-  return { ok, fav, gates, ask, bid, dist, oddsSum, spread, obi, flips };
+  return { ok, fav, gates, ask, bid, dist, oddsSum, spread, obi, flips, z };
 }
 
 export function evaluateLateFlip(snapshot, params, positionSide) {
@@ -237,5 +245,170 @@ export function evaluateDangerExit(snapshot, params, positionSide, history = [])
     bid,
     bidOk,
     reason: 'danger_exit',
+  };
+}
+
+/**
+ * z físico MIDAS: |spot−PTB| / (σ_level/divisor × √τ)
+ * Paridade strategy.gls midas-carry-v1.
+ */
+export function physicalZScore(distAbs, history, params, secsLeft, nowMs) {
+  const lookback = Number(params.sigmaLookbackSecs ?? 90);
+  const divisor = Number(params.sigmaDivisor ?? 5.48);
+  const sigmaLevel = spotVolatility(history, lookback, nowMs);
+  const sigmaPs = divisor > 0 ? sigmaLevel / divisor : 0;
+  if (!(sigmaPs > 0) || !(secsLeft > 0) || !Number.isFinite(distAbs)) {
+    return { z: 0, sigmaLevel, sigmaPs };
+  }
+  const z = distAbs / (sigmaPs * Math.sqrt(secsLeft));
+  return { z: Number.isFinite(z) ? z : 0, sigmaLevel, sigmaPs };
+}
+
+/**
+ * Fator de budget por z-score (sigma sizing). Default wZ2=1 se desligado.
+ */
+export function sigmaBudgetFactor(z, params) {
+  const on = params.sigmaSizingEnabled === true || params.sigmaSizingEnabled === 1;
+  if (!on) return 1;
+  const zT1 = Number(params.zT1 ?? 0.5);
+  const zT2 = Number(params.zT2 ?? 1.0);
+  const zT3 = Number(params.zT3 ?? 2.5);
+  const zT4 = Number(params.zT4 ?? 4.0);
+  const wZ0 = Number(params.wZ0 ?? 0.4);
+  const wZ1 = Number(params.wZ1 ?? 0.7);
+  const wZ2 = Number(params.wZ2 ?? 1.0);
+  const wZ3 = Number(params.wZ3 ?? 1.4);
+  const wZ4 = Number(params.wZ4 ?? 1.8);
+  if (z < zT1) return wZ0;
+  if (z < zT2) return wZ1;
+  if (z < zT3) return wZ2;
+  if (z < zT4) return wZ3;
+  return wZ4;
+}
+
+/**
+ * Danger contínuo: τ ∈ [floor, start] e z = dist/(σ_ps√τ) < minZ (só com dist > 0).
+ */
+export function evaluateDangerExitContinuous(snapshot, params, positionSide, history = []) {
+  const on = params.dangerContinuousEnabled === true || params.dangerContinuousEnabled === 1;
+  if (!on || !positionSide) {
+    return { active: false, z: null, bid: null };
+  }
+  const secsLeft = snapshot.secsLeft;
+  const floor = Number(params.dangerExitFloorSec ?? 4);
+  const start = Number(params.dangerContinuousStartSec ?? 8);
+  const inWindow = secsLeft >= floor && secsLeft <= start;
+  const dist = signedDistance(positionSide, snapshot.btc, snapshot.priceToBeat);
+  const bid = snapshot.book?.[positionSide.toLowerCase()]?.bestBid ?? null;
+  const bidOk = bid != null && bid >= Number(params.stopMinBid ?? 0);
+  if (!inWindow || !bidOk || !(dist > 0)) {
+    return { active: false, z: null, signedDistance: dist, bid, bidOk, reason: 'danger_exit_continuous' };
+  }
+  const { z, sigmaPs } = physicalZScore(dist, history, params, secsLeft, snapshot.nowMs);
+  const minZ = Number(params.dangerContinuousMinZ ?? 0.25);
+  const active = sigmaPs > 0 && z < minZ;
+  return {
+    active: Boolean(active),
+    z,
+    signedDistance: dist,
+    sigmaPs,
+    secsLeft,
+    bid,
+    bidOk,
+    reason: 'danger_exit_continuous',
+  };
+}
+
+/**
+ * Early-warn: ask do oposto reprecifica a favor da virada antes do late flip.
+ */
+export function evaluateEarlyWarnExit(snapshot, params, positionSide, signedDist = null) {
+  const on = params.earlyWarnEnabled === true || params.earlyWarnEnabled === 1;
+  if (!on || !positionSide) {
+    return { active: false, oppAsk: null, bid: null };
+  }
+  const secsLeft = snapshot.secsLeft;
+  const start = Number(params.earlyWarnStartSec ?? 20);
+  const end = Number(params.earlyWarnEndSec ?? 8);
+  const inWindow = secsLeft <= start && secsLeft > end;
+  const bid = snapshot.book?.[positionSide.toLowerCase()]?.bestBid ?? null;
+  const bidOk = bid != null && bid >= Number(params.stopMinBid ?? 0);
+  const opp = oppositeSide(positionSide);
+  const oppAsk = opp ? snapshot.book?.[opp.toLowerCase()]?.bestAsk ?? null : null;
+  const onlyLosing = params.earlyWarnOnlyIfLosing === true || params.earlyWarnOnlyIfLosing === 1;
+  const dist =
+    signedDist != null
+      ? signedDist
+      : signedDistance(positionSide, snapshot.btc, snapshot.priceToBeat);
+  const losingOk = !onlyLosing || dist == null || dist <= 0;
+  const trigger = Number(params.earlyWarnOppAsk ?? 0.45);
+  const active =
+    inWindow && bidOk && losingOk && oppAsk != null && oppAsk > 0 && oppAsk >= trigger;
+  return {
+    active: Boolean(active),
+    oppAsk,
+    bid,
+    bidOk,
+    signedDistance: dist,
+    secsLeft,
+    reason: 'early_warn_exit',
+  };
+}
+
+/**
+ * Scoop: entrada complementar (favorito barato, z alto) fora do envelope core.
+ */
+export function evaluateScoopEntry(snapshot, params, history = []) {
+  const on = params.scoopEnabled === true || params.scoopEnabled === 1;
+  if (!on) return { ok: false, reason: 'scoop_disabled' };
+
+  const { btc, priceToBeat, secsLeft, book } = snapshot;
+  const fav = favoriteSide(btc, priceToBeat);
+  if (!fav) return { ok: false, reason: 'no_fav' };
+
+  const dist = Number.isFinite(btc) && Number.isFinite(priceToBeat) ? Math.abs(btc - priceToBeat) : null;
+  const ask = book?.[fav.toLowerCase()]?.bestAsk ?? null;
+  const bid = book?.[fav.toLowerCase()]?.bestBid ?? null;
+  const spread = ask != null && bid != null ? ask - bid : null;
+  const { z } = physicalZScore(dist ?? 0, history, params, secsLeft, snapshot.nowMs);
+
+  const vel = spotVelocity(history, params.velocityLookbackSecs, snapshot.nowMs);
+  let adverse = false;
+  if (vel && fav) {
+    if (fav === 'UP' && vel.change < -params.maxAdverseSpotChange) adverse = true;
+    if (fav === 'DOWN' && vel.change > params.maxAdverseSpotChange) adverse = true;
+  }
+
+  const upAsk = book?.up?.bestAsk;
+  const downAsk = book?.down?.bestAsk;
+  const oddsSum = upAsk != null && downAsk != null ? upAsk + downAsk : null;
+
+  const ok =
+    !adverse &&
+    secsLeft >= Number(params.scoopMinSecondsLeft ?? 5) &&
+    secsLeft < Number(params.scoopMaxSecondsLeft ?? 30) &&
+    dist != null &&
+    dist < Number(params.scoopMaxDistAbs ?? 80) &&
+    ask != null &&
+    ask >= Number(params.scoopMinAsk ?? 0.1) &&
+    ask < Number(params.scoopMaxAsk ?? 0.55) &&
+    spread != null &&
+    spread <= Number(params.scoopMaxSpread ?? 0.05) &&
+    z >= Number(params.scoopMinZ ?? 1.5) &&
+    oddsSum != null &&
+    oddsSum >= Number(params.scoopMinOddsSum ?? 0.9) &&
+    oddsSum <= Number(params.scoopMaxOddsSum ?? 1.1);
+
+  return {
+    ok: Boolean(ok),
+    fav,
+    ask,
+    bid,
+    dist,
+    z,
+    spread,
+    oddsSum,
+    adverse,
+    reason: ok ? 'midas_scoop_entry' : 'scoop_gates_fail',
   };
 }

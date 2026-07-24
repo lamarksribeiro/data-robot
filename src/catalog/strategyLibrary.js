@@ -12,13 +12,12 @@ import {
   MIDAS_ROBUST_V1,
   MIDAS_AGGRESSIVE_V1,
   MIDAS_RUNTIME_KEYS,
-  MIDAS_LAB_ONLY_KEYS,
   MICRO_AGGRESSIVE,
   canaryMidasPreset,
 } from '../tfc/preset-midas.js';
 
-/** Todos os params MIDAS editáveis na UI (runtime + lab-only flagados). */
-const EDITABLE_MIDAS = [...MIDAS_RUNTIME_KEYS, ...MIDAS_LAB_ONLY_KEYS];
+/** Params do runtime MIDAS (inclui sigma/scoop/early-warn/danger cont./equity scale). Sem walletSize. */
+const EDITABLE_MIDAS = [...MIDAS_RUNTIME_KEYS];
 const EDITABLE_TFC = [...TFC_RUNTIME_KEYS];
 const EDITABLE_APEX = [
   'edgeEnabled',
@@ -48,23 +47,12 @@ const EDITABLE_APEX = [
   'dangerExitK',
   'dangerExitFloorSec',
   'profitLockEnabled',
-  'makerFillEpsilon',
-  'makerFillPolicy',
 ];
 
 export const PARAM_META = Object.freeze({
-  midas: {
-    runtimeKeys: MIDAS_RUNTIME_KEYS,
-    labOnlyKeys: MIDAS_LAB_ONLY_KEYS,
-  },
-  tfc: {
-    runtimeKeys: TFC_RUNTIME_KEYS,
-    labOnlyKeys: [],
-  },
-  apex: {
-    runtimeKeys: [],
-    labOnlyKeys: EDITABLE_APEX,
-  },
+  midas: { runtimeKeys: MIDAS_RUNTIME_KEYS },
+  tfc: { runtimeKeys: TFC_RUNTIME_KEYS },
+  apex: { runtimeKeys: EDITABLE_APEX },
 });
 
 function nowIso() {
@@ -101,31 +89,25 @@ export function builtInLibrary() {
                 presetId: 'btc-champion-v1',
                 name: 'Champion (tier 1.5×)',
                 role: 'champion',
-                source: 'lab',
+                source: 'runtime',
                 params: { ...MIDAS_V1 },
                 editableKeys: EDITABLE_MIDAS,
-                runtimeKeys: MIDAS_RUNTIME_KEYS,
-                labOnlyKeys: MIDAS_LAB_ONLY_KEYS,
               },
               {
                 presetId: 'btc-robust-v1',
                 name: 'Robust (dist 30)',
                 role: 'candidate',
-                source: 'lab',
+                source: 'runtime',
                 params: { ...MIDAS_ROBUST_V1 },
                 editableKeys: EDITABLE_MIDAS,
-                runtimeKeys: MIDAS_RUNTIME_KEYS,
-                labOnlyKeys: MIDAS_LAB_ONLY_KEYS,
               },
               {
                 presetId: 'btc-aggressive-v1',
                 name: 'Aggressive (tier 2.0×)',
                 role: 'candidate',
-                source: 'lab',
+                source: 'runtime',
                 params: { ...MIDAS_AGGRESSIVE_V1 },
                 editableKeys: EDITABLE_MIDAS,
-                runtimeKeys: MIDAS_RUNTIME_KEYS,
-                labOnlyKeys: MIDAS_LAB_ONLY_KEYS,
               },
               {
                 presetId: 'btc-micro-aggressive-v1',
@@ -134,8 +116,6 @@ export function builtInLibrary() {
                 source: 'runtime',
                 params: { ...canaryMidasPreset() },
                 editableKeys: EDITABLE_MIDAS,
-                runtimeKeys: MIDAS_RUNTIME_KEYS,
-                labOnlyKeys: MIDAS_LAB_ONLY_KEYS,
               },
               {
                 presetId: 'btc-micro-robust-v1',
@@ -144,8 +124,6 @@ export function builtInLibrary() {
                 source: 'runtime',
                 params: { ...MIDAS_ROBUST_V1, ...MICRO_AGGRESSIVE, maxEntryBudget: 3 },
                 editableKeys: EDITABLE_MIDAS,
-                runtimeKeys: MIDAS_RUNTIME_KEYS,
-                labOnlyKeys: MIDAS_LAB_ONLY_KEYS,
               },
             ],
           },
@@ -167,11 +145,9 @@ export function builtInLibrary() {
                 presetId: 'btc-champion-v7',
                 name: 'Champion V7 Danger Floor',
                 role: 'champion',
-                source: 'lab',
+                source: 'runtime',
                 params: { ...TFC_V7 },
                 editableKeys: EDITABLE_TFC,
-                runtimeKeys: TFC_RUNTIME_KEYS,
-                labOnlyKeys: [],
               },
               {
                 presetId: 'btc-champion-v7-tight',
@@ -180,8 +156,6 @@ export function builtInLibrary() {
                 source: 'runtime',
                 params: { ...TFC_V7, maxDistAbs: 15 },
                 editableKeys: EDITABLE_TFC,
-                runtimeKeys: TFC_RUNTIME_KEYS,
-                labOnlyKeys: [],
               },
               {
                 presetId: 'btc-champion-v7-wide',
@@ -190,8 +164,6 @@ export function builtInLibrary() {
                 source: 'runtime',
                 params: { ...TFC_V7, maxDistAbs: 30, maxAsk: 0.9 },
                 editableKeys: EDITABLE_TFC,
-                runtimeKeys: TFC_RUNTIME_KEYS,
-                labOnlyKeys: [],
               },
             ],
           },
@@ -201,7 +173,7 @@ export function builtInLibrary() {
         familyId: 'apex',
         label: 'APEX Triad',
         description:
-          'Edge antecipado + núcleo terminal (labs apex-triad). Plugin de runtime ainda não portado — salve/personalize; execução na engine virá depois.',
+          'Edge + terminal. Plugin ainda não está no runtime da engine — biblioteca para preparar versão futura.',
         pluginId: 'apex-triad-v1',
         runnable: false,
         marketScope: ['btc-updown-5m'],
@@ -214,7 +186,7 @@ export function builtInLibrary() {
                 presetId: 'btc-candidate-v1',
                 name: 'BTC Candidate V1',
                 role: 'candidate',
-                source: 'lab',
+                source: 'catalog',
                 params: {
                   edgeEnabled: true,
                   edgeWindowStart: 105,
@@ -256,7 +228,7 @@ export function builtInLibrary() {
                 presetId: 'btc-candidate-v2',
                 name: 'BTC Candidate V2',
                 role: 'candidate',
-                source: 'lab',
+                source: 'catalog',
                 params: {
                   edgeEnabled: true,
                   edgeWindowStart: 100,
@@ -411,6 +383,8 @@ export function createStrategyLibrary(opts = {}) {
     });
     const baseParams = { ...(parent?.preset?.params || {}) };
     const params = { ...baseParams, ...(input.params || {}) };
+    // walletSize é só lab/simulação — runtime usa accountEquityUsd real
+    delete params.walletSize;
     const version = input.version || parent?.version?.version || '1.0.0-custom';
     const name = String(input.name || 'Custom').trim().slice(0, 80);
     const presetId =
@@ -452,6 +426,7 @@ export function createStrategyLibrary(opts = {}) {
     });
     if (!hit) throw new Error('PRESET_NOT_FOUND');
     const params = { ...hit.preset.params, ...(input.params || {}) };
+    delete params.walletSize;
     if (hit.family.runnable !== true && input.force !== true) {
       const err = new Error('PLUGIN_NOT_RUNNABLE');
       err.detail = {

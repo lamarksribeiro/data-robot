@@ -1,15 +1,28 @@
 /**
  * Plugin MIDAS Carry V1 — contrato genérico da engine.
- * Núcleo TFC V7 (evaluate.js) + envelope high-ask + tier de budget.
+ * Núcleo TFC V7 (evaluate.js) + envelope high-ask + tier/sigma/scoop/exits lab.
  * Sem SDK, process.env, rede ou filesystem.
+ *
+ * Ordem de decisão (paridade strategy.gls midas-carry-v1):
+ * Em posição: danger contínuo → early-warn → danger V7 → late flip reverse/exit
+ * Flat: core entry (gates + minEntryZ + sigma/tier budget) → scoop entry
  */
 
 import { makeIntentId } from '../engine/schemas.js';
-import { MIDAS_V1, resolveMidasEntryBudget } from '../tfc/preset-midas.js';
+import {
+  MIDAS_V1,
+  resolveMidasEntryBudget,
+  resolveMidasScoopBudget,
+} from '../tfc/preset-midas.js';
 import {
   evaluateDangerExit,
+  evaluateDangerExitContinuous,
+  evaluateEarlyWarnExit,
   evaluateEntryGates,
   evaluateLateFlipAction,
+  evaluateScoopEntry,
+  physicalZScore,
+  signedDistance,
 } from '../tfc/evaluate.js';
 import { sizeCanaryBuy } from '../tfc/sizeCanaryBuy.js';
 
@@ -75,6 +88,112 @@ function tacticalFloorSec(params) {
   return Number(params.lateFlipMinSec ?? params.dangerExitFloorSec ?? 4);
 }
 
+function budgetOpts(ctx, params, extra = {}) {
+  return {
+    accountEquityUsd: ctx.accountEquityUsd,
+    realizedPnl: ctx.position?.realizedPnl,
+    ...extra,
+  };
+}
+
+function pushExitIntent(next, ctx, snapshot, params, side, bid, reason) {
+  next.seq = (next.seq ?? 0) + 1;
+  next.lastIntentKind = 'EXIT';
+  const exitFields = buildExitOrderFields(params, snapshot, side, bid);
+  return {
+    intentId: makeIntentId({
+      strategyInstanceId: ctx.strategyInstanceId,
+      marketId: snapshot.marketId,
+      kind: 'EXIT',
+      seq: next.seq,
+    }),
+    kind: 'EXIT',
+    side,
+    marketId: snapshot.marketId,
+    strategyInstanceId: ctx.strategyInstanceId,
+    budget: null,
+    quantity: ctx.position.qty,
+    maxPrice: null,
+    minPrice: exitFields.minPrice,
+    deadlineMs: ctx.clockMs + 3000,
+    reason,
+    presetId: MIDAS_V1_PRESET_ID,
+    orderType: exitFields.orderType,
+    tokenId: exitFields.tokenId,
+  };
+}
+
+function tryEnter({
+  next,
+  ctx,
+  snapshot,
+  params,
+  side,
+  ask,
+  entryBudgetUsed,
+  reason,
+  diagnostics,
+  mode,
+}) {
+  const slippage = Number(params.entrySlippageMax ?? 0.02);
+  const maxPrice = ask + slippage;
+  const orderType = params.entryOrderType ?? 'GTC';
+  const sized = sizeCanaryBuy({
+    ask,
+    maxPrice,
+    entryBudget: entryBudgetUsed,
+    minShares: params.minShares ?? 1,
+    minNotional: orderType === 'FAK' || orderType === 'FOK' ? undefined : 0,
+  });
+  const quantity = sized.quantity;
+  const notional = sized.notional;
+  const minLiq = Number(params.minLiquidityRatio ?? 0);
+  const liq = askLiquidity(snapshot.book, side, params.obiLevels ?? 5);
+  const liqOk =
+    !Number.isFinite(minLiq) ||
+    minLiq <= 0 ||
+    !(quantity > 0) ||
+    liq >= quantity * minLiq;
+  diagnostics.liquidity = { liq, quantity, minRatio: minLiq, ok: liqOk };
+  diagnostics.tier = {
+    ask,
+    entryBudgetUsed,
+    tierApplied: ask >= Number(params.tierAskThreshold),
+    mode,
+  };
+  if (!liqOk || !(quantity > 0) || !(notional > 0)) {
+    return { ok: false, skip: !liqOk ? 'min_liquidity_ratio' : 'size_zero' };
+  }
+  next.seq = (next.seq ?? 0) + 1;
+  next.lastIntentKind = 'ENTER';
+  next.entryBudgetUsed = entryBudgetUsed;
+  next.entryMode = mode;
+  return {
+    ok: true,
+    intent: {
+      intentId: makeIntentId({
+        strategyInstanceId: ctx.strategyInstanceId,
+        marketId: snapshot.marketId,
+        kind: 'ENTER',
+        seq: next.seq,
+      }),
+      kind: 'ENTER',
+      side,
+      marketId: snapshot.marketId,
+      strategyInstanceId: ctx.strategyInstanceId,
+      budget: notional,
+      quantity,
+      maxPrice,
+      minPrice: null,
+      deadlineMs: ctx.clockMs + 5000,
+      reason,
+      presetId: MIDAS_V1_PRESET_ID,
+      orderType,
+      tokenId: resolveTokenId(snapshot, side),
+    },
+  };
+}
+
 /**
  * @param {object} [opts]
  * @param {object} [opts.defaultPreset]
@@ -89,7 +208,8 @@ export function createMidasV1Strategy(opts = {}) {
       stateVersion: 1,
       supportedMarkets: ['btc-updown-5m'],
       capabilities: ['price', 'book'],
-      description: 'MIDAS Carry V1 — Tiered High-Ask Terminal Carry (plugin).',
+      description:
+        'MIDAS Carry V1 — Tiered High-Ask Terminal Carry + sigma/scoop/danger-cont/early-warn (plugin).',
       presetId: MIDAS_V1_PRESET_ID,
     },
 
@@ -128,12 +248,17 @@ export function createMidasV1Strategy(opts = {}) {
           closed: false,
           lastIntentKind: null,
           entryBudgetUsed: null,
+          entryMode: null,
         },
         diagnostics: {
           presetId: MIDAS_V1_PRESET_ID,
           entryBudget: p.entryBudget,
           tierAskThreshold: p.tierAskThreshold,
           tierAskBudgetFactor: p.tierAskBudgetFactor,
+          sigmaSizingEnabled: p.sigmaSizingEnabled,
+          scoopEnabled: p.scoopEnabled,
+          dangerContinuousEnabled: p.dangerContinuousEnabled,
+          earlyWarnEnabled: p.earlyWarnEnabled,
         },
       };
     },
@@ -148,6 +273,7 @@ export function createMidasV1Strategy(opts = {}) {
         lastIntentKind: oldState?.lastIntentKind ?? null,
         entryBudgetUsed:
           oldState?.entryBudgetUsed == null ? null : Number(oldState.entryBudgetUsed),
+        entryMode: oldState?.entryMode ?? null,
       };
     },
 
@@ -166,8 +292,21 @@ export function createMidasV1Strategy(opts = {}) {
           closed: false,
           lastIntentKind: null,
           entryBudgetUsed: null,
+          entryMode: null,
         };
       }
+
+      const distAbs =
+        Number.isFinite(snapshot.btc) && Number.isFinite(snapshot.priceToBeat)
+          ? Math.abs(snapshot.btc - snapshot.priceToBeat)
+          : null;
+      const { z } = physicalZScore(
+        distAbs ?? 0,
+        history,
+        params,
+        snapshot.secsLeft,
+        snapshot.nowMs,
+      );
 
       const diagnostics = {
         secsLeft: snapshot.secsLeft,
@@ -177,6 +316,8 @@ export function createMidasV1Strategy(opts = {}) {
         reversed: next.reversed,
         closed: next.closed,
         feedsHealthy: feedsHealthy(snapshot),
+        z,
+        accountEquityUsd: ctx.accountEquityUsd,
       };
       const intents = [];
 
@@ -189,10 +330,23 @@ export function createMidasV1Strategy(opts = {}) {
           ask: entryWatch.ask,
           bid: entryWatch.bid,
           dist: entryWatch.dist,
+          z: entryWatch.z,
           gates: entryWatch.gates,
           blockedByPosition: ctx.position.qty > 0,
           watchOnly: ctx.position.qty > 0,
         };
+        if (params.scoopEnabled === true || params.scoopEnabled === 1) {
+          const scoopWatch = evaluateScoopEntry(snapshot, params, history);
+          diagnostics.scoop = {
+            ok: scoopWatch.ok,
+            fav: scoopWatch.fav,
+            ask: scoopWatch.ask,
+            z: scoopWatch.z,
+            reason: scoopWatch.reason,
+            blockedByPosition: ctx.position.qty > 0,
+            watchOnly: ctx.position.qty > 0,
+          };
+        }
       }
 
       if (!feedsHealthy(snapshot)) {
@@ -214,41 +368,76 @@ export function createMidasV1Strategy(opts = {}) {
       }
 
       if (ctx.position.qty > 0 && ctx.position.side && !next.closed) {
-        const danger = evaluateDangerExit(snapshot, params, ctx.position.side, history);
-        diagnostics.danger = danger;
-        if (danger.active && !next.reversed) {
-          next.seq = (next.seq ?? 0) + 1;
-          next.lastIntentKind = 'EXIT';
-          const exitFields = buildExitOrderFields(
-            params,
-            snapshot,
-            ctx.position.side,
-            danger.bid,
+        // 1) Danger contínuo (z-based, janela [floor, start])
+        const dangerCont = evaluateDangerExitContinuous(
+          snapshot,
+          params,
+          ctx.position.side,
+          history,
+        );
+        diagnostics.dangerContinuous = dangerCont;
+        if (dangerCont.active && !next.reversed) {
+          intents.push(
+            pushExitIntent(
+              next,
+              ctx,
+              snapshot,
+              params,
+              ctx.position.side,
+              dangerCont.bid,
+              'danger_exit_continuous',
+            ),
           );
-          intents.push({
-            intentId: makeIntentId({
-              strategyInstanceId: ctx.strategyInstanceId,
-              marketId: snapshot.marketId,
-              kind: 'EXIT',
-              seq: next.seq,
-            }),
-            kind: 'EXIT',
-            side: ctx.position.side,
-            marketId: snapshot.marketId,
-            strategyInstanceId: ctx.strategyInstanceId,
-            budget: null,
-            quantity: ctx.position.qty,
-            maxPrice: null,
-            minPrice: exitFields.minPrice,
-            deadlineMs: ctx.clockMs + 3000,
-            reason: 'danger_exit',
-            presetId: MIDAS_V1_PRESET_ID,
-            orderType: exitFields.orderType,
-            tokenId: exitFields.tokenId,
-          });
           return { state: next, intents, diagnostics };
         }
 
+        // 2) Early-warn (ask do oposto reprecifica)
+        const signedDist = signedDistance(
+          ctx.position.side,
+          snapshot.btc,
+          snapshot.priceToBeat,
+        );
+        const earlyWarn = evaluateEarlyWarnExit(
+          snapshot,
+          params,
+          ctx.position.side,
+          signedDist,
+        );
+        diagnostics.earlyWarn = earlyWarn;
+        if (earlyWarn.active && !next.reversed) {
+          intents.push(
+            pushExitIntent(
+              next,
+              ctx,
+              snapshot,
+              params,
+              ctx.position.side,
+              earlyWarn.bid,
+              'early_warn_exit',
+            ),
+          );
+          return { state: next, intents, diagnostics };
+        }
+
+        // 3) Danger V7 (janela de 1s no piso)
+        const danger = evaluateDangerExit(snapshot, params, ctx.position.side, history);
+        diagnostics.danger = danger;
+        if (danger.active && !next.reversed) {
+          intents.push(
+            pushExitIntent(
+              next,
+              ctx,
+              snapshot,
+              params,
+              ctx.position.side,
+              danger.bid,
+              'danger_exit',
+            ),
+          );
+          return { state: next, intents, diagnostics };
+        }
+
+        // 4) Late flip reverse / exit
         const late = evaluateLateFlipAction(snapshot, params, ctx.position.side, next);
         diagnostics.lateFlip = late;
         if (late.action === 'REVERSE') {
@@ -256,7 +445,8 @@ export function createMidasV1Strategy(opts = {}) {
           next.lastIntentKind = 'REVERSE';
           const factor = Number(params.lateFlipReverseBudgetFactor ?? 1);
           const baseBudget = Number(
-            next.entryBudgetUsed ?? resolveMidasEntryBudget(params, late.oppAsk),
+            next.entryBudgetUsed ??
+              resolveMidasEntryBudget(params, late.oppAsk, budgetOpts(ctx, params, { z })),
           );
           const reverseBudget =
             baseBudget * (Number.isFinite(factor) && factor > 0 ? factor : 1);
@@ -288,35 +478,17 @@ export function createMidasV1Strategy(opts = {}) {
         }
 
         if (late.action === 'EXIT') {
-          next.seq = (next.seq ?? 0) + 1;
-          next.lastIntentKind = 'EXIT';
-          const exitFields = buildExitOrderFields(
-            params,
-            snapshot,
-            ctx.position.side,
-            late.exitBid ?? late.bid,
+          intents.push(
+            pushExitIntent(
+              next,
+              ctx,
+              snapshot,
+              params,
+              ctx.position.side,
+              late.exitBid ?? late.bid,
+              'late_flip_exit',
+            ),
           );
-          intents.push({
-            intentId: makeIntentId({
-              strategyInstanceId: ctx.strategyInstanceId,
-              marketId: snapshot.marketId,
-              kind: 'EXIT',
-              seq: next.seq,
-            }),
-            kind: 'EXIT',
-            side: ctx.position.side,
-            marketId: snapshot.marketId,
-            strategyInstanceId: ctx.strategyInstanceId,
-            budget: null,
-            quantity: ctx.position.qty,
-            maxPrice: null,
-            minPrice: exitFields.minPrice,
-            deadlineMs: ctx.clockMs + 3000,
-            reason: 'late_flip_exit',
-            presetId: MIDAS_V1_PRESET_ID,
-            orderType: exitFields.orderType,
-            tokenId: exitFields.tokenId,
-          });
           return { state: next, intents, diagnostics };
         }
 
@@ -324,69 +496,84 @@ export function createMidasV1Strategy(opts = {}) {
       }
 
       if (ctx.position.qty <= 0 && !next.closed) {
+        // Core entry
         const entry = diagnostics.entry;
         if (entry?.ok && entry.fav && entry.ask != null) {
-          const slippage = Number(params.entrySlippageMax ?? 0.02);
-          const identity = snapshot.identity ?? {};
-          const tokenId =
-            entry.fav === 'UP' ? identity.upTokenId ?? null : identity.downTokenId ?? null;
-          const maxPrice = entry.ask + slippage;
-          const entryBudgetUsed = resolveMidasEntryBudget(params, entry.ask);
-          const orderType = params.entryOrderType ?? 'GTC';
-          const sized = sizeCanaryBuy({
-            ask: entry.ask,
-            maxPrice,
-            entryBudget: entryBudgetUsed,
-            minShares: params.minShares ?? 1,
-            minNotional:
-              orderType === 'FAK' || orderType === 'FOK' ? undefined : 0,
-          });
-          const quantity = sized.quantity;
-          const notional = sized.notional;
-          const minLiq = Number(params.minLiquidityRatio ?? 0);
-          const liq = askLiquidity(snapshot.book, entry.fav, params.obiLevels ?? 5);
-          const liqOk =
-            !Number.isFinite(minLiq) ||
-            minLiq <= 0 ||
-            !(quantity > 0) ||
-            liq >= quantity * minLiq;
-          diagnostics.tier = {
+          const entryBudgetUsed = resolveMidasEntryBudget(
+            params,
+            entry.ask,
+            budgetOpts(ctx, params, { z: entry.z ?? z }),
+          );
+          diagnostics.budget = {
+            mode: 'core',
+            entryBudgetUsed,
+            z: entry.z ?? z,
+            sigmaSizing: params.sigmaSizingEnabled === true || params.sigmaSizingEnabled === 1,
+            equityScale: params.equityScaleEnabled === true || params.equityScaleEnabled === 1,
+          };
+          const entered = tryEnter({
+            next,
+            ctx,
+            snapshot,
+            params,
+            side: entry.fav,
             ask: entry.ask,
             entryBudgetUsed,
-            tierApplied: entry.ask >= Number(params.tierAskThreshold),
+            reason: 'midas_core_entry',
+            diagnostics,
+            mode: 'core',
+          });
+          if (entered.ok) {
+            intents.push(entered.intent);
+            return { state: next, intents, diagnostics };
+          }
+          // core falhou sizing/liq — não bloqueia scoop (paridade lab !entered)
+          if (entered.skip) {
+            diagnostics.coreSkip = entered.skip;
+          }
+        }
+
+        // Scoop — só se core não entrou
+        const scoop = evaluateScoopEntry(snapshot, params, history);
+        diagnostics.scoop = {
+          ...(diagnostics.scoop || {}),
+          ...scoop,
+          blockedByPosition: false,
+          watchOnly: false,
+        };
+        if (scoop.ok && scoop.fav && scoop.ask != null) {
+          const entryBudgetUsed = resolveMidasScoopBudget(
+            params,
+            budgetOpts(ctx, params),
+          );
+          diagnostics.budget = {
+            mode: 'scoop',
+            entryBudgetUsed,
+            z: scoop.z,
           };
-          diagnostics.liquidity = { liq, quantity, minRatio: minLiq, ok: liqOk };
-          if (!liqOk) {
+          const entered = tryEnter({
+            next,
+            ctx,
+            snapshot,
+            params,
+            side: scoop.fav,
+            ask: scoop.ask,
+            entryBudgetUsed,
+            reason: 'midas_scoop_entry',
+            diagnostics,
+            mode: 'scoop',
+          });
+          if (entered.ok) {
+            intents.push(entered.intent);
+            return { state: next, intents, diagnostics };
+          }
+          if (entered.skip) {
             return {
               state: next,
               intents,
-              diagnostics: { ...diagnostics, skip: 'min_liquidity_ratio' },
+              diagnostics: { ...diagnostics, skip: entered.skip },
             };
           }
-          next.seq = (next.seq ?? 0) + 1;
-          next.lastIntentKind = 'ENTER';
-          next.entryBudgetUsed = entryBudgetUsed;
-          intents.push({
-            intentId: makeIntentId({
-              strategyInstanceId: ctx.strategyInstanceId,
-              marketId: snapshot.marketId,
-              kind: 'ENTER',
-              seq: next.seq,
-            }),
-            kind: 'ENTER',
-            side: entry.fav,
-            marketId: snapshot.marketId,
-            strategyInstanceId: ctx.strategyInstanceId,
-            budget: notional,
-            quantity,
-            maxPrice,
-            minPrice: null,
-            deadlineMs: ctx.clockMs + 5000,
-            reason: 'midas_core_entry',
-            presetId: MIDAS_V1_PRESET_ID,
-            orderType: params.entryOrderType ?? 'GTC',
-            tokenId,
-          });
         }
       }
 

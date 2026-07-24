@@ -58,6 +58,25 @@ export function createEngine(opts) {
     opts.strategyInstanceId ?? `${strategy.manifest.id}:${strategy.manifest.version}:0`;
   const sink = opts.sink ?? createSinkForMode(mode);
   const clock = opts.clock ?? (() => Date.now());
+  /** Saldo real opcional (USD) para equity scale — sem walletSize de lab. */
+  const getAccountEquityUsd =
+    typeof opts.getAccountEquityUsd === 'function' ? opts.getAccountEquityUsd : null;
+  let accountEquityUsd =
+    opts.accountEquityUsd == null || !Number.isFinite(Number(opts.accountEquityUsd))
+      ? null
+      : Number(opts.accountEquityUsd);
+
+  function resolveAccountEquityUsd() {
+    if (getAccountEquityUsd) {
+      try {
+        const v = getAccountEquityUsd();
+        if (v != null && Number.isFinite(Number(v))) return Number(v);
+      } catch {
+        /* ignore provider errors */
+      }
+    }
+    return accountEquityUsd;
+  }
 
   const risk =
     opts.risk ??
@@ -285,6 +304,7 @@ export function createEngine(opts) {
       health: { ok: state !== 'HALTED' },
       preset,
       strategyInstanceId,
+      accountEquityUsd: resolveAccountEquityUsd(),
     });
 
     const raw = strategy.onExecutionEvent(ctx, strategyState, event);
@@ -508,6 +528,7 @@ export function createEngine(opts) {
         },
         preset,
         strategyInstanceId,
+        accountEquityUsd: resolveAccountEquityUsd(),
       });
 
       const raw = strategy.onSnapshot(ctx, strategyState);
@@ -625,6 +646,19 @@ export function createEngine(opts) {
       return api.getStatus();
     },
 
+    /**
+     * Atualiza saldo de conta em USD (preflight/CLOB) para equity scale no plugin.
+     * @param {number|null} usd
+     */
+    setAccountEquityUsd(usd) {
+      if (usd == null || !Number.isFinite(Number(usd))) {
+        accountEquityUsd = null;
+        return null;
+      }
+      accountEquityUsd = Number(usd);
+      return accountEquityUsd;
+    },
+
     getStatus() {
       return {
         state,
@@ -633,6 +667,7 @@ export function createEngine(opts) {
         strategyId: strategy.manifest.id,
         strategyVersion: strategy.manifest.version,
         strategyInstanceId,
+        accountEquityUsd: resolveAccountEquityUsd(),
         position: { ...position },
         pendingIntentCount: pendingIntents.size,
         lastMarketId: lastSnapshot?.marketId ?? null,

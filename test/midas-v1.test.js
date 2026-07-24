@@ -7,11 +7,21 @@ import {
   MIDAS_V1_STRATEGY_ID,
   mergeMidasV1Preset,
 } from '../src/strategy/midasV1.js';
-import { MIDAS_V1, resolveMidasEntryBudget } from '../src/tfc/preset-midas.js';
+import {
+  MIDAS_V1,
+  resolveMidasEntryBudget,
+  resolveMidasScoopBudget,
+  resolveMidasEquityRawBudget,
+} from '../src/tfc/preset-midas.js';
 import {
   evaluateDangerExit,
+  evaluateDangerExitContinuous,
+  evaluateEarlyWarnExit,
   evaluateEntryGates,
   evaluateLateFlipAction,
+  evaluateScoopEntry,
+  physicalZScore,
+  sigmaBudgetFactor,
 } from '../src/tfc/evaluate.js';
 import { buildStrategyContext } from '../src/engine/contract.js';
 import { emptyPosition } from '../src/engine/schemas.js';
@@ -64,6 +74,34 @@ describe('MIDAS V1 tier budget', () => {
     assert.equal(resolveMidasEntryBudget(MIDAS_V1, 0.7), 10);
     assert.equal(resolveMidasEntryBudget(MIDAS_V1, 0.82), 15);
     assert.equal(resolveMidasEntryBudget(MIDAS_V1, 0.9), 15);
+  });
+
+  it('sigma sizing escala budget por z quando ligado', () => {
+    const p = { ...MIDAS_V1, sigmaSizingEnabled: true, tierAskBudgetFactor: 1 };
+    // z < zT1 → wZ0=0.4
+    assert.equal(resolveMidasEntryBudget(p, 0.7, { z: 0.2 }), 4);
+    // zT2..zT3 → wZ2=1.0
+    assert.equal(resolveMidasEntryBudget(p, 0.7, { z: 1.5 }), 10);
+    // z >= zT4 → wZ4=1.8 → 18, cap 30
+    assert.equal(resolveMidasEntryBudget(p, 0.7, { z: 5 }), 18);
+  });
+
+  it('equity scale usa accountEquityUsd real (sem walletSize)', () => {
+    const p = {
+      ...MIDAS_V1,
+      equityScaleEnabled: true,
+      equityScalePct: 0.1,
+      tierAskBudgetFactor: 1,
+      sigmaSizingEnabled: false,
+    };
+    // max(10, 200*0.1)=20
+    assert.equal(resolveMidasEntryBudget(p, 0.7, { accountEquityUsd: 200 }), 20);
+    assert.equal(resolveMidasEquityRawBudget(p, { accountEquityUsd: 200 }), 20);
+  });
+
+  it('scoop budget aplica scoopBudgetFactor', () => {
+    const p = { ...MIDAS_V1, scoopBudgetFactor: 0.5 };
+    assert.equal(resolveMidasScoopBudget(p), 5);
   });
 
   it('ENTER high-ask usa tier 1.5x no quantity', () => {
@@ -238,6 +276,199 @@ describe('plugin MIDAS V1 decisões', () => {
     assert.equal(out.intents.length, 0);
     assert.equal(out.diagnostics.skip, 'below_tactical_floor');
   });
+
+  it('minEntryZ bloqueia core quando z baixo', () => {
+    const nowMs = 1_700_000_000_000;
+    const snapshot = snap({ nowMs, secsLeft: 20, btc: 100.5 });
+    const hist = historyAround(nowMs, 100.5);
+    const p = { ...MIDAS_V1, minEntryZ: 50 };
+    const entry = evaluateEntryGates(snapshot, p, hist);
+    assert.equal(entry.ok, false);
+    assert.equal(entry.gates.minEntryZ.pass, false);
+  });
+
+  it('scoop ENTER quando core falha e scoopEnabled', () => {
+    const strategy = createMidasV1Strategy();
+    const nowMs = 1_700_000_000_000;
+    // ask baixo fora do core (minAsk 0.55), dentro do scoop
+    const deep = (n) => Array.from({ length: 5 }, () => ({ size: n }));
+    const snapshot = snap({
+      nowMs,
+      secsLeft: 15,
+      btc: 110,
+      priceToBeat: 100,
+      book: {
+        up: {
+          bestBid: 0.38,
+          bestAsk: 0.4,
+          bids: deep(100),
+          asks: deep(100),
+        },
+        down: {
+          bestBid: 0.58,
+          bestAsk: 0.6,
+          bids: deep(100),
+          asks: deep(100),
+        },
+      },
+    });
+    // histórico volátil → sigma > 0 e z alto com dist 10
+    const hist = [];
+    for (let i = 0; i < 30; i++) {
+      hist.push({ ts: nowMs - (30 - i) * 1000, btc: 100 + (i % 3) * 5 });
+    }
+    hist.push({ ts: nowMs, btc: 110 });
+    const p = {
+      ...MIDAS_V1,
+      scoopEnabled: true,
+      scoopMinZ: 0.1,
+      scoopMinAsk: 0.1,
+      scoopMaxAsk: 0.55,
+      scoopMaxDistAbs: 80,
+    };
+    const scoop = evaluateScoopEntry(snapshot, p, hist);
+    assert.equal(scoop.ok, true, JSON.stringify(scoop));
+    const ctx = buildStrategyContext({
+      snapshot,
+      position: emptyPosition({ marketId: snapshot.marketId }),
+      mode: 'shadow',
+      clockMs: nowMs,
+      preset: p,
+      strategyInstanceId: 'midas:scoop',
+    });
+    const out = strategy.onSnapshot(ctx, {
+      seq: 0,
+      history: hist,
+      marketId: snapshot.marketId,
+      reversed: false,
+      closed: false,
+      lastIntentKind: null,
+      entryBudgetUsed: null,
+    });
+    assert.equal(out.intents[0]?.kind, 'ENTER');
+    assert.equal(out.intents[0]?.reason, 'midas_scoop_entry');
+  });
+
+  it('early_warn_exit quando oppAsk reprecifica', () => {
+    const strategy = createMidasV1Strategy();
+    const nowMs = 1_700_000_000_000;
+    const snapshot = snap({
+      nowMs,
+      secsLeft: 12,
+      btc: 99,
+      priceToBeat: 100,
+      book: baseBook({
+        up: { bestBid: 0.4, bestAsk: 0.42, bids: [{ size: 10 }], asks: [{ size: 10 }] },
+        down: { bestBid: 0.55, bestAsk: 0.58, bids: [{ size: 10 }], asks: [{ size: 10 }] },
+      }),
+    });
+    const p = {
+      ...MIDAS_V1,
+      earlyWarnEnabled: true,
+      earlyWarnOppAsk: 0.45,
+      earlyWarnStartSec: 20,
+      earlyWarnEndSec: 8,
+      earlyWarnOnlyIfLosing: true,
+    };
+    const ew = evaluateEarlyWarnExit(snapshot, p, 'UP', -1);
+    assert.equal(ew.active, true);
+    const ctx = buildStrategyContext({
+      snapshot,
+      position: {
+        marketId: snapshot.marketId,
+        side: 'UP',
+        qty: 5,
+        avgPrice: 0.6,
+        realizedPnl: 0,
+      },
+      mode: 'shadow',
+      clockMs: nowMs,
+      preset: p,
+      strategyInstanceId: 'midas:ew',
+    });
+    const out = strategy.onSnapshot(ctx, {
+      seq: 0,
+      history: historyAround(nowMs, 99),
+      marketId: snapshot.marketId,
+      reversed: false,
+      closed: false,
+      lastIntentKind: null,
+      entryBudgetUsed: 10,
+    });
+    assert.equal(out.intents[0]?.kind, 'EXIT');
+    assert.equal(out.intents[0]?.reason, 'early_warn_exit');
+  });
+
+  it('danger_exit_continuous quando z colapsa', () => {
+    const strategy = createMidasV1Strategy();
+    const nowMs = 1_700_000_000_000;
+    const secsLeft = 6;
+    // dist pequena, sigma alto → z baixo
+    const snapshot = snap({
+      nowMs,
+      secsLeft,
+      btc: 100.05,
+      priceToBeat: 100,
+    });
+    const hist = [
+      { ts: nowMs - 80000, btc: 90 },
+      { ts: nowMs - 40000, btc: 110 },
+      { ts: nowMs - 20000, btc: 95 },
+      { ts: nowMs - 5000, btc: 105 },
+      { ts: nowMs, btc: 100.05 },
+    ];
+    const p = {
+      ...MIDAS_V1,
+      dangerContinuousEnabled: true,
+      dangerContinuousStartSec: 8,
+      dangerContinuousMinZ: 0.5,
+      dangerExitEnabled: false,
+    };
+    const dc = evaluateDangerExitContinuous(snapshot, p, 'UP', hist);
+    assert.equal(dc.active, true, JSON.stringify(dc));
+    const ctx = buildStrategyContext({
+      snapshot,
+      position: {
+        marketId: snapshot.marketId,
+        side: 'UP',
+        qty: 4,
+        avgPrice: 0.6,
+        realizedPnl: 0,
+      },
+      mode: 'shadow',
+      clockMs: nowMs,
+      preset: p,
+      strategyInstanceId: 'midas:dc',
+    });
+    const out = strategy.onSnapshot(ctx, {
+      seq: 0,
+      history: hist,
+      marketId: snapshot.marketId,
+      reversed: false,
+      closed: false,
+      lastIntentKind: null,
+      entryBudgetUsed: 10,
+    });
+    assert.equal(out.intents[0]?.kind, 'EXIT');
+    assert.equal(out.intents[0]?.reason, 'danger_exit_continuous');
+  });
+});
+
+describe('MIDAS evaluate helpers (lab port)', () => {
+  it('sigmaBudgetFactor monotônico por faixas', () => {
+    const p = { ...MIDAS_V1, sigmaSizingEnabled: true };
+    assert.equal(sigmaBudgetFactor(0.1, p), 0.4);
+    assert.equal(sigmaBudgetFactor(0.7, p), 0.7);
+    assert.equal(sigmaBudgetFactor(1.5, p), 1.0);
+    assert.equal(sigmaBudgetFactor(3.0, p), 1.4);
+    assert.equal(sigmaBudgetFactor(5.0, p), 1.8);
+    assert.equal(sigmaBudgetFactor(5.0, { ...p, sigmaSizingEnabled: false }), 1);
+  });
+
+  it('physicalZScore devolve 0 sem histórico', () => {
+    const r = physicalZScore(10, [], MIDAS_V1, 20, 1_700_000_000_000);
+    assert.equal(r.z, 0);
+  });
 });
 
 describe('paridade MIDAS V1 — 100 casos sintéticos', () => {
@@ -250,6 +481,15 @@ describe('paridade MIDAS V1 — 100 casos sintéticos', () => {
     if (snapshot.secsLeft != null && snapshot.secsLeft < floor) return [];
 
     if (position.qty > 0 && position.side && !state.closed) {
+      const dangerCont = evaluateDangerExitContinuous(
+        snapshot,
+        preset,
+        position.side,
+        state.history,
+      );
+      if (dangerCont.active && !state.reversed) return ['EXIT'];
+      const earlyWarn = evaluateEarlyWarnExit(snapshot, preset, position.side);
+      if (earlyWarn.active && !state.reversed) return ['EXIT'];
       const danger = evaluateDangerExit(snapshot, preset, position.side, state.history);
       if (danger.active && !state.reversed) return ['EXIT'];
       const late = evaluateLateFlipAction(snapshot, preset, position.side, state);
@@ -260,7 +500,9 @@ describe('paridade MIDAS V1 — 100 casos sintéticos', () => {
 
     if (position.qty <= 0 && !state.closed) {
       const entry = evaluateEntryGates(snapshot, preset, state.history);
-      return entry.ok ? ['ENTER'] : [];
+      if (entry.ok) return ['ENTER'];
+      const scoop = evaluateScoopEntry(snapshot, preset, state.history);
+      return scoop.ok ? ['ENTER'] : [];
     }
     return [];
   }

@@ -178,8 +178,14 @@ function drawMultiChart(canvas, lines, opts = {}) {
 
     if (line.fill) {
       const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + h);
-      grad.addColorStop(0, `${line.color}40`);
-      grad.addColorStop(1, `${line.color}00`);
+      let strokeCol = line.color || '#10b981';
+      if (strokeCol.startsWith('#') && strokeCol.length === 7) {
+        grad.addColorStop(0, `${strokeCol}35`);
+        grad.addColorStop(1, `${strokeCol}00`);
+      } else {
+        grad.addColorStop(0, 'rgba(16, 185, 129, 0.22)');
+        grad.addColorStop(1, 'rgba(16, 185, 129, 0.00)');
+      }
       ctx.beginPath();
       ctx.moveTo(path[0].x, pad.t + h);
       for (const p of path) ctx.lineTo(p.x, p.y);
@@ -192,7 +198,7 @@ function drawMultiChart(canvas, lines, opts = {}) {
     ctx.beginPath();
     ctx.moveTo(path[0].x, path[0].y);
     for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
-    ctx.strokeStyle = line.color;
+    ctx.strokeStyle = line.color || '#10b981';
     ctx.lineWidth = line.width ?? 2.2;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
@@ -200,9 +206,12 @@ function drawMultiChart(canvas, lines, opts = {}) {
 
     const last = path[path.length - 1];
     ctx.beginPath();
-    ctx.arc(last.x, last.y, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = line.color;
+    ctx.arc(last.x, last.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = line.color || '#10b981';
     ctx.fill();
+    ctx.strokeStyle = '#050811';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
   }
 
   // crossovers between first two series
@@ -1688,13 +1697,16 @@ function currentPreset() {
 
 function collectEditedParams() {
   const out = { ...stratStudio.baseParams };
+  delete out.walletSize;
   for (const input of document.querySelectorAll('#strat-params [data-param]')) {
     const key = input.dataset.param;
+    if (key === 'walletSize') continue;
     const raw = input.value;
     if (raw === 'true' || raw === 'false') out[key] = raw === 'true';
     else if (raw !== '' && Number.isFinite(Number(raw))) out[key] = Number(raw);
     else out[key] = raw;
   }
+  delete out.walletSize;
   return out;
 }
 
@@ -1702,82 +1714,49 @@ function renderStratParams(preset) {
   const box = $('strat-params');
   if (!box) return;
   box.replaceChildren();
-  const params = preset?.params || {};
-  // Prefer full param object; editableKeys defines order, then remaining keys
-  const ordered = [
-    ...(preset?.editableKeys || []),
-    ...Object.keys(params).filter((k) => !(preset?.editableKeys || []).includes(k)),
-  ];
-  const runtimeKeys = new Set(preset?.runtimeKeys || ordered);
-  const labOnlyKeys = new Set(preset?.labOnlyKeys || []);
+  const params = { ...(preset?.params || {}) };
+  // Remove legado de lab se ainda vier em custom antigo
+  delete params.walletSize;
+  const keys = (preset?.editableKeys?.length ? preset.editableKeys : Object.keys(params)).filter(
+    (k) => k !== 'walletSize' && k in params,
+  );
   stratStudio.baseParams = { ...params };
 
-  const runtimeKeysList = ordered.filter((k) => runtimeKeys.has(k) && k in params);
-  const labKeysList = ordered.filter((k) => labOnlyKeys.has(k) && k in params);
-  const otherKeys = ordered.filter(
-    (k) => k in params && !runtimeKeys.has(k) && !labOnlyKeys.has(k),
-  );
-
-  function appendGroup(title, keys, { labOnly = false } = {}) {
-    if (!keys.length) return;
-    const section = document.createElement('div');
-    section.className = 'strat-param-group';
-    const h = document.createElement('h4');
-    h.className = 'strat-param-group__title';
-    h.textContent = `${title} · ${keys.length}`;
-    section.append(h);
-    const grid = document.createElement('div');
-    grid.className = 'strat-params';
-    for (const key of keys) {
-      const value = params[key];
-      const field = document.createElement('div');
-      field.className = `strat-param${labOnly ? ' strat-param--lab' : ''}`;
-      const label = document.createElement('label');
-      label.setAttribute('for', `param-${key}`);
-      label.innerHTML = labOnly
-        ? `${key} <em title="Presente no lab; não lido pelo plugin robot">lab</em>`
-        : key;
-      const input = document.createElement('input');
-      input.id = `param-${key}`;
-      input.dataset.param = key;
-      if (labOnly) {
-        input.dataset.labOnly = '1';
-        input.title = 'Parâmetro de lab — o runtime data-robot ainda não usa este campo';
-      }
-      if (typeof value === 'boolean') {
-        input.type = 'text';
-        input.value = String(value);
-      } else if (typeof value === 'number') {
-        input.type = 'number';
-        input.step = 'any';
-        input.value = String(value);
-      } else {
-        input.type = 'text';
-        input.value = value == null ? '' : String(value);
-      }
-      input.addEventListener('input', () => {
-        field.classList.add('is-dirty');
-        stratStudio.dirty = true;
-      });
-      field.append(label, input);
-      grid.append(field);
+  const grid = document.createElement('div');
+  grid.className = 'strat-params';
+  for (const key of keys) {
+    const value = params[key];
+    const field = document.createElement('div');
+    field.className = 'strat-param';
+    const label = document.createElement('label');
+    label.textContent = key;
+    label.setAttribute('for', `param-${key}`);
+    const input = document.createElement('input');
+    input.id = `param-${key}`;
+    input.dataset.param = key;
+    if (typeof value === 'boolean') {
+      input.type = 'text';
+      input.value = String(value);
+    } else if (typeof value === 'number') {
+      input.type = 'number';
+      input.step = 'any';
+      input.value = String(value);
+    } else {
+      input.type = 'text';
+      input.value = value == null ? '' : String(value);
     }
-    section.append(grid);
-    box.append(section);
+    input.addEventListener('input', () => {
+      field.classList.add('is-dirty');
+      stratStudio.dirty = true;
+    });
+    field.append(label, input);
+    grid.append(field);
   }
-
-  appendGroup('Runtime (ativo na engine)', runtimeKeysList);
-  appendGroup('Lab only (não wired no robot)', labKeysList, { labOnly: true });
-  appendGroup('Outros', otherKeys);
-
-  if (!ordered.filter((k) => k in params).length) {
+  box.append(grid);
+  if (!keys.length) {
     box.innerHTML = '<p class="panel__hint">Este preset não expõe parâmetros editáveis.</p>';
   }
-
-  text(
-    'strat-params-hint',
-    `Params: ${Object.keys(params).length} · runtime ${runtimeKeysList.length} · lab-only ${labKeysList.length}`,
-  );
+  text('strat-params-hint', `${keys.length} parâmetros usados pela engine (sem walletSize / lab).`);
 }
 
 function renderStratSelects() {

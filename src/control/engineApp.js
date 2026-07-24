@@ -677,6 +677,14 @@ export function createEngineApp(opts = {}) {
     /** Atualiza snapshot de preflight/carteira (ex.: leitura CLOB em shadow). */
     setPreflight(next) {
       latestPreflight = next ?? null;
+      const bal = Number(
+        latestPreflight?.checks?.balance?.balanceUsd ??
+          latestPreflight?.balanceUsd ??
+          latestPreflight?.wallet?.balanceUsd,
+      );
+      if (typeof engine.setAccountEquityUsd === 'function') {
+        engine.setAccountEquityUsd(Number.isFinite(bal) ? bal : null);
+      }
       return latestPreflight;
     },
     getPreflight() {
