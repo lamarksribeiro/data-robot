@@ -2041,7 +2041,90 @@ const stratStudio = {
   baseParams: {},
   dirty: false,
   loaded: false,
+  paramSearch: '',
+  editableKeys: [],
 };
+
+const STRAT_GROUP_ORDER = ['timing', 'entry', 'book', 'spot', 'risk', 'scoop', 'sizing', 'other'];
+const STRAT_GROUP_LABELS = {
+  timing: 'Timing da janela',
+  entry: 'Entrada / ask',
+  book: 'Book & liquidez',
+  spot: 'Spot / favorito',
+  risk: 'Risco & saídas',
+  scoop: 'Scoop',
+  sizing: 'Sizing & budget',
+  other: 'Outros',
+};
+
+const STRAT_PARAM_LABELS = {
+  entryBudget: 'Budget de entrada',
+  maxEntryBudget: 'Budget máximo',
+  minShares: 'Shares mínimos',
+  entrySlippageMax: 'Slippage máx.',
+  minLiquidityRatio: 'Liquidez mín. (×qty)',
+  entryOrderType: 'Tipo ordem entrada',
+  exitOrderType: 'Tipo ordem saída',
+  minSecondsLeft: 'Segundos mín. restantes',
+  maxSecondsLeft: 'Segundos máx. restantes',
+  maxDistAbs: 'Distância máx. |BTC−PTB|',
+  minAsk: 'Ask mínimo',
+  maxAsk: 'Ask máximo',
+  maxSpread: 'Spread máximo',
+  minOddsSum: 'Soma odds mín.',
+  maxOddsSum: 'Soma odds máx.',
+  minFlips: 'Flips mínimos',
+  flipWindowSecs: 'Janela de flips (s)',
+  minObi: 'OBI mínimo',
+  obiLevels: 'Níveis OBI',
+  velocityLookbackSecs: 'Lookback velocidade (s)',
+  maxAdverseSpotChange: 'Δspot adverso máx.',
+  minEntryZ: 'Z mínimo de entrada',
+  stopMinBid: 'Bid mín. stop',
+  lateFlipExitEnabled: 'Late flip exit',
+  lateFlipExitSec: 'Late flip até (s)',
+  lateFlipExitCrossDist: 'Late flip cross dist',
+  lateFlipMinSec: 'Late flip desde (s)',
+  lateFlipReverseEnabled: 'Late flip reverse',
+  lateFlipReverseMaxAsk: 'Reverse ask máx.',
+  lateFlipReverseMinAsk: 'Reverse ask mín.',
+  dangerExitEnabled: 'Danger exit',
+  dangerExitK: 'Danger K',
+  dangerExitFloorSec: 'Danger floor (s)',
+  scoopEnabled: 'Scoop ativo',
+  equityScaleEnabled: 'Equity scale',
+};
+
+function humanizeParam(key) {
+  if (STRAT_PARAM_LABELS[key]) return STRAT_PARAM_LABELS[key];
+  return String(key)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function groupForParam(key) {
+  const k = String(key);
+  if (/^(min|max)SecondsLeft|flipWindow|velocityLookback|terminalMinSeconds|terminalMaxSeconds|edgeWindow/.test(k)) {
+    return 'timing';
+  }
+  if (/SecondsLeft|LookbackSecs|WindowStart|WindowEnd|FloorSec|ExitSec|MinSec/.test(k) && /late|danger|hedge|terminal/.test(k.toLowerCase())) {
+    return 'risk';
+  }
+  if (/^(min|max)Ask|minEntryZ|entrySlippage|entryOrder|edgeMinAsk|edgeMaxAsk|edgeMinEdge|terminalMinAsk|terminalMaxAsk/.test(k)) {
+    return 'entry';
+  }
+  if (/[Oo]bi|Spread|OddsSum|Liquidity|liquidity|useObi|obiScore/.test(k)) return 'book';
+  if (/[Dd]ist|Flips|Adverse|favorite|Directional|edgeMinDistance/.test(k)) return 'spot';
+  if (/[Ss]coop/.test(k)) return 'scoop';
+  if (/[Bb]udget|[Ss]hares|[Ee]quity|[Ss]igma|tier|sizing|BudgetFactor/.test(k)) return 'sizing';
+  if (/[Dd]anger|[Ll]ate|[Rr]everse|[Pp]rofit|[Ss]top|Exit|hedge/.test(k)) return 'risk';
+  if (/Enabled$/.test(k)) {
+    if (/scoop/i.test(k)) return 'scoop';
+    if (/danger|late|reverse|profit|edge|terminal/i.test(k)) return 'risk';
+  }
+  return 'other';
+}
 
 function currentFamily() {
   return stratStudio.library?.families?.find((f) => f.familyId === stratStudio.familyId) || null;
@@ -2063,6 +2146,10 @@ function collectEditedParams() {
   for (const input of document.querySelectorAll('#strat-params [data-param]')) {
     const key = input.dataset.param;
     if (key === 'walletSize') continue;
+    if (input.type === 'checkbox') {
+      out[key] = input.checked;
+      continue;
+    }
     const raw = input.value;
     if (raw === 'true' || raw === 'false') out[key] = raw === 'true';
     else if (raw !== '' && Number.isFinite(Number(raw))) out[key] = Number(raw);
@@ -2072,53 +2159,144 @@ function collectEditedParams() {
   return out;
 }
 
+function markStratDirty(field) {
+  if (field) field.classList.add('is-dirty');
+  stratStudio.dirty = true;
+  updateStratActionMsg();
+}
+
+function updateStratActionMsg(extra = null) {
+  if (extra) {
+    text('strat-action-msg', extra);
+    return;
+  }
+  if (stratStudio.dirty) {
+    text('strat-action-msg', 'Alterações não salvas — salve um preset e/ou ative (restart aplica).');
+  } else {
+    text('strat-action-msg', 'Sem alterações.');
+  }
+}
+
+function updateActivateButton() {
+  const btn = $('strat-activate');
+  const family = currentFamily();
+  if (!btn) return;
+  if (family && family.runnable === false) {
+    btn.disabled = true;
+    btn.title = 'Família ainda não executável na engine';
+  } else {
+    btn.disabled = false;
+    btn.title = 'Define a próxima estratégia; requer restart da Engine';
+  }
+}
+
+function applyParamSearchFilter() {
+  const q = (stratStudio.paramSearch || '').trim().toLowerCase();
+  for (const group of document.querySelectorAll('#strat-params .strat-param-group')) {
+    let visible = 0;
+    for (const field of group.querySelectorAll('.strat-param')) {
+      const key = field.dataset.key || '';
+      const label = field.dataset.label || '';
+      const match = !q || key.toLowerCase().includes(q) || label.toLowerCase().includes(q);
+      field.hidden = !match;
+      if (match) visible += 1;
+    }
+    group.hidden = visible === 0;
+  }
+}
+
 function renderStratParams(preset) {
   const box = $('strat-params');
   if (!box) return;
   box.replaceChildren();
   const params = { ...(preset?.params || {}) };
-  // Remove legado de lab se ainda vier em custom antigo
   delete params.walletSize;
   const keys = (preset?.editableKeys?.length ? preset.editableKeys : Object.keys(params)).filter(
     (k) => k !== 'walletSize' && k in params,
   );
   stratStudio.baseParams = { ...params };
+  stratStudio.editableKeys = keys;
 
-  const grid = document.createElement('div');
-  grid.className = 'strat-params';
-  for (const key of keys) {
-    const value = params[key];
-    const field = document.createElement('div');
-    field.className = 'strat-param';
-    const label = document.createElement('label');
-    label.textContent = key;
-    label.setAttribute('for', `param-${key}`);
-    const input = document.createElement('input');
-    input.id = `param-${key}`;
-    input.dataset.param = key;
-    if (typeof value === 'boolean') {
-      input.type = 'text';
-      input.value = String(value);
-    } else if (typeof value === 'number') {
-      input.type = 'number';
-      input.step = 'any';
-      input.value = String(value);
-    } else {
-      input.type = 'text';
-      input.value = value == null ? '' : String(value);
-    }
-    input.addEventListener('input', () => {
-      field.classList.add('is-dirty');
-      stratStudio.dirty = true;
-    });
-    field.append(label, input);
-    grid.append(field);
-  }
-  box.append(grid);
   if (!keys.length) {
     box.innerHTML = '<p class="panel__hint">Este preset não expõe parâmetros editáveis.</p>';
+    text('strat-params-hint', '0 parâmetros editáveis.');
+    return;
   }
-  text('strat-params-hint', `${keys.length} parâmetros usados pela engine (sem walletSize / lab).`);
+
+  const byGroup = new Map(STRAT_GROUP_ORDER.map((g) => [g, []]));
+  for (const key of keys) {
+    const g = groupForParam(key);
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g).push(key);
+  }
+
+  for (const groupId of STRAT_GROUP_ORDER) {
+    const groupKeys = byGroup.get(groupId) || [];
+    if (!groupKeys.length) continue;
+    const section = document.createElement('section');
+    section.className = 'strat-param-group';
+    section.dataset.group = groupId;
+    const title = document.createElement('h4');
+    title.className = 'strat-param-group__title';
+    title.textContent = `${STRAT_GROUP_LABELS[groupId] || groupId} · ${groupKeys.length}`;
+    section.append(title);
+    const grid = document.createElement('div');
+    grid.className = 'strat-params';
+    for (const key of groupKeys) {
+      const value = params[key];
+      const field = document.createElement('div');
+      field.className = 'strat-param';
+      field.dataset.key = key;
+      const nice = humanizeParam(key);
+      field.dataset.label = nice;
+
+      const label = document.createElement('label');
+      label.setAttribute('for', `param-${key}`);
+      label.innerHTML = `<strong>${nice}</strong><code>${key}</code>`;
+
+      if (typeof value === 'boolean') {
+        field.classList.add('strat-param--bool');
+        const input = document.createElement('input');
+        input.id = `param-${key}`;
+        input.type = 'checkbox';
+        input.dataset.param = key;
+        input.checked = value === true;
+        input.addEventListener('change', () => markStratDirty(field));
+        const row = document.createElement('div');
+        row.className = 'strat-param__bool';
+        const flag = document.createElement('span');
+        flag.textContent = value ? 'ligado' : 'desligado';
+        input.addEventListener('change', () => {
+          flag.textContent = input.checked ? 'ligado' : 'desligado';
+        });
+        row.append(input, flag);
+        field.append(label, row);
+      } else {
+        const input = document.createElement('input');
+        input.id = `param-${key}`;
+        input.dataset.param = key;
+        if (typeof value === 'number') {
+          input.type = 'number';
+          input.step = 'any';
+          input.value = String(value);
+        } else {
+          input.type = 'text';
+          input.value = value == null ? '' : String(value);
+        }
+        input.addEventListener('input', () => markStratDirty(field));
+        field.append(label, input);
+      }
+      grid.append(field);
+    }
+    section.append(grid);
+    box.append(section);
+  }
+
+  text(
+    'strat-params-hint',
+    `${keys.length} parâmetros · agrupados por tema · busca filtra a lista`,
+  );
+  applyParamSearchFilter();
 }
 
 function renderStratSelects() {
@@ -2155,10 +2333,7 @@ function renderStratSelects() {
   const preset = currentPreset();
   text('strat-family-title', family.label || family.familyId);
   text('strat-family-desc', family.description || '—');
-  text(
-    'strat-runnable-badge',
-    family.runnable ? 'executável' : 'só biblioteca',
-  );
+  text('strat-runnable-badge', family.runnable ? 'executável' : 'só biblioteca');
   if ($('strat-runnable-badge')) {
     $('strat-runnable-badge').className = `badge ${family.runnable ? 'badge--accent' : 'badge--warn'}`;
   }
@@ -2170,6 +2345,8 @@ function renderStratSelects() {
   );
   renderStratParams(preset);
   stratStudio.dirty = false;
+  updateStratActionMsg();
+  updateActivateButton();
 }
 
 function renderStratFamilies() {
@@ -2180,16 +2357,59 @@ function renderStratFamilies() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `strat-family-btn${family.familyId === stratStudio.familyId ? ' is-active' : ''}`;
-    btn.innerHTML = `<strong>${family.label}</strong><span>${family.pluginId} · ${(family.versions || []).length} ver.</span>`;
+    const runLabel = family.runnable ? 'executável' : 'biblioteca';
+    btn.innerHTML = `<strong>${family.label}</strong><span>${family.pluginId}</span><em>${runLabel} · ${(family.versions || []).length} ver.</em>`;
     btn.addEventListener('click', () => {
       stratStudio.familyId = family.familyId;
       stratStudio.version = family.versions?.[0]?.version || null;
       stratStudio.presetId = family.versions?.[0]?.presets?.[0]?.presetId || null;
+      stratStudio.paramSearch = '';
+      if ($('strat-param-search')) $('strat-param-search').value = '';
       renderStratFamilies();
       renderStratSelects();
     });
     box.append(btn);
   }
+}
+
+function renderStratStatusStrip(library) {
+  const running = library?.running;
+  const active = library?.active;
+  const runLabel = running
+    ? `${running.strategyId || '—'} · ${running.presetId || running.version || '—'}`
+    : 'Nenhuma / default env';
+  const nextLabel = active
+    ? `${active.pluginId || active.strategyId || '—'} · ${active.presetId || active.version || '—'}`
+    : 'env / default';
+  text('strat-status-running', runLabel);
+  text('strat-status-running-meta', running?.name || 'runtime atual da Engine');
+  text('strat-status-next', nextLabel);
+  text('strat-status-next-meta', active?.name || 'ativa no disco após restart');
+
+  const same =
+    running &&
+    active &&
+    String(running.strategyId || '') === String(active.pluginId || active.strategyId || '') &&
+    String(running.presetId || '') === String(active.presetId || '');
+  const strip = $('strat-status');
+  if (strip) {
+    strip.dataset.tone = !running || !active ? 'warn' : same ? 'ok' : 'warn';
+  }
+  text(
+    'strat-status-hint',
+    same || (!running && !active)
+      ? 'Runtime e próxima boot estão alinhados (ou sem override).'
+      : 'Runtime ≠ próxima boot — reinicie a Engine para aplicar a estratégia ativa.',
+  );
+
+  text(
+    'strategy-running-badge',
+    running ? `rodando ${running.strategyId} · ${running.presetId || '—'}` : 'rodando —',
+  );
+  text(
+    'strategy-active-badge',
+    active ? `próxima ${active.pluginId} · ${active.presetId}` : 'próxima = env/default',
+  );
 }
 
 function renderStrategyStudio(library) {
@@ -2202,25 +2422,14 @@ function renderStrategyStudio(library) {
     if (library.running?.version) stratStudio.version = library.running.version;
     if (library.running?.presetId) stratStudio.presetId = library.running.presetId;
   }
-  const active = library.active;
-  text(
-    'strategy-running-badge',
-    library.running
-      ? `rodando ${library.running.strategyId} · ${library.running.presetId || '—'}`
-      : 'rodando —',
-  );
-  text(
-    'strategy-active-badge',
-    active
-      ? `próxima ${active.pluginId} · ${active.presetId}`
-      : 'próxima = env/default',
-  );
+  renderStratStatusStrip(library);
   if (!stratStudio.dirty || !stratStudio.loaded) {
     renderStratFamilies();
     renderStratSelects();
     stratStudio.loaded = true;
   } else {
     renderStratFamilies();
+    updateActivateButton();
   }
 }
 
@@ -2252,7 +2461,7 @@ async function saveStrategyVersion() {
         version: `${version?.version || '1.0.0'}-custom`,
       }),
     });
-    const msg = `Salvo: ${res.result?.presetId || name}`;
+    const msg = `Preset salvo: ${res.result?.presetId || name}. Ainda não está rodando — use Ativar + restart.`;
     text('strat-action-msg', msg);
     showToast(msg, 'ok');
     stratStudio.dirty = false;
@@ -2279,7 +2488,7 @@ async function activateStrategy() {
   if (!family.runnable) {
     text(
       'strat-action-msg',
-      'APEX ainda não é executável na engine. Salve o preset para uso futuro.',
+      'Esta família ainda não é executável na engine. Você pode salvar o preset para uso futuro.',
     );
     return;
   }
@@ -2287,7 +2496,7 @@ async function activateStrategy() {
     kind: 'warning',
     kicker: 'Ativar estratégia',
     title: `${family.label} · ${preset.name}`,
-    body: 'A Engine precisa ser reiniciada para aplicar (npm run local ou restart no Coolify). Continuar?',
+    body: 'Isso define a próxima boot. A Engine precisa ser reiniciada (npm run local ou restart no Coolify) para passar a operar com este preset. Continuar?',
     confirmLabel: 'Ativar',
   });
   if (!ok) return;
@@ -2304,7 +2513,7 @@ async function activateStrategy() {
     });
     const msg =
       res.result?.message ||
-      'Ativado. Reinicie com npm run local (ou restart no Coolify) para aplicar.';
+      'Ativado como próxima boot. Reinicie a Engine para aplicar.';
     text('strat-action-msg', msg);
     showToast(msg, 'ok');
     stratStudio.dirty = false;
@@ -2331,10 +2540,16 @@ function wireStrategyStudio() {
   $('strat-reset')?.addEventListener('click', () => {
     stratStudio.dirty = false;
     renderStratSelects();
-    text('strat-action-msg', 'Preset restaurado.');
+    text('strat-action-msg', 'Preset restaurado (alterações descartadas).');
   });
   $('strat-save')?.addEventListener('click', () => saveStrategyVersion());
   $('strat-activate')?.addEventListener('click', () => activateStrategy());
+  let searchTimer = null;
+  $('strat-param-search')?.addEventListener('input', (e) => {
+    stratStudio.paramSearch = e.target.value || '';
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => applyParamSearchFilter(), 120);
+  });
 }
 
 async function refresh() {

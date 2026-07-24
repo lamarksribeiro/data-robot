@@ -5,17 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Login · Data Robot</title>
 
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.16.6">
-  <link rel="apple-touch-icon" href="/favicon.svg?v=1.16.6">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.16.7">
+  <link rel="apple-touch-icon" href="/favicon.svg?v=1.16.7">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/styles.css?v=1.16.6">
+  <link rel="stylesheet" href="/styles.css?v=1.16.7">
 
-  <script src="/js/dashboard.js?v=1.16.6" defer></script>
-  <script src="/js/mascot.js?v=1.16.6" defer></script>
+  <script src="/js/dashboard.js?v=1.16.7" defer></script>
+  <script src="/js/mascot.js?v=1.16.7" defer></script>
 </head>
 <body>
   <!-- Inline icon sprite (stroke icons, consistent weight) -->
@@ -713,19 +713,33 @@
           <div>
             <p class="eyebrow">Studio operacional</p>
             <h1 id="hdr-strategies">Estratégias</h1>
-            <p class="page-header__sub">Escolha família → versão/preset → ajuste params → salve ou ative (reinício da Engine aplica)</p>
+            <p class="page-header__sub">Escolha família e preset, ajuste parâmetros, salve e ative — a Engine aplica no próximo restart</p>
           </div>
           <div class="page-header__badges">
             <span class="badge badge--accent" id="strategy-running-badge">rodando —</span>
-            <span class="badge" id="strategy-active-badge">ativa —</span>
+            <span class="badge" id="strategy-active-badge">próxima —</span>
           </div>
         </header>
+
+        <section class="strat-status" id="strat-status" data-tone="ok" aria-label="Estado da estratégia">
+          <div class="strat-status__card">
+            <span class="strat-status__chip">Em execução agora</span>
+            <strong id="strat-status-running">—</strong>
+            <em id="strat-status-running-meta">runtime atual da Engine</em>
+          </div>
+          <div class="strat-status__card">
+            <span class="strat-status__chip">Próxima após restart</span>
+            <strong id="strat-status-next">—</strong>
+            <em id="strat-status-next-meta">ativa no disco / env</em>
+          </div>
+          <div class="strat-status__hint" id="strat-status-hint">Sem diferença entre runtime e próxima boot.</div>
+        </section>
 
         <div class="strat-layout" id="strategies">
           <aside class="panel strat-side">
             <div class="panel__header">
               <div>
-                <p class="panel__kicker">Famílias</p>
+                <p class="panel__kicker">1 · Família</p>
                 <h2>Biblioteca</h2>
               </div>
             </div>
@@ -737,7 +751,7 @@
             <article class="panel">
               <div class="panel__header">
                 <div>
-                  <p class="panel__kicker">Seleção</p>
+                  <p class="panel__kicker">2 · Escolher</p>
                   <h2 id="strat-family-title">—</h2>
                   <p class="panel__hint" id="strat-family-desc">—</p>
                 </div>
@@ -756,36 +770,38 @@
               <div class="strat-preset-meta" id="strat-preset-meta">—</div>
             </article>
 
-            <article class="panel">
+            <article class="panel strat-params-panel">
               <div class="panel__header">
                 <div>
-                  <p class="panel__kicker">Parâmetros</p>
-                  <h2>Personalizar</h2>
+                  <p class="panel__kicker">3 · Ajustar</p>
+                  <h2>Parâmetros</h2>
                   <p class="panel__hint" id="strat-params-hint">
-                    Apenas parâmetros que a engine usa de verdade. Limites de capital: entryBudget, maxEntryBudget e canário — não walletSize.
+                    Apenas parâmetros que a engine usa. Capital: entryBudget / maxEntryBudget / canário — não walletSize.
                   </p>
                 </div>
+                <label class="strat-field strat-field--search">
+                  <span>Buscar</span>
+                  <input id="strat-param-search" type="search" placeholder="ex.: ask, scoop, danger…" autocomplete="off">
+                </label>
               </div>
               <div id="strat-params"></div>
-              <div class="strat-actions">
-                <label class="strat-field strat-field--grow">
-                  <span>Nome da nova versão</span>
-                  <input id="strat-save-name" type="text" placeholder="ex.: midas-dist35-lab" maxlength="80">
-                </label>
-                <button class="btn btn--ghost btn--sm" type="button" id="strat-reset">Resetar preset</button>
-                <button class="btn btn--primary btn--sm" type="button" id="strat-save">Salvar versão</button>
-                <button class="btn btn--warning btn--sm" type="button" id="strat-activate">Ativar para rodar</button>
-              </div>
-              <p class="panel__note" id="strat-action-msg">—</p>
             </article>
 
-            <article class="panel">
-              <div class="panel__header">
-                <div>
-                  <p class="panel__kicker">Deploy gate</p>
-                  <h2>Catálogo de aprovação</h2>
-                </div>
+            <div class="strat-actions-bar" id="strat-actions-bar">
+              <label class="strat-field strat-field--grow">
+                <span>Nome do novo preset</span>
+                <input id="strat-save-name" type="text" placeholder="ex.: midas-dist35-lab" maxlength="80">
+              </label>
+              <div class="strat-actions-bar__btns">
+                <button class="btn btn--ghost btn--sm" type="button" id="strat-reset">Resetar</button>
+                <button class="btn btn--primary btn--sm" type="button" id="strat-save">Salvar como preset</button>
+                <button class="btn btn--warning btn--sm" type="button" id="strat-activate">Ativar (requer restart)</button>
               </div>
+              <p class="strat-actions-bar__msg" id="strat-action-msg">Sem alterações.</p>
+            </div>
+
+            <details class="strat-catalog">
+              <summary>Catálogo de aprovação (deploy gate)</summary>
               <div class="table-wrap table-wrap--fit">
                 <table>
                   <thead>
@@ -797,7 +813,7 @@
                   <tbody id="catalog-body"><tr><td colspan="7" class="empty">Carregando…</td></tr></tbody>
                 </table>
               </div>
-            </article>
+            </details>
           </div>
         </div>
       </section>
