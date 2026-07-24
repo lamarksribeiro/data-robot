@@ -45,6 +45,40 @@ const CONTROL_ACTION_COPY = {
   },
 };
 
+/** Fallback UI quando a API ainda não envia displayTitle (cache antigo). */
+const MIDAS_PRESET_UI = {
+  'btc-champion-v1': { backtestVersion: 1, displayTitle: 'MIDAS v1 · Champion', budgetLabel: '$10 / $15' },
+  'btc-aggressive-v1': { backtestVersion: 2, displayTitle: 'MIDAS v2 · Aggressive', budgetLabel: '$10 / $20' },
+  'btc-robust-v1': { backtestVersion: 3, displayTitle: 'MIDAS v3 · Robust', budgetLabel: '$10 / $15' },
+  'btc-micro-robust-v1': { backtestVersion: 4, displayTitle: 'MIDAS v4 · Micro Robust', budgetLabel: '$2 / $3' },
+  'btc-micro-aggressive-v1': { backtestVersion: 5, displayTitle: 'MIDAS v5 · Micro Aggressive', budgetLabel: '$2 / $4' },
+};
+
+function resolvePresetPresentation(status, presetHit = null) {
+  const presetId =
+    status?.canary?.presetId?.replace(/-canary$/, '') ||
+    status?.catalog?.presetId ||
+    status?.strategyId;
+  const preset = presetHit?.preset;
+  const ui = MIDAS_PRESET_UI[presetId] || {};
+  const displayTitle =
+    preset?.displayTitle || status?.canary?.displayTitle || ui.displayTitle || preset?.name || presetId;
+  const budgetLabel =
+    preset?.budgetLabel || status?.canary?.budgetLabel || ui.budgetLabel || null;
+  const backtestVersion =
+    preset?.backtestVersion ?? status?.canary?.backtestVersion ?? ui.backtestVersion ?? null;
+  const hardCapUsd = status?.canary?.hardCapUsd ?? preset?.maxEntryBudgetUsd ?? null;
+  return { presetId, displayTitle, budgetLabel, backtestVersion, hardCapUsd };
+}
+
+function formatCanaryBudgetLine(presentation) {
+  if (presentation.budgetLabel) {
+    return `orçamento ${presentation.budgetLabel} (teto ${money(presentation.hardCapUsd)}/ordem)`;
+  }
+  if (presentation.hardCapUsd != null) return `teto ${money(presentation.hardCapUsd)}/ordem`;
+  return 'limites do canário';
+}
+
 /**
  * Séries só enquanto a sessão do dashboard está ativa.
  * No logout: clearInterval + clearSeries — zero poll e zero desenho.
@@ -1657,17 +1691,17 @@ function renderGuide(status, health) {
   } else if (!armed) {
     tone = 'warn';
     title = 'Live · entradas bloqueadas';
-    body = `Canário pronto (cap ${
-      status.canary?.hardCapUsd != null ? `$${Number(status.canary.hardCapUsd).toFixed(0)}` : '$3'
-    }). Aguardando confirmação.`;
-    next = 'Validar carteira e liberar entradas';
+    const pres = resolvePresetPresentation(status);
+    const budgetLine = formatCanaryBudgetLine(pres);
+    body = `Canário P9 (${pres.displayTitle}). ${budgetLine}. Aguardando você ativar entradas.`;
+    next = 'Validar carteira e ativar entradas';
     showCta = true;
   } else {
     tone = 'ok';
     title = 'Live · operando';
-    body = `Entradas liberadas · cap ${
-      status.canary?.hardCapUsd != null ? `$${Number(status.canary.hardCapUsd).toFixed(0)}` : '$3'
-    }/ordem`;
+    const pres = resolvePresetPresentation(status);
+    const budgetLine = formatCanaryBudgetLine(pres);
+    body = `${pres.displayTitle} · ${budgetLine} · entradas liberadas`;
     next = 'Use Pausar em Controles para parar novas entradas';
     showControlsLink = true;
   }
@@ -1914,11 +1948,18 @@ function render(status, health, instances) {
   const resolved = resolveGates(status);
   const entry = resolved.entry;
 
+  const pres = resolvePresetPresentation(status);
+
   renderMode(status, health);
   renderGuide(status, health);
 
-  text('strategy-id', status.strategyId);
-  text('strategy-preset', status.canary?.presetId || status.catalog?.presetId || '—');
+  text('strategy-id', pres.displayTitle);
+  text(
+    'strategy-preset',
+    pres.backtestVersion
+      ? `backtest v${pres.backtestVersion} · ${pres.budgetLabel || '—'} · ${pres.presetId}`
+      : pres.presetId,
+  );
   text('asset-label', market.asset || '—');
   text('market-window', market.window || '—');
   text('market-id', shortId(market.marketId || status.lastMarketId, 28));
@@ -1927,7 +1968,14 @@ function render(status, health, instances) {
     market.secsLeft != null ? `${number(market.secsLeft, 1)}s restantes` : '—',
   );
   text('approval', status.catalog?.approval);
-  text('canary-cap', status.canary ? `cap ${money(status.canary.hardCapUsd)}` : 'cap —');
+  text(
+    'canary-cap',
+    status.canary
+      ? pres.budgetLabel
+        ? `orçamento ${pres.budgetLabel}`
+        : `teto ${money(status.canary.hardCapUsd)}`
+      : 'canário —',
+  );
   text('pnl-realized', money(pos.realizedPnl));
   setPnlTone($('pnl-realized'), pos.realizedPnl);
   text(
@@ -2093,7 +2141,9 @@ function render(status, health, instances) {
   );
   text('control-window', status.canary ? duration(status.canary.controlWindowMs) : '—');
   text('live-reverse', status.canary ? (status.canary.liveReverse ? 'ativado' : 'bloqueado') : '—');
-  text('canary-preset', status.canary?.presetId || status.catalog?.presetId || '—');
+  text('canary-preset', pres.backtestVersion
+    ? `backtest v${pres.backtestVersion} · ${pres.presetId}`
+    : status.canary?.presetId || status.catalog?.presetId || '—');
 
   renderHealth(health, status.slos, status.mode);
   renderSystemBoard(status, health);
@@ -2428,7 +2478,7 @@ function renderStratSelects() {
       runningIsThisFamily && runningPresetId === p.presetId ? ' · em execução' : '';
     const role = p.role ? ` · ${p.role}` : '';
     const custom = p.custom ? ' · custom' : '';
-    opt.textContent = `${p.name} (${p.presetId})${role}${custom}${runMark}`;
+    opt.textContent = `${p.displayTitle || p.name}${p.budgetLabel ? ` · ${p.budgetLabel}` : ''} (${p.presetId})${role}${custom}${runMark}`;
     presetSel.append(opt);
   }
   if (!stratStudio.presetId || !version?.presets?.some((p) => p.presetId === stratStudio.presetId)) {
@@ -2455,7 +2505,9 @@ function renderStratSelects() {
   text(
     'strat-preset-meta',
     preset
-      ? `${preset.presetId} · ${preset.source || 'lab'}${preset.parentPresetId ? ` · base ${preset.parentPresetId}` : ''}${runningNote}`
+      ? `${preset.displayTitle || preset.name}${preset.budgetLabel ? ` · ${preset.budgetLabel}` : ''}${
+          preset.backtestVersion ? ` · backtest v${preset.backtestVersion}` : ''
+        } · plugin ${stratStudio.version || '—'} · ${preset.presetId}${runningNote}`
       : '—',
   );
   renderStratParams(preset);
@@ -2511,20 +2563,22 @@ function renderStratStatusStrip(library) {
     version: active?.version,
     presetId: active?.presetId,
   });
-  const runName = runningHit?.preset?.name || running?.name || null;
-  const nextName = activeHit?.preset?.name || active?.name || null;
+  const runName = runningHit?.preset?.displayTitle || running?.displayTitle || runningHit?.preset?.name || running?.name || null;
+  const nextName = activeHit?.preset?.displayTitle || activeHit?.preset?.name || active?.name || null;
+  const runBudget = runningHit?.preset?.budgetLabel || running?.budgetLabel;
+  const nextBudget = activeHit?.preset?.budgetLabel;
   const runLabel = running
-    ? `${runName || running.strategyId} · ${running.presetId || running.version || '—'}`
+    ? `${runName || running.strategyId}${runBudget ? ` · ${runBudget}` : ''}`
     : 'Nenhuma / default env';
   const nextLabel = active
-    ? `${nextName || active.pluginId || active.strategyId || '—'} · ${active.presetId || active.version || '—'}`
+    ? `${nextName || active.pluginId || active.strategyId || '—'}${nextBudget ? ` · ${nextBudget}` : ''}`
     : 'env / default (sem active-strategy.json)';
   text('strat-status-running', runLabel);
   text(
     'strat-status-running-meta',
     running
-      ? `${running.strategyId}${running.version ? ` · v${running.version}` : ''}${
-          runName && runName !== running.presetId ? ` · ${running.presetId}` : ''
+      ? `${running.strategyId} · plugin ${running.version || '—'} · ${running.presetId}${
+          runningHit?.preset?.backtestVersion ? ` · backtest v${runningHit.preset.backtestVersion}` : ''
         }`
       : 'runtime atual da Engine',
   );

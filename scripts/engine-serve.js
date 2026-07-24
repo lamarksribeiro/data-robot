@@ -21,7 +21,7 @@ import {
 } from '../src/composition/midasService.js';
 import { createApprovalStore } from '../src/catalog/approvalStore.js';
 import { createStrategyLibrary } from '../src/catalog/strategyLibrary.js';
-import { canaryMidasPreset } from '../src/tfc/preset-midas.js';
+import { canaryMidasPreset, describeMidasPreset, resolveMidasCanaryCap } from '../src/tfc/preset-midas.js';
 import { defaultPresetFor } from '../src/composition/presets.js';
 import { MIDAS_V1_PRESET_ID, MIDAS_V1_STRATEGY_ID } from '../src/strategy/midasV1.js';
 import { TFC_V7_STRATEGY_ID } from '../src/strategy/tfcV7.js';
@@ -104,8 +104,32 @@ const marketScope =
   activeStrategy?.marketScope ||
   (sourceKind === 'btc5m' ? 'btc-updown-5m' : 'fixture');
 
+function buildCanaryStatus(strategyId, preset, presetId) {
+  if (strategyId !== MIDAS_V1_STRATEGY_ID && strategyId !== TFC_V7_STRATEGY_ID) return null;
+  const envCap = process.env.ENGINE_CANARY_MAX_BUDGET;
+  const hardCapUsd =
+    strategyId === MIDAS_V1_STRATEGY_ID
+      ? resolveMidasCanaryCap(preset, envCap)
+      : Number(envCap || 2);
+  const midasDesc =
+    strategyId === MIDAS_V1_STRATEGY_ID ? describeMidasPreset(presetId, preset) : null;
+  const entryBudgetUsd = midasDesc?.entryBudgetUsd ?? Number(preset.entryBudget);
+  return {
+    presetId,
+    hardCapUsd,
+    entryBudgetUsd: Number.isFinite(entryBudgetUsd) ? entryBudgetUsd : null,
+    maxEntryBudgetUsd: midasDesc?.maxEntryBudgetUsd ?? hardCapUsd,
+    budgetLabel: midasDesc?.budgetLabel ?? null,
+    backtestVersion: midasDesc?.backtestVersion ?? null,
+    displayTitle: midasDesc?.displayTitle ?? presetId,
+    maxEntriesPerControlWindow: 1,
+    controlWindowMs: Number(process.env.ENGINE_CONTROL_WINDOW_MS || 24 * 60 * 60 * 1000),
+    liveReverse: strategyId === MIDAS_V1_STRATEGY_ID,
+  };
+}
+
 // Garante entrada no catálogo para presets custom/ativados via UI.
-function ensureCatalogEntry() {
+function ensureCatalogEntry(resolvedPreset) {
   const existing = catalog.strategies.find(
     (e) =>
       e.strategyId === strategyId &&
@@ -122,12 +146,15 @@ function ensureCatalogEntry() {
       ? activeStrategy.marketScope
       : [marketScope],
     approval: mode === 'live' && strategyId !== MIDAS_V1_STRATEGY_ID ? 'registered' : approval,
-    canary: {
-      hardCapUsd: Number(process.env.ENGINE_CANARY_MAX_BUDGET || MIDAS_CANARY_HARD_CAP_USD),
-      maxEntriesPerControlWindow: 1,
-      controlWindowHours: 24,
-      liveReverse: strategyId === MIDAS_V1_STRATEGY_ID,
-    },
+    canary: (() => {
+      const c = buildCanaryStatus(strategyId, resolvedPreset, presetId);
+      return {
+        hardCapUsd: c?.hardCapUsd ?? Number(process.env.ENGINE_CANARY_MAX_BUDGET || MIDAS_CANARY_HARD_CAP_USD),
+        maxEntriesPerControlWindow: 1,
+        controlWindowHours: 24,
+        liveReverse: strategyId === MIDAS_V1_STRATEGY_ID,
+      };
+    })(),
     evidence: activeStrategy ? ['config/active-strategy.json'] : [],
   };
   const next = {
@@ -140,7 +167,11 @@ function ensureCatalogEntry() {
 
 let catalogEntry;
 try {
-  ensureCatalogEntry();
+  const catalogPreset =
+    strategyId === MIDAS_V1_STRATEGY_ID
+      ? canaryMidasPreset(activeStrategy?.params || {})
+      : defaultPresetFor(strategyId, activeStrategy?.params || {});
+  ensureCatalogEntry(catalogPreset);
   catalogEntry = catalogStore.assertApproved({
     strategyId,
     version: strategyVersion,
@@ -172,8 +203,9 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
   if (!activeStrategy?.params) {
     preset = canaryMidasPreset(preset);
   }
-  const maxCanaryBudget = Number(
-    process.env.ENGINE_CANARY_MAX_BUDGET || MIDAS_CANARY_HARD_CAP_USD,
+  const maxCanaryBudget = resolveMidasCanaryCap(
+    preset,
+    process.env.ENGINE_CANARY_MAX_BUDGET,
   );
   const controlWindowMs = Number(
     process.env.ENGINE_CONTROL_WINDOW_MS || 24 * 60 * 60 * 1000,
@@ -239,6 +271,8 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
   }
 }
 
+const canaryStatus = buildCanaryStatus(strategyId, preset, presetId);
+
 const deployment = {
   sourceCommit: process.env.SOURCE_COMMIT || process.env.ENGINE_SOURCE_COMMIT || null,
   deploymentId: process.env.ENGINE_DEPLOYMENT_ID || null,
@@ -274,28 +308,26 @@ const app = createEngineApp({
     process.env.ENGINE_START_ARMED == null
       ? mode !== 'live'
       : process.env.ENGINE_START_ARMED === '1',
-  canary:
-    strategyId === MIDAS_V1_STRATEGY_ID || strategyId === TFC_V7_STRATEGY_ID
-      ? {
-          presetId,
-          hardCapUsd: Number(process.env.ENGINE_CANARY_MAX_BUDGET || MIDAS_CANARY_HARD_CAP_USD),
-          maxEntriesPerControlWindow: 1,
-          controlWindowMs: Number(
-            process.env.ENGINE_CONTROL_WINDOW_MS || 24 * 60 * 60 * 1000,
-          ),
-          liveReverse: strategyId === MIDAS_V1_STRATEGY_ID,
-        }
-      : null,
-  getStrategyLibrary: () => ({
-    ...strategyLibrary.list(),
-    active: strategyLibrary.loadActive(),
-    running: {
-      strategyId,
-      version: strategyVersion,
-      presetId,
-      name: activeStrategy?.name || presetId,
-    },
-  }),
+  canary: canaryStatus,
+  getStrategyLibrary: () => {
+    const described =
+      strategyId === MIDAS_V1_STRATEGY_ID
+        ? describeMidasPreset(presetId, preset)
+        : { displayTitle: presetId, backtestVersion: null, budgetLabel: null };
+    return {
+      ...strategyLibrary.list(),
+      active: strategyLibrary.loadActive(),
+      running: {
+        strategyId,
+        version: strategyVersion,
+        presetId,
+        name: activeStrategy?.name || described.displayTitle || presetId,
+        displayTitle: described.displayTitle || null,
+        backtestVersion: described.backtestVersion || null,
+        budgetLabel: described.budgetLabel || null,
+      },
+    };
+  },
   getActiveStrategy: () => strategyLibrary.loadActive(),
   onSaveStrategyPreset: (body) => strategyLibrary.saveCustomPreset(body || {}),
   onActivateStrategy: (body) => strategyLibrary.activate(body || {}),

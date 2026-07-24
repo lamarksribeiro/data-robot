@@ -12,6 +12,9 @@ import {
   resolveMidasEntryBudget,
   resolveMidasScoopBudget,
   resolveMidasEquityRawBudget,
+  describeMidasPreset,
+  resolveMidasCanaryCap,
+  canaryMidasPreset,
 } from '../src/tfc/preset-midas.js';
 import {
   evaluateDangerExit,
@@ -68,6 +71,22 @@ function historyAround(nowMs, btc = 100.5) {
     { ts: nowMs, btc },
   ];
 }
+
+describe('MIDAS preset metadata (paridade backtest)', () => {
+  it('describeMidasPreset v5 = Micro Aggressive $2/$4', () => {
+    const d = describeMidasPreset('btc-micro-aggressive-v1', canaryMidasPreset());
+    assert.equal(d.backtestVersion, 5);
+    assert.equal(d.budgetLabel, '$2 / $4');
+    assert.match(d.displayTitle, /MIDAS v5/);
+  });
+
+  it('resolveMidasCanaryCap prioriza maxEntryBudget do preset sobre env menor', () => {
+    const p = canaryMidasPreset();
+    assert.equal(resolveMidasCanaryCap(p, 3), 4);
+    assert.equal(resolveMidasCanaryCap(p, 5), 4);
+    assert.equal(resolveMidasCanaryCap(p, 2), 2);
+  });
+});
 
 describe('MIDAS V1 tier budget', () => {
   it('resolveMidasEntryBudget: base abaixo do threshold, 1.5x acima', () => {

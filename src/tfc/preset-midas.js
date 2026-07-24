@@ -232,3 +232,88 @@ export function resolveMidasScoopBudget(params, opts = {}) {
 export function canaryMidasPreset(override = {}) {
   return { ...MIDAS_AGGRESSIVE_V1, ...MICRO_AGGRESSIVE, ...override };
 }
+
+/**
+ * Metadados de paridade com o Estúdio do data-backtest (presets midas-carry-v1).
+ * `backtestVersion` = coluna "v1..v5" no backtest; `pluginVersion` no robot é sempre 1.0.0.
+ */
+export const MIDAS_PRESET_META = Object.freeze({
+  'btc-champion-v1': {
+    backtestVersion: 1,
+    labName: 'Champion',
+    budgetLabel: '$10 / $15',
+  },
+  'btc-aggressive-v1': {
+    backtestVersion: 2,
+    labName: 'Aggressive',
+    budgetLabel: '$10 / $20',
+  },
+  'btc-robust-v1': {
+    backtestVersion: 3,
+    labName: 'Robust',
+    budgetLabel: '$10 / $15',
+  },
+  'btc-micro-robust-v1': {
+    backtestVersion: 4,
+    labName: 'Micro Robust',
+    budgetLabel: '$2 / $3',
+  },
+  'btc-micro-aggressive-v1': {
+    backtestVersion: 5,
+    labName: 'Micro Aggressive',
+    budgetLabel: '$2 / $4',
+  },
+});
+
+function formatBudgetLabel(entryBudget, maxEntryBudget) {
+  const entry = Number(entryBudget);
+  const max = Number(maxEntryBudget);
+  if (Number.isFinite(entry) && Number.isFinite(max) && entry > 0 && max > 0) {
+    return `$${entry} / $${max}`;
+  }
+  return null;
+}
+
+/** Rótulos amigáveis para UI / status da engine (paridade backtest). */
+export function describeMidasPreset(presetId, preset = {}) {
+  const meta = MIDAS_PRESET_META[presetId] || {};
+  const entryBudget = Number(preset.entryBudget);
+  const maxEntryBudget = Number(preset.maxEntryBudget);
+  const budgetLabel =
+    formatBudgetLabel(entryBudget, maxEntryBudget) || meta.budgetLabel || null;
+  const labName = meta.labName || String(presetId || 'MIDAS');
+  const backtestVersion = meta.backtestVersion ?? null;
+  const displayTitle = backtestVersion
+    ? `MIDAS v${backtestVersion} · ${labName}`
+    : labName;
+  return {
+    presetId,
+    backtestVersion,
+    labName,
+    budgetLabel,
+    displayTitle,
+    entryBudgetUsd: Number.isFinite(entryBudget) ? entryBudget : null,
+    maxEntryBudgetUsd: Number.isFinite(maxEntryBudget) ? maxEntryBudget : null,
+  };
+}
+
+/** Cap operacional do canário: preset.maxEntryBudget manda; env só restringe até entryBudget (ex. micro $2). */
+export function resolveMidasCanaryCap(preset = {}, envCap) {
+  const presetCap = Number(preset.maxEntryBudget);
+  const entry = Number(preset.entryBudget);
+  const env = Number(envCap);
+  if (Number.isFinite(presetCap) && presetCap > 0) {
+    if (
+      Number.isFinite(env) &&
+      env > 0 &&
+      Number.isFinite(entry) &&
+      entry > 0 &&
+      env <= entry
+    ) {
+      return env;
+    }
+    return presetCap;
+  }
+  if (Number.isFinite(env) && env > 0) return env;
+  return CANARY_LIMITS.maxCanaryBudget;
+}

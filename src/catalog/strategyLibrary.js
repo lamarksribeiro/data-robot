@@ -13,7 +13,9 @@ import {
   MIDAS_AGGRESSIVE_V1,
   MIDAS_RUNTIME_KEYS,
   MICRO_AGGRESSIVE,
+  MICRO_ROBUST,
   canaryMidasPreset,
+  describeMidasPreset,
 } from '../tfc/preset-midas.js';
 
 /** Params do runtime MIDAS (inclui sigma/scoop/early-warn/danger cont./equity scale). Sem walletSize. */
@@ -67,6 +69,18 @@ function slugify(value) {
     .slice(0, 48);
 }
 
+/** Enriquece preset MIDAS com metadados do backtest (v1..v5). */
+function midasPreset(presetId, base) {
+  const params = base.params || {};
+  const described = describeMidasPreset(presetId, params);
+  return {
+    presetId,
+    ...base,
+    ...described,
+    name: base.name || described.displayTitle,
+  };
+}
+
 /** Catálogo embutido — espelha labs do data-backtest + presets do robot. */
 export function builtInLibrary() {
   return {
@@ -83,48 +97,43 @@ export function builtInLibrary() {
         versions: [
           {
             version: '1.0.0',
-            label: 'V1 runtime',
+            label: 'Plugin runtime (≠ backtest v1–v5)',
             presets: [
-              {
-                presetId: 'btc-champion-v1',
+              midasPreset('btc-champion-v1', {
                 name: 'Champion (tier 1.5×)',
                 role: 'champion',
                 source: 'runtime',
                 params: { ...MIDAS_V1 },
                 editableKeys: EDITABLE_MIDAS,
-              },
-              {
-                presetId: 'btc-robust-v1',
+              }),
+              midasPreset('btc-robust-v1', {
                 name: 'Robust (dist 30)',
                 role: 'candidate',
                 source: 'runtime',
                 params: { ...MIDAS_ROBUST_V1 },
                 editableKeys: EDITABLE_MIDAS,
-              },
-              {
-                presetId: 'btc-aggressive-v1',
+              }),
+              midasPreset('btc-aggressive-v1', {
                 name: 'Aggressive (tier 2.0×)',
                 role: 'candidate',
                 source: 'runtime',
                 params: { ...MIDAS_AGGRESSIVE_V1 },
                 editableKeys: EDITABLE_MIDAS,
-              },
-              {
-                presetId: 'btc-micro-aggressive-v1',
-                name: 'Micro canário ($2–$4)',
+              }),
+              midasPreset('btc-micro-aggressive-v1', {
+                name: 'Micro Aggressive ($2–$4) · canário P9',
                 role: 'canary',
                 source: 'runtime',
                 params: { ...canaryMidasPreset() },
                 editableKeys: EDITABLE_MIDAS,
-              },
-              {
-                presetId: 'btc-micro-robust-v1',
-                name: 'Micro robust',
+              }),
+              midasPreset('btc-micro-robust-v1', {
+                name: 'Micro Robust ($2–$3)',
                 role: 'canary',
                 source: 'runtime',
-                params: { ...MIDAS_ROBUST_V1, ...MICRO_AGGRESSIVE, maxEntryBudget: 3 },
+                params: { ...MIDAS_ROBUST_V1, ...MICRO_ROBUST },
                 editableKeys: EDITABLE_MIDAS,
-              },
+              }),
             ],
           },
         ],
