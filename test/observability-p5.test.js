@@ -237,6 +237,40 @@ describe('engine app + soak', () => {
     await app.stop();
   });
 
+  it('audit decision só grava aceite do risk ou mudança de estado', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engine-audit-'));
+    const app = createEngineApp({
+      mode: 'shadow',
+      serveHttp: false,
+      strategyId: 'fixture-price-cross',
+      executionAuditDir: dir,
+      // Cap de canário abaixo do budget da fixture → ENTER é emitido e negado.
+      riskOpts: { canaryMode: true, maxCanaryBudget: 0.01 },
+    });
+    await app.start();
+    // 1ª ingest: OBSERVING/MARKET_SYNCING → ARMED (state_change) pode gravar 1 decision.
+    await app.ingestSynthetic(snapshot({ btc: 100 }));
+    const afterFirst = app.executionAudit
+      .listRecent(50)
+      .filter((r) => r.type === 'decision');
+    // Mais ingests com sinal: intents negados pelo canário não devem acumular decisions.
+    await app.ingestSynthetic(snapshot({ btc: 101 }));
+    await app.ingestSynthetic(snapshot({ btc: 102 }));
+    await app.ingestSynthetic(snapshot({ btc: 103 }));
+    const decisions = app.executionAudit
+      .listRecent(50)
+      .filter((r) => r.type === 'decision');
+    assert.ok(
+      decisions.length <= afterFirst.length + 1,
+      `esperava poucas decisions, veio ${decisions.length}`,
+    );
+    assert.ok(
+      decisions.every((d) => d.acceptedCount > 0 || d.stateChanged === true),
+    );
+    await app.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   it('checkpoint durável restaura posição antes do start', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engine-cp-'));
     const first = createEngineApp({

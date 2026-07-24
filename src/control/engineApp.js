@@ -532,10 +532,32 @@ export function createEngineApp(opts = {}) {
     }
     const decisionResult = useMarketGate ? result?.result : result;
     if (decisionResult?.intentCount) metrics.inc('intents_emitted', decisionResult.intentCount);
-    if (decisionResult?.intentCount) {
+    if (decisionResult?.acceptedCount) {
+      metrics.inc('intents_accepted', decisionResult.acceptedCount);
+    }
+    // Auditoria: só intent aceito pelo risk ou mudança de estado da engine.
+    // Reavaliações negadas (ex. canário) não poluem o JSONL.
+    const shouldAuditDecision =
+      (decisionResult?.acceptedCount ?? 0) > 0 || decisionResult?.stateChanged === true;
+    if (shouldAuditDecision) {
+      const acceptedKinds = (decisionResult.accepted ?? [])
+        .map((a) => a.kind)
+        .filter(Boolean);
       executionAudit.append('decision', {
         marketId: snapshot.marketId,
-        intentCount: decisionResult.intentCount,
+        ok: (decisionResult.acceptedCount ?? 0) > 0 ? true : null,
+        action:
+          (decisionResult.acceptedCount ?? 0) > 0
+            ? acceptedKinds.join('+') || 'accepted'
+            : 'state_change',
+        intentCount: decisionResult.intentCount ?? 0,
+        acceptedCount: decisionResult.acceptedCount ?? 0,
+        deniedCount: decisionResult.deniedCount ?? 0,
+        stateChanged: decisionResult.stateChanged === true,
+        fromState: decisionResult.previousState ?? null,
+        toState: decisionResult.state ?? null,
+        accepted: decisionResult.accepted ?? [],
+        denied: decisionResult.denied ?? [],
         diagnostics: decisionResult.diagnostics ?? null,
         position: decisionResult.position ?? engine.position,
       });

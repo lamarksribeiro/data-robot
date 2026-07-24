@@ -545,18 +545,47 @@ export function createEngine(opts) {
         };
       });
 
+      const stateBefore = state;
+      const dispatchResults = [];
       for (const intent of intents) {
         if (!intent.intentId) {
           intentSeq += 1;
           intent.intentId = `${strategyInstanceId}:${snapshot.marketId}:${intent.kind}:${intentSeq}`;
         }
-        await dispatchIntent(intent);
+        dispatchResults.push({
+          intent: {
+            intentId: intent.intentId,
+            kind: intent.kind,
+            side: intent.side,
+            reason: intent.reason,
+            budget: intent.budget ?? null,
+            quantity: intent.quantity ?? null,
+            maxPrice: intent.maxPrice ?? null,
+          },
+          ...(await dispatchIntent(intent)),
+        });
       }
+
+      const accepted = dispatchResults.filter((r) => r.allowed);
+      const denied = dispatchResults.filter((r) => !r.allowed);
+      const stateChanged = stateBefore !== state;
 
       return {
         skipped: false,
         state,
+        previousState: stateBefore,
+        stateChanged,
         intentCount: intents.length,
+        acceptedCount: accepted.length,
+        deniedCount: denied.length,
+        accepted: accepted.map((r) => ({
+          ...r.intent,
+          reasonCode: r.decision?.reasonCode ?? null,
+        })),
+        denied: denied.map((r) => ({
+          kind: r.intent.kind,
+          reasonCode: r.decision?.reasonCode ?? null,
+        })),
         diagnostics: lastDiagnostics,
         position: { ...position },
       };

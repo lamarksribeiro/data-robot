@@ -1048,8 +1048,21 @@ const AUDIT_TYPE_LABELS = {
   audit_parse_error: 'Parse error',
 };
 
+const AUDIT_TYPE_TONE = {
+  operator_action: 'operator',
+  engine_started: 'lifecycle',
+  engine_stopped: 'lifecycle',
+  decision: 'decision',
+  checkpoint: 'muted',
+  rollback: 'warn',
+  position_settled: 'settle',
+  protective_halt: 'halt',
+  audit_parse_error: 'halt',
+};
+
 const AUDIT_PRESETS = {
-  operational: { excludeTypes: 'decision,checkpoint' },
+  // Checkpoint a cada 30s polui; decisions agora só saem em aceite/state change.
+  operational: { excludeTypes: 'checkpoint' },
   decisions: { types: 'decision' },
   all: {},
 };
@@ -1061,10 +1074,25 @@ function auditTypeLabel(type) {
   return AUDIT_TYPE_LABELS[type] || type || '—';
 }
 
+function auditTypeTone(type) {
+  return AUDIT_TYPE_TONE[type] || 'muted';
+}
+
 function auditSummary(entry) {
   if (!entry || typeof entry !== 'object') return '—';
   const bits = [];
-  if (entry.reason) bits.push(String(entry.reason));
+  if (entry.action && entry.type === 'decision') {
+    bits.push(entry.action === 'state_change' ? 'state change' : entry.action);
+  } else if (entry.reason) {
+    bits.push(String(entry.reason));
+  }
+  if (entry.fromState && entry.toState && entry.fromState !== entry.toState) {
+    bits.push(`${entry.fromState}→${entry.toState}`);
+  }
+  if (entry.acceptedCount > 0) bits.push(`${entry.acceptedCount} aceito(s)`);
+  if (entry.deniedCount > 0 && entry.acceptedCount > 0) {
+    bits.push(`${entry.deniedCount} negado(s)`);
+  }
   if (entry.marketId) bits.push(`mkt ${String(entry.marketId).slice(0, 18)}`);
   if (entry.fromMarketId && entry.toMarketId) {
     bits.push(`${String(entry.fromMarketId).slice(0, 10)}→${String(entry.toMarketId).slice(0, 10)}`);
@@ -1072,10 +1100,12 @@ function auditSummary(entry) {
   if (entry.strategyId) bits.push(entry.strategyId);
   if (entry.mode) bits.push(entry.mode);
   if (entry.operatorState) bits.push(entry.operatorState);
-  if (entry.intentCount != null) bits.push(`${entry.intentCount} intents`);
+  if (entry.intentCount != null && entry.acceptedCount == null) {
+    bits.push(`${entry.intentCount} intents`);
+  }
   if (entry.pnlDelta != null) bits.push(`Δpnl ${entry.pnlDelta}`);
   if (entry.side && entry.qty != null) bits.push(`${entry.side}×${entry.qty}`);
-  if (entry.state) bits.push(entry.state);
+  if (entry.state && !(entry.fromState && entry.toState)) bits.push(entry.state);
   if (!bits.length) {
     const detail = { ...entry };
     delete detail.schemaVersion;
@@ -1164,19 +1194,22 @@ function renderAudit(rows = []) {
   }
   for (const entry of auditRowsCache) {
     const row = document.createElement('tr');
-    row.className = 'audit-row';
+    const tone = auditTypeTone(entry.type);
+    row.className = `audit-row audit-row--${tone}`;
     if (entry.ok === false) row.classList.add('audit-row--fail');
     else if (entry.ok === true) row.classList.add('audit-row--ok');
     row.tabIndex = 0;
     row.title = 'Clique para ver o JSON completo';
 
     const tdTime = document.createElement('td');
+    tdTime.className = 'audit-time';
     tdTime.textContent = entry.tsMs ? new Date(entry.tsMs).toLocaleString('pt-BR') : '—';
 
     const tdType = document.createElement('td');
-    tdType.innerHTML = `<span class="audit-chip audit-chip--type">${auditTypeLabel(entry.type)}</span>`;
+    tdType.innerHTML = `<span class="audit-chip audit-chip--${tone}">${auditTypeLabel(entry.type)}</span>`;
 
     const tdAction = document.createElement('td');
+    tdAction.className = 'audit-action';
     tdAction.textContent = entry.action || '—';
 
     const tdOk = document.createElement('td');
