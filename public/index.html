@@ -12,9 +12,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/styles.css?v=1.16.9">
+  <link rel="stylesheet" href="/styles.css?v=1.16.11">
 
-  <script src="/js/dashboard.js?v=1.16.10" defer></script>
+  <script src="/js/dashboard.js?v=1.16.11" defer></script>
   <script src="/js/mascot.js?v=1.16.9" defer></script>
 </head>
 <body>
@@ -190,7 +190,7 @@
             </div>
             <div class="ops-bar__next-actions">
               <button class="btn btn--primary ops-bar__cta" id="guide-cta" type="button" hidden>
-                Armar agora
+                Ativar entradas
               </button>
               <button class="btn btn--ghost btn--sm ops-bar__link" id="guide-goto-controls" type="button" data-goto="controls" hidden>
                 Ver controles
@@ -582,7 +582,7 @@
               <div><dt>Preset canário</dt><dd id="canary-preset">—</dd></div>
             </dl>
             <p class="panel__note" id="wallet-explain">
-              Em shadow não há saldo CLOB real. Em live, o saldo vem do preflight (arm / start).
+              Em shadow não há saldo CLOB real. Em live, o saldo vem do preflight (ativação / start).
             </p>
           </article>
         </div>
@@ -650,7 +650,7 @@
           <div>
             <p class="eyebrow">Controle operacional</p>
             <h1 id="hdr-controls">Controles</h1>
-            <p class="page-header__sub">Armar, pausar e ações de emergência</p>
+            <p class="page-header__sub">Ativar entradas, pausar e ações de emergência</p>
           </div>
           <div class="page-header__badges">
             <span class="badge badge--accent" id="instance-count">1 ativa</span>
@@ -667,8 +667,8 @@
           </div>
           <div class="control-cards control-cards--primary" id="control-grid-primary">
             <button class="control-card btn--primary" data-action="arm" data-confirm="ARM" type="button">
-              <strong>Armar</strong>
-              <span>Libera entradas após preflight e reconciliação. Em live, usa capital real.</span>
+              <strong>Ativar entradas</strong>
+              <span>Libera novas entradas após preflight e reconciliação. Em live, usa capital real.</span>
             </button>
             <button class="control-card btn--warning" data-action="pause" data-confirm="PAUSE" type="button">
               <strong>Pausar</strong>
@@ -684,7 +684,7 @@
             <div class="control-cards" id="control-grid-advanced">
               <button class="control-card btn--ghost" data-action="stop" data-confirm="STOP" type="button">
                 <strong>Parar entradas</strong>
-                <span>Marca operador como DISARMED (parecido com pausar).</span>
+                <span>Marca operador como entradas bloqueadas (parecido com pausar).</span>
               </button>
               <button class="control-card btn--ghost" data-action="reconcile" data-confirm="RECONCILE" type="button">
                 <strong>Reconciliar</strong>
@@ -704,7 +704,7 @@
               </button>
               <button class="control-card btn--danger" data-action="rollback" data-confirm="ROLLBACK" data-typed="true" type="button">
                 <strong>Rollback</strong>
-                <span>Restaura último checkpoint. Só desarmado. Digite ROLLBACK.</span>
+                <span>Restaura último checkpoint. Só com entradas bloqueadas. Digite ROLLBACK.</span>
               </button>
             </div>
           </details>
@@ -945,7 +945,7 @@
 
         <section class="sys-hero" id="sys-hero" aria-label="Status operacional" data-tone="idle">
           <div class="sys-hero__item" data-key="ready"><span class="dot" id="sys-dot-ready"></span><div><em>Ready</em><strong id="sys-ready">—</strong></div></div>
-          <div class="sys-hero__item" data-key="armed"><span class="dot" id="sys-dot-armed"></span><div><em>Armed</em><strong id="sys-armed">—</strong></div></div>
+          <div class="sys-hero__item" data-key="armed"><span class="dot" id="sys-dot-armed"></span><div><em>Entradas</em><strong id="sys-armed">—</strong></div></div>
           <div class="sys-hero__item" data-key="live"><span class="dot" id="sys-dot-live"></span><div><em>Live</em><strong id="sys-live">—</strong></div></div>
           <div class="sys-hero__item" data-key="halted"><span class="dot" id="sys-dot-halted"></span><div><em>Halted</em><strong id="sys-halted">—</strong></div></div>
         </section>

@@ -9,6 +9,42 @@ let actionRunning = false;
 let lastStatus = null;
 let currentView = 'overview';
 
+/** Rótulos e textos de confirmação dos controles (API interna continua arm/disarm). */
+const CONTROL_ACTION_COPY = {
+  arm: {
+    label: 'Ativar entradas',
+    confirmBody:
+      'Roda preflight e reconciliação. Se tudo passar, novas entradas serão liberadas. Em live, usa capital real.',
+    confirmLabel: 'Ativar',
+  },
+  pause: {
+    label: 'Pausar',
+    confirmBody:
+      'Bloqueia novas entradas. Saídas automáticas e proteção da posição aberta continuam ativas.',
+    confirmLabel: 'Pausar',
+  },
+  stop: {
+    label: 'Parar entradas',
+    confirmBody: 'Bloqueia novas entradas até você ativar de novo.',
+    confirmLabel: 'Parar',
+  },
+  reconcile: {
+    label: 'Reconciliar',
+    confirmBody: 'Compara OMS com a exchange. Se houver divergência, as entradas ficam bloqueadas.',
+    confirmLabel: 'Reconciliar',
+  },
+  checkpoint: {
+    label: 'Checkpoint',
+    confirmBody: 'Salva o estado atual no disco para recovery.',
+    confirmLabel: 'Salvar',
+  },
+  'cancel-all': {
+    label: 'Cancelar ordens',
+    confirmBody: 'Cancela todas as ordens abertas na exchange.',
+    confirmLabel: 'Cancelar ordens',
+  },
+};
+
 /**
  * Séries só enquanto a sessão do dashboard está ativa.
  * No logout: clearInterval + clearSeries — zero poll e zero desenho.
@@ -1542,7 +1578,7 @@ function renderHealthItems(listEl, health = {}, mode = 'shadow') {
     { label: 'Recovery / reconcile', ok: health.recoveryOk === true },
     { label: 'User channel WS', ok: health.userChannelOk === true },
     { label: 'Pronto (ready)', ok: health.ready === true },
-    { label: 'Armada (engine)', ok: health.armed === true },
+    { label: 'Entradas liberadas', ok: health.armed === true },
     {
       label: 'Dinheiro real (live)',
       ok: isLive ? health.live === true : null,
@@ -1606,21 +1642,21 @@ function renderGuide(status, health) {
     title = 'HALTED';
     if (haltReason.includes('market-rotated') || haltReason.includes('position')) {
       body = 'Mercado fechou com posição aberta — reinicie a Engine após settlement.';
-      next = 'Reinicie a Engine e depois arme de novo';
+      next = 'Reinicie a Engine e depois ative as entradas';
     } else {
       body = 'Parado por emergência. Reinício da Engine necessário.';
-      next = 'Reinicie a Engine e depois arme de novo';
+      next = 'Reinicie a Engine e depois ative as entradas';
     }
     showControlsLink = true;
   } else if (!live) {
     tone = 'warn';
     title = 'Simulação (shadow)';
     body = 'Decisões reais, sem ordens na exchange.';
-    next = 'Para capital real: Engine em live + Armar';
+    next = 'Para capital real: Engine em live + Ativar entradas';
     showControlsLink = true;
   } else if (!armed) {
     tone = 'warn';
-    title = 'Live · desarmado';
+    title = 'Live · entradas bloqueadas';
     body = `Canário pronto (cap ${
       status.canary?.hardCapUsd != null ? `$${Number(status.canary.hardCapUsd).toFixed(0)}` : '$3'
     }). Aguardando confirmação.`;
@@ -1643,7 +1679,7 @@ function renderGuide(status, health) {
   text('guide-next', next);
   text(
     'wallet-balance-banner',
-    live ? (Number.isFinite(Number(bal)) ? money(bal) : 'aguarde Armar') : 'n/a shadow',
+    live ? (Number.isFinite(Number(bal)) ? money(bal) : 'aguarde ativação') : 'n/a shadow',
   );
   if (nextWrap) nextWrap.classList.toggle('is-cta', showCta);
   if (cta) {
@@ -1680,6 +1716,13 @@ function updateControls(status) {
   }
 }
 
+function formatOperatorState(state) {
+  if (state === 'ARMED') return 'Entradas ativas';
+  if (state === 'PAUSED') return 'Pausado';
+  if (state === 'DISARMED') return 'Entradas bloqueadas';
+  return state || '—';
+}
+
 function renderMode(status, health) {
   const mode = String(status.mode || 'shadow').toLowerCase();
   const copy = MODE_COPY[mode] ?? {
@@ -1697,7 +1740,7 @@ function renderMode(status, health) {
   if (envDot) {
     envDot.className = `dot dot--${copy.tone === 'err' ? 'err' : copy.tone === 'warn' ? 'warn' : 'ok'}`;
   }
-  text('operator-state', status.operatorState);
+  text('operator-state', formatOperatorState(status.operatorState));
   text('engine-state', status.state);
   text('entry-enabled', status.entryEnabled ? 'LIBERADAS' : 'BLOQUEADAS');
   const entriesPill = $('topbar-entries');
@@ -1724,7 +1767,7 @@ function renderWallet(status) {
       ? 'FALHA'
       : mode === 'shadow' || mode === 'dry-run'
         ? 'n/a shadow'
-        : 'ainda não armou';
+        : 'ainda não ativou';
 
   text('overview-wallet-mode', mode === 'live' ? 'live' : mode || '—');
   text('overview-canary-cap', status.canary ? money(status.canary.hardCapUsd) : '—');
@@ -1757,7 +1800,7 @@ function renderWallet(status) {
       text('overview-wallet-preflight', preflightLabel);
       text(
         'wallet-explain',
-        'Shadow: saldo lido do CLOB só para exibição (não envia ordens). Atualiza ~1 min. Em live, o preflight completo roda ao Armar.',
+        'Shadow: saldo lido do CLOB só para exibição (não envia ordens). Atualiza ~1 min. Em live, o preflight completo roda ao ativar entradas.',
       );
       text(
         'overview-wallet-explain',
@@ -1780,7 +1823,7 @@ function renderWallet(status) {
       text('overview-wallet-preflight', preflightLabel);
       text(
         'wallet-explain',
-        'Sem snapshot de carteira. Confira POLYMARKET_* no .env e reinicie com npm run local. Live usa preflight ao Armar.',
+        'Sem snapshot de carteira. Confira POLYMARKET_* no .env e reinicie com npm run local. Live usa preflight ao ativar entradas.',
       );
       text(
         'overview-wallet-explain',
@@ -1810,7 +1853,7 @@ function renderWallet(status) {
   text('overview-wallet-preflight', preflightLabel);
   text(
     'wallet-explain',
-    'Saldo/allowance vêm do preflight live. Ao armar, a Engine revalida. Não é mark-to-market contínuo da carteira.',
+    'Saldo/allowance vêm do preflight live. Ao ativar entradas, a Engine revalida. Não é mark-to-market contínuo da carteira.',
   );
   text(
     'overview-wallet-explain',
@@ -2806,7 +2849,8 @@ function showLogin() {
 async function runControl(button) {
   const action = button.dataset.action;
   const confirmation = button.dataset.confirm;
-  const label = button.querySelector('strong')?.textContent?.trim() || button.textContent.trim();
+  const copy = CONTROL_ACTION_COPY[action] || {};
+  const label = copy.label || button.querySelector('strong')?.textContent?.trim() || button.textContent.trim();
   const isTyped = button.dataset.typed === 'true';
   const isDanger = button.classList.contains('btn--danger') || button.classList.contains('btn--critical');
 
@@ -2828,8 +2872,8 @@ async function runControl(button) {
       kind: isDanger ? 'danger' : 'warning',
       kicker: 'Controle operacional',
       title: label,
-      body: `Confirmar execução de “${label}”?`,
-      confirmLabel: 'Confirmar',
+      body: copy.confirmBody || `Deseja continuar com “${label}”?`,
+      confirmLabel: copy.confirmLabel || 'Confirmar',
     });
     if (!ok) return;
   }
