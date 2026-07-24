@@ -2,20 +2,18 @@ import { WebSocket } from 'ws';
 import config from '../config.js';
 import { BTC5M_STALENESS } from '../market/health.js';
 
-const RECONNECT_MS = 500;
+const RECONNECT_BASE_MS = 400;
+const RECONNECT_MAX_MS = 8_000;
 const DEFAULT_WATCHDOG_MS = 2_000;
-/** Acima do limite operacional BTC5m (8s) para evitar churn; ainda abaixo de restart manual. */
-const DEFAULT_STALE_MS = Math.max(BTC5M_STALENESS.rtdsMaxLagMs * 2, 12_000);
+/**
+ * Watchdog de force-reconnect acima do limite de trading BTC5m para evitar churn.
+ * Ainda reconecta se o socket "zumbie" ficar sem ticks.
+ */
+const DEFAULT_STALE_MS = Math.max(BTC5M_STALENESS.rtdsMaxLagMs * 2.5, 25_000);
 
 /**
  * @param {ReturnType<import('./marketState.js').createMarketState>} state
  * @param {object} [opts]
- * @param {() => void} [opts.onUpdate]
- * @param {(info: { reason: string, lagMs: number|null }) => void} [opts.onStaleReconnect]
- * @param {number} [opts.staleMs]
- * @param {number} [opts.watchdogMs]
- * @param {() => number} [opts.clock]
- * @param {typeof WebSocket} [opts.WebSocket]
  */
 export function startRtdsFeed(state, opts = {}) {
   const WebSocketImpl = opts.WebSocket ?? WebSocket;
@@ -32,6 +30,8 @@ export function startRtdsFeed(state, opts = {}) {
   let watchdogTimer = null;
   let stopped = false;
   let connectedAtMs = null;
+  let reconnectAttempt = 0;
+  let lastForceReconnectAtMs = 0;
 
   function clearPing() {
     if (pingTimer) {
@@ -47,25 +47,41 @@ export function startRtdsFeed(state, opts = {}) {
     }
   }
 
+  function backoffMs() {
+    const exp = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** Math.min(reconnectAttempt, 5));
+    const jitter = Math.floor(Math.random() * 200);
+    return exp + jitter;
+  }
+
   function scheduleReconnect() {
     if (stopped || reconnectTimer) return;
+    const delay = backoffMs();
+    reconnectAttempt += 1;
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
       connect();
-    }, RECONNECT_MS);
+    }, delay);
     reconnectTimer.unref?.();
   }
 
-  function dropSocket() {
+  function dropSocket({ keepSample = true } = {}) {
     clearPing();
     const socket = ws;
     ws = null;
     connectedAtMs = null;
     state.wsRtdsConnected = false;
+    state.rtdsConnectedAt = null;
+    // Mantém último tick (btc/rtdsReceivedAt) para histerese de saúde do processo.
+    if (!keepSample) {
+      /* optional hard reset unused */
+    }
     if (!socket) return;
     try {
       if (typeof socket.terminate === 'function') socket.terminate();
-      else if (socket.readyState === WebSocketImpl.OPEN || socket.readyState === WebSocketImpl.CONNECTING) {
+      else if (
+        socket.readyState === WebSocketImpl.OPEN ||
+        socket.readyState === WebSocketImpl.CONNECTING
+      ) {
         socket.close();
       }
     } catch {
@@ -75,14 +91,18 @@ export function startRtdsFeed(state, opts = {}) {
 
   function forceReconnect(reason, lagMs) {
     if (stopped) return;
-    dropSocket();
+    const now = clock();
+    // Anti-churn: no máximo 1 force-reconnect a cada 5s.
+    if (now - lastForceReconnectAtMs < 5_000) return;
+    lastForceReconnectAtMs = now;
+    dropSocket({ keepSample: true });
     onStaleReconnect({ reason, lagMs });
     scheduleReconnect();
   }
 
   function sampleLagMs() {
     if (connectedAtMs == null) return null;
-    // Sample de conexão anterior não conta — dá grace até o 1º tick desta sessão.
+    // Grace até o 1º tick desta sessão de socket.
     if (state.rtdsReceivedAt == null || state.rtdsReceivedAt < connectedAtMs) {
       return clock() - connectedAtMs;
     }
@@ -106,19 +126,31 @@ export function startRtdsFeed(state, opts = {}) {
     socket.onopen = () => {
       if (stopped || ws !== socket) return;
       connectedAtMs = clock();
+      reconnectAttempt = 0;
       state.wsRtdsConnected = true;
-      socket.send(JSON.stringify({
-        action: 'subscribe',
-        subscriptions: [{
-          topic: 'crypto_prices_chainlink',
-          type: 'update',
-          filters: JSON.stringify({ symbol: 'btc/usd' }),
-        }],
-      }));
+      state.rtdsConnectedAt = connectedAtMs;
+      socket.send(
+        JSON.stringify({
+          action: 'subscribe',
+          subscriptions: [
+            {
+              topic: 'crypto_prices_chainlink',
+              type: 'update',
+              filters: JSON.stringify({ symbol: 'btc/usd' }),
+            },
+          ],
+        }),
+      );
       clearPing();
       pingTimer = setInterval(() => {
-        if (socket.readyState === WebSocketImpl.OPEN) socket.send('PING');
-      }, 30000);
+        if (socket.readyState === WebSocketImpl.OPEN) {
+          try {
+            socket.send('PING');
+          } catch {
+            /* ignore */
+          }
+        }
+      }, 15_000);
       pingTimer.unref?.();
     };
 
@@ -126,19 +158,31 @@ export function startRtdsFeed(state, opts = {}) {
       if (!event.data || event.data === 'PONG') return;
       try {
         if (handlePayload(state, JSON.parse(event.data), clock)) onUpdate();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     };
 
     socket.onclose = () => {
       if (ws !== socket) return;
       state.wsRtdsConnected = false;
+      state.rtdsConnectedAt = null;
       clearPing();
       ws = null;
       connectedAtMs = null;
       if (!stopped) scheduleReconnect();
     };
 
-    socket.onerror = () => {};
+    socket.onerror = () => {
+      // onclose costuma seguir; se não, força schedule
+      if (ws === socket && socket.readyState !== WebSocketImpl.OPEN) {
+        try {
+          socket.terminate?.();
+        } catch {
+          /* ignore */
+        }
+      }
+    };
   }
 
   connect();
@@ -153,7 +197,7 @@ export function startRtdsFeed(state, opts = {}) {
       clearInterval(watchdogTimer);
       watchdogTimer = null;
     }
-    dropSocket();
+    dropSocket({ keepSample: true });
   };
 }
 
@@ -165,7 +209,9 @@ function handlePayload(state, data, clock = Date.now) {
   if (!payload || typeof payload !== 'object') return false;
 
   const apply = (value, ts) => {
-    state.btc = parseFloat(value);
+    const n = parseFloat(value);
+    if (!Number.isFinite(n)) return false;
+    state.btc = n;
     state.rtdsTs = ts != null ? parseInt(ts, 10) : null;
     state.rtdsReceivedAt = clock();
     return true;

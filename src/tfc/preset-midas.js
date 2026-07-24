@@ -1,24 +1,61 @@
 /**
- * Presets MIDAS Carry V1 (data-backtest lab midas-carry-v1).
- * Canário P9: Aggressive (dist 40, tier 2.0x) + sizing micro $2/$4.
+ * Presets MIDAS Carry V1 — paridade com data-backtest labs/terminal/midas-carry-v1.
+ * Defaults do lab + overrides champion/robust/aggressive.
+ *
+ * Runtime data-robot (midasV1.js + evaluate.js) consome o núcleo TFC + tier/budget.
+ * Flags de lab (sigma/scoop/earlyWarn/dangerContinuous/equityScale) ficam no preset
+ * para paridade e edição futura; o plugin atual não implementa esses ramos (default off).
  */
 
 import { CANARY_LIMITS as TFC_CANARY_LIMITS, MICRO_TEST } from './preset-v7.js';
 
-/** Params espelhados de labs/.../midas-carry-v1/presets/btc-champion-v1.json */
-export const MIDAS_V1 = {
+/** Defaults completos do lab midas-carry-v1/defaults.json */
+export const MIDAS_LAB_DEFAULTS = Object.freeze({
   walletSize: 100,
   entryBudget: 10,
+  minShares: 1,
+  entrySlippageMax: 0.02,
+  minLiquidityRatio: 0.6,
   minSecondsLeft: 5,
   maxSecondsLeft: 30,
-  maxDistAbs: 40,
+  maxDistAbs: 20,
   minAsk: 0.55,
-  maxAsk: 0.94,
+  maxAsk: 0.82,
   maxSpread: 0.03,
   minOddsSum: 0.98,
   maxOddsSum: 1.06,
   minFlips: 0,
   flipWindowSecs: 60,
+  velocityLookbackSecs: 5,
+  maxAdverseSpotChange: 8.0,
+  minObi: 0.0,
+  obiLevels: 5,
+  // sigma sizing (lab; não wired no plugin robot)
+  sigmaSizingEnabled: false,
+  sigmaLookbackSecs: 90,
+  sigmaDivisor: 5.48,
+  zT1: 0.5,
+  zT2: 1.0,
+  zT3: 2.5,
+  zT4: 4.0,
+  wZ0: 0.4,
+  wZ1: 0.7,
+  wZ2: 1.0,
+  wZ3: 1.4,
+  wZ4: 1.8,
+  // scoop (lab; não wired)
+  scoopEnabled: false,
+  scoopMinZ: 1.5,
+  scoopMinAsk: 0.1,
+  scoopMaxAsk: 0.55,
+  scoopMaxSpread: 0.05,
+  scoopMaxDistAbs: 80,
+  scoopMinSecondsLeft: 5,
+  scoopMaxSecondsLeft: 30,
+  scoopBudgetFactor: 1.0,
+  scoopMinOddsSum: 0.9,
+  scoopMaxOddsSum: 1.1,
+  // exits
   stopIfCrossed: false,
   stopCrossDist: 0,
   stopMinBid: 0.05,
@@ -30,47 +67,57 @@ export const MIDAS_V1 = {
   lateFlipReverseMaxAsk: 0.95,
   lateFlipReverseMinAsk: 0.0,
   lateFlipReverseBudgetFactor: 1.0,
-  velocityLookbackSecs: 5,
-  maxAdverseSpotChange: 8.0,
-  minObi: 0.0,
-  obiLevels: 5,
   dangerExitEnabled: true,
   dangerExitK: 0.3,
   dangerExitFloorSec: 4,
+  dangerContinuousEnabled: false,
+  dangerContinuousStartSec: 8,
+  dangerContinuousMinZ: 0.25,
+  earlyWarnEnabled: false,
+  earlyWarnOppAsk: 0.45,
+  earlyWarnStartSec: 20,
+  earlyWarnEndSec: 8,
+  earlyWarnOnlyIfLosing: true,
+  // midas envelope
+  minEntryZ: 0.0,
+  tierAskThreshold: 0.82,
+  tierAskBudgetFactor: 1.0,
+  equityScaleEnabled: false,
+  equityScalePct: 0.1,
+  maxEntryBudget: 30,
   hedgeStopEnabled: false,
   hedgeLimitEnabled: false,
   entryMakerEnabled: false,
-  entrySlippageMax: 0.02,
-  minLiquidityRatio: 0.6,
-  minShares: 1,
-  // MIDAS-only
+});
+
+/**
+ * Champion lab btc-champion-v1 (tier 1.5x, dist 40, ask 0.94).
+ * = defaults + overrides do preset champion.
+ */
+export const MIDAS_V1 = {
+  ...MIDAS_LAB_DEFAULTS,
+  maxDistAbs: 40,
+  minAsk: 0.55,
+  maxAsk: 0.94,
   tierAskThreshold: 0.82,
   tierAskBudgetFactor: 1.5,
   maxEntryBudget: 30,
-  minEntryZ: 0.0,
-  sigmaSizingEnabled: false,
-  scoopEnabled: false,
-  dangerContinuousEnabled: false,
-  earlyWarnEnabled: false,
 };
 
-/** Espelho de labs/.../presets/btc-robust-v1.json (champion + maxDistAbs 30). */
+/** Espelho btc-robust-v1 (champion + maxDistAbs 30). */
 export const MIDAS_ROBUST_V1 = {
   ...MIDAS_V1,
   maxDistAbs: 30,
 };
 
-/** Espelho de labs/.../presets/btc-aggressive-v1.json (dist 40, tier 2.0x). */
+/** Espelho btc-aggressive-v1 (dist 40, tier 2.0x). */
 export const MIDAS_AGGRESSIVE_V1 = {
   ...MIDAS_V1,
   maxDistAbs: 40,
   tierAskBudgetFactor: 2.0,
 };
 
-/**
- * Sizing micro para Aggressive: entry $2 / tier 2.0× teto $4.
- * Wallet ~$34 aguenta com folga (cap ~12%).
- */
+/** Sizing micro canário. */
 export const MICRO_AGGRESSIVE = Object.freeze({
   entryBudget: 2,
   maxEntryBudget: 4,
@@ -79,7 +126,7 @@ export const MICRO_AGGRESSIVE = Object.freeze({
   exitOrderType: 'FAK',
 });
 
-/** @deprecated Prefer MICRO_AGGRESSIVE — mantido para testes/docs legados. */
+/** @deprecated Prefer MICRO_AGGRESSIVE */
 export const MICRO_ROBUST = Object.freeze({
   entryBudget: 2,
   maxEntryBudget: 3,
@@ -88,9 +135,6 @@ export const MICRO_ROBUST = Object.freeze({
   exitOrderType: 'FAK',
 });
 
-/**
- * Cap de canário MIDAS — alinhado a maxEntryBudget do micro aggressive.
- */
 export const CANARY_LIMITS = Object.freeze({
   maxCanaryBudget: MICRO_AGGRESSIVE.maxEntryBudget,
   preferredEntryBudget: MICRO_AGGRESSIVE.entryBudget,
@@ -100,9 +144,55 @@ export const CANARY_LIMITS = Object.freeze({
 export { MICRO_TEST };
 
 /**
+ * Params que o runtime data-robot realmente lê (evaluate + midasV1).
+ * O resto é paridade de lab / futuro.
+ */
+export const MIDAS_RUNTIME_KEYS = Object.freeze([
+  'walletSize',
+  'entryBudget',
+  'maxEntryBudget',
+  'minShares',
+  'entrySlippageMax',
+  'minLiquidityRatio',
+  'entryOrderType',
+  'exitOrderType',
+  'minSecondsLeft',
+  'maxSecondsLeft',
+  'maxDistAbs',
+  'minAsk',
+  'maxAsk',
+  'maxSpread',
+  'minOddsSum',
+  'maxOddsSum',
+  'minFlips',
+  'flipWindowSecs',
+  'velocityLookbackSecs',
+  'maxAdverseSpotChange',
+  'minObi',
+  'obiLevels',
+  'stopMinBid',
+  'lateFlipExitEnabled',
+  'lateFlipExitSec',
+  'lateFlipExitCrossDist',
+  'lateFlipMinSec',
+  'lateFlipReverseEnabled',
+  'lateFlipReverseMaxAsk',
+  'lateFlipReverseMinAsk',
+  'lateFlipReverseBudgetFactor',
+  'dangerExitEnabled',
+  'dangerExitK',
+  'dangerExitFloorSec',
+  'tierAskThreshold',
+  'tierAskBudgetFactor',
+]);
+
+/** Keys de lab presentes no preset mas sem ramo no plugin robot. */
+export const MIDAS_LAB_ONLY_KEYS = Object.freeze(
+  Object.keys(MIDAS_LAB_DEFAULTS).filter((k) => !MIDAS_RUNTIME_KEYS.includes(k)),
+);
+
+/**
  * Budget efetivo de entrada (tier quando ask >= threshold).
- * @param {object} params
- * @param {number} ask
  */
 export function resolveMidasEntryBudget(params, ask) {
   const base = Number(params.entryBudget);

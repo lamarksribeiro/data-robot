@@ -1,12 +1,14 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-23T09:20:00.000Z",
+  "updatedAt": "2026-07-24T04:15:07.953Z",
   "strategies": [
     {
       "strategyId": "midas-carry-v1",
       "version": "1.0.0",
       "presetId": "btc-micro-aggressive-v1",
-      "marketScope": ["btc-updown-5m"],
+      "marketScope": [
+        "btc-updown-5m"
+      ],
       "approval": "canary-approved",
       "canary": {
         "hardCapUsd": 4,
@@ -24,7 +26,9 @@
       "strategyId": "tfc-v7",
       "version": "1.0.0",
       "presetId": "btc-champion-v7",
-      "marketScope": ["btc-updown-5m"],
+      "marketScope": [
+        "btc-updown-5m"
+      ],
       "approval": "registered",
       "evidence": []
     },
@@ -32,9 +36,29 @@
       "strategyId": "fixture-price-cross",
       "version": "1.0.0",
       "presetId": "fixture-price-cross",
-      "marketScope": ["fixture"],
+      "marketScope": [
+        "fixture"
+      ],
       "approval": "shadow-approved",
       "evidence": []
+    },
+    {
+      "strategyId": "midas-carry-v1",
+      "version": "1.0.0",
+      "presetId": "test-dist-35-5b5dcc",
+      "marketScope": [
+        "btc-updown-5m"
+      ],
+      "approval": "shadow-approved",
+      "canary": {
+        "hardCapUsd": 4,
+        "maxEntriesPerControlWindow": 1,
+        "controlWindowHours": 24,
+        "liveReverse": true
+      },
+      "evidence": [
+        "config/active-strategy.json"
+      ]
     }
   ]
 }

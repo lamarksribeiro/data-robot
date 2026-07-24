@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createMarketState } from '../src/feeds/marketState.js';
 import {
   BTC5M_STALENESS,
+  createFeedHealthGate,
   evaluateFeedHealth,
   STALENESS,
 } from '../src/market/health.js';
@@ -82,6 +83,32 @@ describe('feed health', () => {
       clobLagMs: 800,
     });
     assert.equal(h.ok, true);
+  });
+
+  it('modo process tolera book quieto com top-of-book', () => {
+    const h = evaluateFeedHealth(
+      {
+        rtdsConnected: true,
+        clobConnected: true,
+        rtdsLagMs: 2_000,
+        clobLagMs: null,
+        clobHasBook: true,
+      },
+      BTC5M_STALENESS,
+      { mode: 'process', nowMs: 1e12, connectedSinceMs: { clob: 1e12 - 60_000, rtds: 1e12 - 60_000 } },
+    );
+    assert.equal(h.ok, true);
+    assert.ok(h.softReasons.includes('CLOB_BOOK_HELD'));
+  });
+
+  it('histerese não degrada no primeiro tick ruim', () => {
+    const gate = createFeedHealthGate({ failStreakToDegrade: 3, okStreakToRecover: 2 });
+    assert.equal(gate.observe(true).healthy, true);
+    assert.equal(gate.observe(false).healthy, true);
+    assert.equal(gate.observe(false).healthy, true);
+    assert.equal(gate.observe(false).healthy, false);
+    assert.equal(gate.observe(true).healthy, false);
+    assert.equal(gate.observe(true).healthy, true);
   });
 });
 

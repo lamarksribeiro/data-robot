@@ -335,19 +335,27 @@ export function createBtc5mSnapshotSource(opts = {}) {
         }
 
         await handlers.onSnapshot(captured.snapshot);
-        const sourceOk =
-          captured.snapshot.health?.ok === true &&
+        const hasIdentity =
           Number.isFinite(Number(captured.snapshot.priceToBeat)) &&
           Boolean(captured.snapshot.identity?.upTokenId) &&
           Boolean(captured.snapshot.identity?.downTokenId);
+        // Processo: processHealth (tolerante). Trading: health estrito em elegibilidade.
+        const processOk = captured.snapshot.processHealth?.ok !== false;
+        const tradingOk = captured.snapshot.health?.ok === true;
+        const sourceOk = processOk && hasIdentity;
         const sourceReason = sourceOk
-          ? null
-          : captured.snapshot.health?.reasons?.[0] ??
+          ? tradingOk
+            ? null
+            : captured.snapshot.health?.reasons?.[0] ?? 'TRADING_FEEDS_SOFT'
+          : captured.snapshot.processHealth?.reasons?.[0] ??
+            captured.snapshot.health?.reasons?.[0] ??
             captured.reasons?.[0] ??
             'SOURCE_NOT_READY';
         emitStatus({
           running: true,
           ok: sourceOk,
+          tradingOk,
+          processOk,
           reason: sourceReason,
           eligible: captured.eligible,
           eligibilityReason: captured.eligible
@@ -389,13 +397,20 @@ export function createBtc5mSnapshotSource(opts = {}) {
       stopRtds = startRtds(state, {
         onUpdate: requestSnapshot,
         onStaleReconnect: ({ reason, lagMs }) => {
+          const now = clock();
+          // Não derruba source.ok se o último snapshot bom ainda é recente (anti-flap degraded).
+          const lastGoodAge =
+            status.lastSnapshotAtMs != null ? now - status.lastSnapshotAtMs : Infinity;
+          const keepOk = status.ok === true && lastGoodAge < 20_000;
           emitStatus({
-            ok: false,
+            ok: keepOk ? true : false,
             reason: reason ?? 'RTDS_STALE_RECONNECT',
-            eligible: false,
+            // elegibilidade de trade pode cair; processo pode permanecer ok
+            eligible: keepOk ? status.eligible : false,
             eligibilityReason: reason ?? 'RTDS_STALE_RECONNECT',
-            lastStaleReconnectAtMs: clock(),
+            lastStaleReconnectAtMs: now,
             lastStaleReconnectLagMs: lagMs ?? null,
+            softDegraded: keepOk,
           });
         },
       });

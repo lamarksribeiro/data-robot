@@ -14,19 +14,37 @@ import path from 'node:path';
 import { createEngineApp } from '../src/control/engineApp.js';
 import { createSnapshotSource } from '../src/market/snapshotSources.js';
 import { createDefaultRegistry } from '../src/composition/bootstrap.js';
-import { prepareMidasCanaryRuntime, MIDAS_CANARY_HARD_CAP_USD } from '../src/composition/midasService.js';
+import {
+  prepareMidasCanaryRuntime,
+  fetchWalletSnapshot,
+  MIDAS_CANARY_HARD_CAP_USD,
+} from '../src/composition/midasService.js';
 import { createApprovalStore } from '../src/catalog/approvalStore.js';
+import { createStrategyLibrary } from '../src/catalog/strategyLibrary.js';
 import { canaryMidasPreset } from '../src/tfc/preset-midas.js';
+import { defaultPresetFor } from '../src/composition/presets.js';
 import { MIDAS_V1_PRESET_ID, MIDAS_V1_STRATEGY_ID } from '../src/strategy/midasV1.js';
+import { TFC_V7_STRATEGY_ID } from '../src/strategy/tfcV7.js';
+import config from '../src/config.js';
 
 const mode = process.env.ENGINE_MODE || 'shadow';
 const liveEnabled = process.env.ENGINE_LIVE_ENABLED === '1';
 const host = process.env.ENGINE_HOST || '0.0.0.0';
 const opsToken = process.env.ENGINE_OPS_TOKEN;
 const sourceKind = process.env.ENGINE_SNAPSHOT_SOURCE || 'fixture';
-const strategyId = process.env.ENGINE_STRATEGY_ID || 'fixture-price-cross';
+const strategyLibrary = createStrategyLibrary({
+  rootDir: process.env.STRATEGY_CONFIG_DIR || 'config',
+});
+const activeStrategy = strategyLibrary.loadActive();
+// Prioridade: active-strategy.json (UI) → env → fixture.
+const strategyId =
+  activeStrategy?.pluginId ||
+  process.env.ENGINE_STRATEGY_ID ||
+  'fixture-price-cross';
 const strategyInstanceId =
-  process.env.ENGINE_STRATEGY_INSTANCE_ID || `${strategyId}:primary`;
+  process.env.ENGINE_STRATEGY_INSTANCE_ID ||
+  activeStrategy?.presetId ||
+  `${strategyId}:primary`;
 const stateDir = process.env.ENGINE_STATE_DIR || 'runs';
 const catalogStore = createApprovalStore({
   file: process.env.STRATEGY_CATALOG_PATH || path.join('config', 'strategy-catalog.json'),
@@ -72,14 +90,60 @@ try {
 
 const registry = createDefaultRegistry();
 const catalog = catalogStore.load();
-const manifest = registry.resolve(strategyId).manifest;
-const presetId = manifest.presetId ?? strategyId;
-const marketScope = sourceKind === 'btc5m' ? 'btc-updown-5m' : 'fixture';
+let manifest;
+try {
+  manifest = registry.resolve(strategyId).manifest;
+} catch (error) {
+  console.error(`[engine:serve] plugin não registrado: ${strategyId} (${error.message})`);
+  process.exit(2);
+}
+const presetId =
+  activeStrategy?.presetId || manifest.presetId || strategyId;
+const strategyVersion = activeStrategy?.version || manifest.version;
+const marketScope =
+  activeStrategy?.marketScope ||
+  (sourceKind === 'btc5m' ? 'btc-updown-5m' : 'fixture');
+
+// Garante entrada no catálogo para presets custom/ativados via UI.
+function ensureCatalogEntry() {
+  const existing = catalog.strategies.find(
+    (e) =>
+      e.strategyId === strategyId &&
+      e.version === strategyVersion &&
+      e.presetId === presetId,
+  );
+  if (existing) return existing;
+  const approval = mode === 'live' ? 'canary-approved' : 'shadow-approved';
+  const entry = {
+    strategyId,
+    version: strategyVersion,
+    presetId,
+    marketScope: Array.isArray(activeStrategy?.marketScope)
+      ? activeStrategy.marketScope
+      : [marketScope],
+    approval: mode === 'live' && strategyId !== MIDAS_V1_STRATEGY_ID ? 'registered' : approval,
+    canary: {
+      hardCapUsd: Number(process.env.ENGINE_CANARY_MAX_BUDGET || MIDAS_CANARY_HARD_CAP_USD),
+      maxEntriesPerControlWindow: 1,
+      controlWindowHours: 24,
+      liveReverse: strategyId === MIDAS_V1_STRATEGY_ID,
+    },
+    evidence: activeStrategy ? ['config/active-strategy.json'] : [],
+  };
+  const next = {
+    ...catalog,
+    strategies: [...catalog.strategies, entry],
+  };
+  catalogStore.save(next);
+  return entry;
+}
+
 let catalogEntry;
 try {
+  ensureCatalogEntry();
   catalogEntry = catalogStore.assertApproved({
     strategyId,
-    version: manifest.version,
+    version: strategyVersion,
     presetId,
     marketScope,
     mode,
@@ -90,15 +154,24 @@ try {
 }
 
 let runtime = null;
-let preset;
+let preset = defaultPresetFor(strategyId, activeStrategy?.params || {});
 let riskOpts;
+if (activeStrategy?.params && Object.keys(activeStrategy.params).length) {
+  preset = { ...preset, ...activeStrategy.params };
+  console.log(
+    `[engine:serve] active-strategy ${strategyId} · ${presetId} · v${strategyVersion}`,
+  );
+}
+
 if (strategyId === MIDAS_V1_STRATEGY_ID) {
   if (sourceKind !== 'btc5m') {
     console.error('[engine:serve] Recusa: MIDAS P9 exige ENGINE_SNAPSHOT_SOURCE=btc5m');
     process.exit(2);
   }
-  // Live/shadow: Aggressive micro com reverse (saga SELL→BUY no OMS).
-  preset = canaryMidasPreset();
+  // Default canário se não houver active params de lab.
+  if (!activeStrategy?.params) {
+    preset = canaryMidasPreset(preset);
+  }
   const maxCanaryBudget = Number(
     process.env.ENGINE_CANARY_MAX_BUDGET || MIDAS_CANARY_HARD_CAP_USD,
   );
@@ -112,6 +185,7 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
         maxEntriesPerControlWindow: 1,
         controlWindowMs,
         allowLiveReverse: true,
+        preset,
       });
       preset = runtime.preset;
       riskOpts = runtime.riskOpts;
@@ -129,6 +203,39 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
       controlWindowMs,
       allowLiveReverse: true,
     };
+    if (config.polymarketPrivateKey) {
+      try {
+        runtime = {
+          preflight: await fetchWalletSnapshot(),
+          revalidatePreflight: async () => fetchWalletSnapshot(),
+        };
+        console.log(
+          `[engine:serve] wallet snapshot USDC=$${Number(runtime.preflight.checks.balance.balanceUsd).toFixed(2)} (display-only)`,
+        );
+      } catch (error) {
+        console.warn(`[engine:serve] wallet snapshot indisponível: ${error.message}`);
+      }
+    }
+  }
+} else if (strategyId === TFC_V7_STRATEGY_ID && sourceKind === 'btc5m') {
+  riskOpts = {
+    canaryMode: true,
+    maxCanaryBudget: Number(process.env.ENGINE_CANARY_MAX_BUDGET || 2),
+    maxNotionalPerOrder: Number(process.env.ENGINE_CANARY_MAX_BUDGET || 2),
+    maxNotionalPerEvent: Number(process.env.ENGINE_CANARY_MAX_BUDGET || 2),
+    maxEntriesPerControlWindow: 1,
+    controlWindowMs: Number(process.env.ENGINE_CONTROL_WINDOW_MS || 24 * 60 * 60 * 1000),
+    allowLiveReverse: false,
+  };
+  if (mode !== 'live' && config.polymarketPrivateKey) {
+    try {
+      runtime = {
+        preflight: await fetchWalletSnapshot(),
+        revalidatePreflight: async () => fetchWalletSnapshot(),
+      };
+    } catch {
+      /* optional */
+    }
   }
 }
 
@@ -168,17 +275,30 @@ const app = createEngineApp({
       ? mode !== 'live'
       : process.env.ENGINE_START_ARMED === '1',
   canary:
-    strategyId === MIDAS_V1_STRATEGY_ID
+    strategyId === MIDAS_V1_STRATEGY_ID || strategyId === TFC_V7_STRATEGY_ID
       ? {
-          presetId: MIDAS_V1_PRESET_ID,
+          presetId,
           hardCapUsd: Number(process.env.ENGINE_CANARY_MAX_BUDGET || MIDAS_CANARY_HARD_CAP_USD),
           maxEntriesPerControlWindow: 1,
           controlWindowMs: Number(
             process.env.ENGINE_CONTROL_WINDOW_MS || 24 * 60 * 60 * 1000,
           ),
-          liveReverse: false,
+          liveReverse: strategyId === MIDAS_V1_STRATEGY_ID,
         }
       : null,
+  getStrategyLibrary: () => ({
+    ...strategyLibrary.list(),
+    active: strategyLibrary.loadActive(),
+    running: {
+      strategyId,
+      version: strategyVersion,
+      presetId,
+      name: activeStrategy?.name || presetId,
+    },
+  }),
+  getActiveStrategy: () => strategyLibrary.loadActive(),
+  onSaveStrategyPreset: (body) => strategyLibrary.saveCustomPreset(body || {}),
+  onActivateStrategy: (body) => strategyLibrary.activate(body || {}),
   haltOnMarketRotationWithPosition: true,
 });
 
@@ -187,8 +307,24 @@ console.log(
   `[engine:serve] mode=${mode} strategy=${strategyId} source=${sourceKind} approval=${catalogEntry.approval} port=${app.httpServer.port}`,
 );
 
+// Atualiza saldo periodicamente em shadow (só leitura) para o dashboard local.
+let walletRefreshTimer = null;
+if (mode !== 'live' && config.polymarketPrivateKey && typeof app.setPreflight === 'function') {
+  const refreshMs = Number(process.env.ENGINE_WALLET_REFRESH_MS || 60_000);
+  walletRefreshTimer = setInterval(async () => {
+    try {
+      const snap = await fetchWalletSnapshot();
+      app.setPreflight(snap);
+    } catch {
+      /* silent — UI mantém último snapshot */
+    }
+  }, Math.max(15_000, refreshMs));
+  walletRefreshTimer.unref?.();
+}
+
 async function shutdown(signal) {
   console.log(`[engine:serve] ${signal} — shutdown`);
+  if (walletRefreshTimer) clearInterval(walletRefreshTimer);
   await app.stop();
   process.exit(0);
 }

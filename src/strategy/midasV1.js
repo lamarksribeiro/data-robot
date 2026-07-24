@@ -171,12 +171,29 @@ export function createMidasV1Strategy(opts = {}) {
 
       const diagnostics = {
         secsLeft: snapshot.secsLeft,
+        btc: Number.isFinite(snapshot.btc) ? snapshot.btc : null,
+        priceToBeat: Number.isFinite(snapshot.priceToBeat) ? snapshot.priceToBeat : null,
         inPosition: ctx.position.qty > 0,
         reversed: next.reversed,
         closed: next.closed,
         feedsHealthy: feedsHealthy(snapshot),
       };
       const intents = [];
+
+      // Sempre avalia gates de entrada para o dashboard (mesmo em posição = watch-only).
+      if (feedsHealthy(snapshot)) {
+        const entryWatch = evaluateEntryGates(snapshot, params, history);
+        diagnostics.entry = {
+          ok: entryWatch.ok,
+          fav: entryWatch.fav,
+          ask: entryWatch.ask,
+          bid: entryWatch.bid,
+          dist: entryWatch.dist,
+          gates: entryWatch.gates,
+          blockedByPosition: ctx.position.qty > 0,
+          watchOnly: ctx.position.qty > 0,
+        };
+      }
 
       if (!feedsHealthy(snapshot)) {
         return {
@@ -307,14 +324,8 @@ export function createMidasV1Strategy(opts = {}) {
       }
 
       if (ctx.position.qty <= 0 && !next.closed) {
-        const entry = evaluateEntryGates(snapshot, params, history);
-        diagnostics.entry = {
-          ok: entry.ok,
-          fav: entry.fav,
-          ask: entry.ask,
-          gates: entry.gates,
-        };
-        if (entry.ok && entry.fav && entry.ask != null) {
+        const entry = diagnostics.entry;
+        if (entry?.ok && entry.fav && entry.ask != null) {
           const slippage = Number(params.entrySlippageMax ?? 0.02);
           const identity = snapshot.identity ?? {};
           const tokenId =

@@ -636,6 +636,35 @@ export function createEngine(opts) {
         position: { ...position },
         pendingIntentCount: pendingIntents.size,
         lastMarketId: lastSnapshot?.marketId ?? null,
+        // Preços do último snapshot (para UI/gráficos; independente de diagnostics de evento).
+        lastSpot:
+          lastSnapshot && Number.isFinite(Number(lastSnapshot.btc))
+            ? {
+                btc: Number(lastSnapshot.btc),
+                priceToBeat: Number.isFinite(Number(lastSnapshot.priceToBeat))
+                  ? Number(lastSnapshot.priceToBeat)
+                  : null,
+                secsLeft: Number.isFinite(Number(lastSnapshot.secsLeft))
+                  ? Number(lastSnapshot.secsLeft)
+                  : null,
+                nowMs: lastSnapshot.nowMs ?? null,
+                marketId: lastSnapshot.marketId ?? null,
+                book: {
+                  upAsk: Number.isFinite(Number(lastSnapshot.book?.up?.bestAsk))
+                    ? Number(lastSnapshot.book.up.bestAsk)
+                    : null,
+                  upBid: Number.isFinite(Number(lastSnapshot.book?.up?.bestBid))
+                    ? Number(lastSnapshot.book.up.bestBid)
+                    : null,
+                  downAsk: Number.isFinite(Number(lastSnapshot.book?.down?.bestAsk))
+                    ? Number(lastSnapshot.book.down.bestAsk)
+                    : null,
+                  downBid: Number.isFinite(Number(lastSnapshot.book?.down?.bestBid))
+                    ? Number(lastSnapshot.book.down.bestBid)
+                    : null,
+                },
+              }
+            : null,
         diagnostics: { ...lastDiagnostics },
         journalLength: journal.length,
         killActive: Boolean(riskEngine.killSwitch?.active),

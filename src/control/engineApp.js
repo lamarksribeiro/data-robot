@@ -13,6 +13,7 @@ import { evaluateSlos, DEFAULT_SLOS } from '../observability/slo.js';
 import { createJournalBackup } from '../observability/journalBackup.js';
 import { createExecutionAudit } from '../observability/executionAudit.js';
 import { resolveBinarySettlementPrice } from '../market/resolveBinarySettlement.js';
+import { createFeedHealthGate } from '../market/health.js';
 import { buildHealthReport } from './health.js';
 import { createControlServer } from './httpServer.js';
 
@@ -51,6 +52,7 @@ export function createEngineApp(opts = {}) {
   let ticks = 0;
   let eligibleTicks = 0;
   let lastFeedsOk = false;
+  let lastProcessFeedsOk = true;
   let recoveryOk = opts.restoreOnStart !== true;
   let autoCheckpointTimer = null;
   let started = false;
@@ -62,6 +64,14 @@ export function createEngineApp(opts = {}) {
   let sourceStatus = snapshotSource
     ? { kind: snapshotSource.kind ?? 'custom', running: false, ok: false, reason: 'NOT_STARTED' }
     : { kind: 'manual', running: false, ok: null, reason: null };
+  // Histerese: engine só degrada após falhas sustentadas de feed (não em blip de 1 tick).
+  const feedHealthGate = createFeedHealthGate({
+    failStreakToDegrade: Number(opts.feedFailStreakToDegrade ?? 5),
+    okStreakToRecover: Number(opts.feedOkStreakToRecover ?? 2),
+  });
+  // User WS: grace após reconnect antes de marcar userChannelOk=false.
+  let userChannelFailStreak = 0;
+  const userChannelFailToDegrade = Number(opts.userChannelFailStreakToDegrade ?? 3);
 
   function marketSummary(base) {
     const marketId = base.lastMarketId ?? base.position?.marketId ?? null;
@@ -88,6 +98,60 @@ export function createEngineApp(opts = {}) {
       asset = 'FIXTURE';
       window = 'simulado';
     }
+    const spot = base.lastSpot ?? {};
+    const btc = Number.isFinite(Number(spot.btc))
+      ? Number(spot.btc)
+      : Number.isFinite(Number(diag.btc))
+        ? Number(diag.btc)
+        : null;
+    const priceToBeat = Number.isFinite(Number(spot.priceToBeat))
+      ? Number(spot.priceToBeat)
+      : Number.isFinite(Number(diag.priceToBeat))
+        ? Number(diag.priceToBeat)
+        : null;
+    const favFromSpot =
+      btc != null && priceToBeat != null ? (btc >= priceToBeat ? 'UP' : 'DOWN') : null;
+    const favoriteSide = entry.fav ?? favFromSpot ?? base.position?.side ?? null;
+    let signedDistance = null;
+    if (Number.isFinite(Number(diag.danger?.signedDistance))) {
+      signedDistance = Number(diag.danger.signedDistance);
+    } else if (Number.isFinite(Number(diag.lateFlip?.signedDistance))) {
+      signedDistance = Number(diag.lateFlip.signedDistance);
+    } else if (btc != null && priceToBeat != null && favoriteSide) {
+      signedDistance =
+        favoriteSide === 'DOWN' ? priceToBeat - btc : btc - priceToBeat;
+    } else if (btc != null && priceToBeat != null) {
+      // sem lado: distância bruta BTC−PTB (sinal do cruzamento absoluto)
+      signedDistance = btc - priceToBeat;
+    }
+    const secsLeft = Number.isFinite(Number(diag.secsLeft))
+      ? Number(diag.secsLeft)
+      : Number.isFinite(Number(spot.secsLeft))
+        ? Number(spot.secsLeft)
+        : null;
+    const book = spot.book ?? {};
+    const askFromBook =
+      favoriteSide === 'UP'
+        ? book.upAsk
+        : favoriteSide === 'DOWN'
+          ? book.downAsk
+          : null;
+    const bidFromBook =
+      favoriteSide === 'UP'
+        ? book.upBid
+        : favoriteSide === 'DOWN'
+          ? book.downBid
+          : null;
+    const ask = Number.isFinite(Number(entry.ask))
+      ? Number(entry.ask)
+      : Number.isFinite(Number(askFromBook))
+        ? Number(askFromBook)
+        : null;
+    const bid = Number.isFinite(Number(entry.bid))
+      ? Number(entry.bid)
+      : Number.isFinite(Number(bidFromBook))
+        ? Number(bidFromBook)
+        : null;
     return {
       asset,
       window,
@@ -95,10 +159,19 @@ export function createEngineApp(opts = {}) {
       sourceKind: source.kind ?? null,
       sourceOk: source.ok ?? null,
       sourceReason: source.reason ?? null,
-      secsLeft: Number.isFinite(Number(diag.secsLeft)) ? Number(diag.secsLeft) : null,
-      favoriteSide: entry.fav ?? null,
-      ask: Number.isFinite(Number(entry.ask)) ? Number(entry.ask) : null,
+      secsLeft,
+      favoriteSide,
+      ask,
+      bid,
+      upAsk: Number.isFinite(Number(book.upAsk)) ? Number(book.upAsk) : null,
+      upBid: Number.isFinite(Number(book.upBid)) ? Number(book.upBid) : null,
+      downAsk: Number.isFinite(Number(book.downAsk)) ? Number(book.downAsk) : null,
+      downBid: Number.isFinite(Number(book.downBid)) ? Number(book.downBid) : null,
+      btc,
+      priceToBeat,
+      signedDistance,
       entryOk: entry.ok === true,
+      entryWatchOnly: entry.blockedByPosition === true || entry.watchOnly === true,
       feedsHealthy: diag.feedsHealthy !== false,
       inPosition: diag.inPosition === true || Number(base.position?.qty) > 0,
     };
@@ -320,23 +393,49 @@ export function createEngineApp(opts = {}) {
       sink.userChannel?.lastHeartbeatMs == null
         ? Infinity
         : Date.now() - sink.userChannel.lastHeartbeatMs;
+    const userWsStaleMs = Number(opts.userWsStaleMs ?? 45_000);
     // órfã: open sem intentId (não deve ocorrer) ou UNKNOWN não reconciliado
     const unknowns = (sink.oms?.listOrders?.() ?? []).filter((o) => o.state === 'UNKNOWN');
+
+    // User channel: streak + grace — blip de reconnect não degrada o processo.
+    let userChannelRawOk = true;
+    if (mode === 'live') {
+      userChannelRawOk =
+        sink.userChannel?.connected === true &&
+        userHeartbeatAgeMs <= userWsStaleMs &&
+        !sink.lastChannelError;
+      if (userChannelRawOk) userChannelFailStreak = 0;
+      else userChannelFailStreak += 1;
+    } else {
+      userChannelFailStreak = 0;
+    }
+    const userChannelOk =
+      mode !== 'live' || userChannelRawOk || userChannelFailStreak < userChannelFailToDegrade;
+
+    const feedGate = feedHealthGate.snapshot();
+    // Processo: histerese de feeds + source.ok (identidade/PTB). Não usa trading-stale tick-a-tick.
+    const sourceReady = !snapshotSource || sourceStatus.ok === true;
+    const feedsOk = feedGate.healthy && sourceReady;
+
     const report = buildHealthReport({
       engineStatus: st,
       mode,
-      feedsOk: snapshotSource ? lastFeedsOk && sourceStatus.ok === true : lastFeedsOk,
+      feedsOk,
       recoveryOk,
-      userChannelOk:
-        mode !== 'live' ||
-        (sink.userChannel?.connected === true &&
-          userHeartbeatAgeMs <= Number(opts.userWsStaleMs ?? 30_000) &&
-          !sink.lastChannelError),
+      userChannelOk,
       orphanOrders: unknowns.length + (sink.orphanCount ?? 0),
       openOrders: open.length,
       availability: ticks > 0 ? eligibleTicks / ticks : null,
     });
-    return { ...report, snapshotSource: { ...sourceStatus } };
+    return {
+      ...report,
+      snapshotSource: { ...sourceStatus },
+      feedGate,
+      tradingFeedsOk: lastFeedsOk,
+      processFeedsOk: lastProcessFeedsOk,
+      userChannelRawOk,
+      userChannelFailStreak,
+    };
   }
 
   function metricsSnap() {
@@ -408,6 +507,17 @@ export function createEngineApp(opts = {}) {
     const t0 = performance.now();
     ticks += 1;
     lastFeedsOk = (snapshot.health?.ok ?? snapshot.feeds?.healthy) === true;
+    lastProcessFeedsOk =
+      snapshot.processHealth?.ok === true ||
+      snapshot.feeds?.processHealthy === true ||
+      // se processHealth ausente (fixture), use trading
+      (snapshot.processHealth == null && lastFeedsOk);
+    // Hard fail: ambos os sockets caídos.
+    const hardFail =
+      snapshot.feeds?.rtdsConnected === false && snapshot.feeds?.clobConnected === false;
+    feedHealthGate.observe(lastProcessFeedsOk, snapshot.health?.reasons?.[0] ?? null, {
+      hardFail,
+    });
     const result = useMarketGate
       ? await engine.ingestMarketSnapshot(snapshot)
       : await engine.ingestSnapshot(snapshot);
@@ -518,6 +628,10 @@ export function createEngineApp(opts = {}) {
       },
     ],
     getAudit: (limit) => executionAudit.listRecent(limit),
+    getStrategyLibrary: opts.getStrategyLibrary,
+    getActiveStrategy: opts.getActiveStrategy,
+    onSaveStrategyPreset: opts.onSaveStrategyPreset,
+    onActivateStrategy: opts.onActivateStrategy,
     onArm: arm,
     onPause: (reason) => disarm('PAUSED', reason),
     onDisarm: (reason) => disarm('DISARMED', reason),
@@ -560,6 +674,14 @@ export function createEngineApp(opts = {}) {
     metricsSnap,
     ingestSynthetic,
     ingestMarketSnapshot,
+    /** Atualiza snapshot de preflight/carteira (ex.: leitura CLOB em shadow). */
+    setPreflight(next) {
+      latestPreflight = next ?? null;
+      return latestPreflight;
+    },
+    getPreflight() {
+      return latestPreflight;
+    },
     get snapshotSourceStatus() {
       return { ...sourceStatus };
     },

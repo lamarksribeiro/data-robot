@@ -188,6 +188,8 @@ export function createUiServer(opts = {}) {
         ['/api/engine/metrics', '/metrics'],
         ['/api/engine/catalog', '/catalog'],
         ['/api/engine/instances', '/instances'],
+        ['/api/engine/strategy-library', '/strategy-library'],
+        ['/api/engine/strategy-active', '/strategy-active'],
       ]);
       if (req.method === 'GET' && readRoutes.has(url.pathname)) {
         if (!requireSession(req, res)) return;
@@ -224,6 +226,16 @@ export function createUiServer(opts = {}) {
           });
         }
         return proxyEngine(req, res, action.path, 'POST', body);
+      }
+      if (req.method === 'POST' && url.pathname === '/api/engine/strategy-library/presets') {
+        if (!requireSession(req, res)) return;
+        const body = await readJson(req);
+        return proxyEngine(req, res, '/strategy-library/presets', 'POST', body);
+      }
+      if (req.method === 'POST' && url.pathname === '/api/engine/strategy-library/activate') {
+        if (!requireSession(req, res)) return;
+        const body = await readJson(req);
+        return proxyEngine(req, res, '/strategy-library/activate', 'POST', body);
       }
       if (url.pathname.startsWith('/api/')) {
         return json(res, 404, { ok: false, reason: 'NOT_FOUND' });

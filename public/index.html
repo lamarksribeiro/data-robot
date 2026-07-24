@@ -5,21 +5,54 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Login · Data Robot</title>
 
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.12.3">
-  <link rel="apple-touch-icon" href="/favicon.svg?v=1.12.3">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=1.16.2">
+  <link rel="apple-touch-icon" href="/favicon.svg?v=1.16.2">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/styles.css?v=1.12.3">
+  <link rel="stylesheet" href="/styles.css?v=1.16.2">
 
-  <script src="/js/dashboard.js?v=1.12.3" defer></script>
-  <script src="/js/mascot.js?v=1.12.3" defer></script>
+  <script src="/js/dashboard.js?v=1.16.2" defer></script>
+  <script src="/js/mascot.js?v=1.16.2" defer></script>
 </head>
 <body>
+  <!-- Inline icon sprite (stroke icons, consistent weight) -->
+  <svg xmlns="http://www.w3.org/2000/svg" class="svg-sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+    </symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 3v18h18"/><path d="M7 14l4-4 4 4 5-6"/>
+    </symbol>
+    <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+    </symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>
+    </symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+    </symbol>
+    <symbol id="i-scroll" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 21h8a2 2 0 0 0 2-2V7l-4-4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z"/><path d="M14 3v4h4"/><path d="M10 13h4M10 17h4"/>
+    </symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/>
+    </symbol>
+    <symbol id="i-target" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+    </symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 14h.01"/><path d="M2 9l2.5-4.5A2 2 0 0 1 6.2 3.5H17.8a2 2 0 0 1 1.7 1L22 9"/>
+    </symbol>
+  </svg>
+
   <div class="login-wrapper">
-    <!-- O mascote container é injetado dinamicamente aqui -->
     <div class="login" id="login-view">
       <div class="login__header">
         <h1 class="login__title">Data Robot</h1>
@@ -58,15 +91,39 @@
         </div>
       </div>
 
-      <nav class="sidebar__nav">
-        <a class="navlink is-active" href="#overview"><span class="navlink__icon" aria-hidden="true">⌁</span><span>Visão geral</span></a>
-        <a class="navlink" href="#market"><span class="navlink__icon" aria-hidden="true">◎</span><span>Mercado</span></a>
-        <a class="navlink" href="#position-pnl"><span class="navlink__icon" aria-hidden="true">$</span><span>Posição & PnL</span></a>
-        <a class="navlink" href="#orders"><span class="navlink__icon" aria-hidden="true">≡</span><span>Ordens</span></a>
-        <a class="navlink" href="#operations"><span class="navlink__icon" aria-hidden="true">⚡</span><span>Controles</span></a>
-        <a class="navlink" href="#strategies"><span class="navlink__icon" aria-hidden="true">◇</span><span>Estratégias</span></a>
-        <a class="navlink" href="#audit"><span class="navlink__icon" aria-hidden="true">☰</span><span>Auditoria</span></a>
-        <a class="navlink" href="#diagnostics-panel"><span class="navlink__icon" aria-hidden="true">⌘</span><span>Diagnóstico</span></a>
+      <nav class="sidebar__nav" id="sidebar-nav">
+        <a class="navlink is-active" href="#overview" data-view="overview">
+          <span class="navlink__icon" aria-hidden="true"><svg><use href="#i-grid"/></svg></span>
+          <span class="navlink__label">Visão geral</span>
+        </a>
+        <a class="navlink" href="#market" data-view="market">
+          <span class="navlink__icon" aria-hidden="true"><svg><use href="#i-activity"/></svg></span>
+          <span class="navlink__label">Mercado & Gates</span>
+        </a>
+        <a class="navlink" href="#position" data-view="position">
+          <span class="navlink__icon" aria-hidden="true"><svg><use href="#i-chart"/></svg></span>
+          <span class="navlink__label">Posição & PnL</span>
+        </a>
+        <a class="navlink" href="#orders" data-view="orders">
+          <span class="navlink__icon" aria-hidden="true"><svg><use href="#i-list"/></svg></span>
+          <span class="navlink__label">Ordens</span>
+        </a>
+        <a class="navlink" href="#controls" data-view="controls">
+          <span class="navlink__icon" aria-hidden="true"><svg><use href="#i-sliders"/></svg></span>
+          <span class="navlink__label">Controles</span>
+        </a>
+        <a class="navlink" href="#strategies" data-view="strategies">
+          <span class="navlink__icon" aria-hidden="true"><svg><use href="#i-layers"/></svg></span>
+          <span class="navlink__label">Estratégias</span>
+        </a>
+        <a class="navlink" href="#audit" data-view="audit">
+          <span class="navlink__icon" aria-hidden="true"><svg><use href="#i-scroll"/></svg></span>
+          <span class="navlink__label">Auditoria</span>
+        </a>
+        <a class="navlink" href="#system" data-view="system">
+          <span class="navlink__icon" aria-hidden="true"><svg><use href="#i-cpu"/></svg></span>
+          <span class="navlink__label">Sistema</span>
+        </a>
       </nav>
 
       <div class="sidebar__footer">
@@ -89,195 +146,451 @@
       </div>
       <div class="topbar__actions">
         <span class="topbar-pill" id="topbar-mode">—</span>
+        <span class="topbar-pill topbar-pill--live" id="topbar-entries" title="Estado das entradas">—</span>
         <button class="btn btn--ghost btn--sm" id="refresh-button" type="button">Atualizar</button>
         <button class="btn btn--ghost btn--sm logout-button" type="button">Sair</button>
       </div>
     </header>
 
     <main class="content">
-      <section class="page-header" id="overview">
-        <div>
-          <p class="eyebrow">Control Plane P9</p>
-          <h1>Sala de operação</h1>
-          <p class="page-header__sub" id="last-update">Aguardando Engine…</p>
-        </div>
-        <div class="page-header__badges">
-          <span class="environment-badge" id="env-badge"><span class="dot dot--warn"></span> <span id="env-badge-label">Ambiente controlado</span></span>
-          <span class="environment-badge" id="uptime-badge">Uptime —</span>
-        </div>
-      </section>
-
       <div class="alert hidden" id="dashboard-alert" role="alert"></div>
 
-      <section class="guide-card" id="guide-card" aria-live="polite">
-        <div class="guide-card__left">
-          <span class="guide-card__eyebrow" id="guide-eyebrow">Estado</span>
-          <strong id="guide-title">—</strong>
-          <p id="guide-body">—</p>
+      <!-- ═══════════════ VIEW: VISÃO GERAL ═══════════════ -->
+      <section class="view is-active" id="view-overview" data-view="overview" aria-labelledby="hdr-overview">
+        <header class="page-header page-header--compact">
+          <div>
+            <p class="eyebrow">Control Plane</p>
+            <h1 id="hdr-overview">Sala de operação</h1>
+            <p class="page-header__sub" id="last-update">Aguardando Engine…</p>
+          </div>
+          <div class="page-header__badges">
+            <span class="environment-badge" id="env-badge"><span class="dot dot--warn"></span> <span id="env-badge-label">Ambiente controlado</span></span>
+            <span class="environment-badge" id="uptime-badge">Uptime —</span>
+          </div>
+        </header>
+
+        <!-- Status operacional compacto (substitui guide + mode banners gigantes) -->
+        <section class="ops-bar" id="guide-card" aria-live="polite">
+          <div class="ops-bar__state">
+            <span class="ops-bar__chip" id="guide-eyebrow">Estado</span>
+            <strong class="ops-bar__title" id="guide-title">—</strong>
+            <p class="ops-bar__body" id="guide-body">—</p>
+          </div>
+          <dl class="ops-bar__facts" id="mode-banner">
+            <div><dt id="mode-title">Modo</dt><dd id="mode-name">—</dd></div>
+            <div><dt>Operador</dt><dd id="operator-state">—</dd></div>
+            <div><dt>Engine</dt><dd id="engine-state">—</dd></div>
+            <div><dt>Entradas</dt><dd id="entry-enabled">—</dd></div>
+            <div><dt>Carteira</dt><dd id="wallet-balance-banner">—</dd></div>
+          </dl>
+          <div class="ops-bar__next">
+            <span class="ops-bar__chip">Próximo</span>
+            <strong id="guide-next">—</strong>
+            <button class="btn btn--primary btn--sm" id="guide-cta" type="button" hidden>Armar</button>
+          </div>
+          <p class="ops-bar__explain hidden" id="mode-explain"></p>
+        </section>
+
+        <section class="kpi-strip" aria-label="Indicadores-chave">
+          <article class="kpi-card kpi-card--pnl">
+            <span class="kpi-card__label">PnL realizado</span>
+            <strong class="kpi-card__value" id="pnl-realized">—</strong>
+            <em class="kpi-card__meta" id="exposure-notional">exposição —</em>
+          </article>
+          <article class="kpi-card kpi-card--wallet">
+            <span class="kpi-card__label">Carteira USDC</span>
+            <strong class="kpi-card__value" id="wallet-balance">—</strong>
+            <em class="kpi-card__meta" id="wallet-note">—</em>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-card__label">Posição</span>
+            <strong class="kpi-card__value" id="overview-position">—</strong>
+            <em class="kpi-card__meta" id="overview-position-meta">flat</em>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-card__label">Mercado</span>
+            <strong class="kpi-card__value" id="asset-label">—</strong>
+            <em class="kpi-card__meta" id="secs-left">—</em>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-card__label">Ordens abertas</span>
+            <strong class="kpi-card__value" id="open-orders-count">0</strong>
+            <em class="kpi-card__meta" id="pending-intents">intents —</em>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-card__label">Estratégia</span>
+            <strong class="kpi-card__value" id="strategy-id">—</strong>
+            <em class="kpi-card__meta" id="strategy-preset">preset —</em>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-card__label">Aprovação</span>
+            <strong class="kpi-card__value" id="approval">—</strong>
+            <em class="kpi-card__meta" id="canary-cap">cap —</em>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-card__label">Commit</span>
+            <strong class="kpi-card__value" id="source-commit">—</strong>
+            <em class="kpi-card__meta" id="instance-short">instância —</em>
+          </article>
+        </section>
+
+        <div class="chart-grid chart-grid--2">
+          <article class="panel chart-panel chart-panel--hero">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Cruzamento · spot × PTB</p>
+                <h2>BTC vs Price-to-Beat</h2>
+                <p class="panel__hint">Linha verde = BTC spot · amarela = PTB. Marcadores = cruzamento (flip do favorito).</p>
+              </div>
+              <div class="chart-legend">
+                <span class="chart-legend__item chart-legend__item--btc">BTC</span>
+                <span class="chart-legend__item chart-legend__item--ptb">PTB</span>
+                <span class="badge" id="chart-cross-badge">—</span>
+              </div>
+            </div>
+            <canvas id="chart-cross" class="chart-canvas chart-canvas--lg" width="960" height="220" aria-label="BTC vs PTB"></canvas>
+            <p class="chart-empty" id="chart-cross-empty">Coletando BTC e PTB…</p>
+          </article>
+          <article class="panel chart-panel">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Sinal da posição</p>
+                <h2>Distância assinada</h2>
+                <p class="panel__hint">Acima de 0 = a favor do lado; cruzar o zero = flip contra.</p>
+              </div>
+              <span class="badge" id="chart-dist-badge">—</span>
+            </div>
+            <canvas id="chart-dist" class="chart-canvas chart-canvas--lg" width="640" height="220" aria-label="Distância assinada"></canvas>
+            <p class="chart-empty" id="chart-dist-empty">Coletando distância…</p>
+          </article>
         </div>
-        <div class="guide-card__right">
-          <span class="guide-card__eyebrow">Próximo passo</span>
-          <strong id="guide-next">—</strong>
-          <button class="btn btn--primary" id="guide-cta" type="button" hidden>Armar e operar</button>
+
+        <div class="panel-grid panel-grid--overview">
+          <article class="panel">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Tempo real</p>
+                <h2>Gates da estratégia</h2>
+              </div>
+              <span class="badge" id="overview-entry-badge">entrada</span>
+            </div>
+            <div class="gates-summary" id="overview-gates-summary">
+              <div class="gates-meter" id="overview-gates-meter">
+                <span class="gates-meter__bar" id="overview-gates-bar"></span>
+              </div>
+              <p class="gates-summary__text" id="overview-gates-text">Aguardando avaliação…</p>
+            </div>
+            <ul class="gates-list gates-list--tiles" id="overview-gates-list"></ul>
+            <button class="btn btn--ghost btn--sm panel__link-btn" type="button" data-goto="market">Ver mercado completo →</button>
+          </article>
+
+          <article class="panel panel--wallet">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Capital</p>
+                <h2>Carteira &amp; canário</h2>
+              </div>
+              <span class="badge badge--warn" id="overview-wallet-mode">—</span>
+            </div>
+            <dl class="facts facts--dense">
+              <div><dt>Saldo USDC</dt><dd id="overview-wallet-balance">—</dd></div>
+              <div><dt>Allowance</dt><dd id="overview-wallet-allowance">—</dd></div>
+              <div><dt>Preflight</dt><dd id="overview-wallet-preflight">—</dd></div>
+              <div><dt>Hard cap</dt><dd id="overview-canary-cap">—</dd></div>
+              <div><dt>Entradas / janela</dt><dd id="overview-canary-entries">—</dd></div>
+              <div><dt>Reverse live</dt><dd id="overview-live-reverse">—</dd></div>
+            </dl>
+            <p class="panel__note" id="overview-wallet-explain">Em shadow o saldo CLOB não aparece. Em live, vem do preflight.</p>
+            <button class="btn btn--ghost btn--sm panel__link-btn" type="button" data-goto="position">Ver posição &amp; PnL →</button>
+          </article>
+
+          <article class="panel">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Saúde</p>
+                <h2>Dependências</h2>
+              </div>
+              <span class="badge" id="overview-slo-badge">SLO</span>
+            </div>
+            <ul class="health-list" id="overview-health-list"></ul>
+            <button class="btn btn--ghost btn--sm panel__link-btn" type="button" data-goto="system">Ver sistema →</button>
+          </article>
+
+          <article class="panel">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">OMS</p>
+                <h2>Ordens abertas</h2>
+              </div>
+              <span id="overview-orders-badge" class="badge badge--warn">0 abertas</span>
+            </div>
+            <div class="table-wrap table-wrap--fit">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Horário</th><th>Tipo</th><th>Lado</th><th>Estado</th>
+                    <th>Qtd</th><th>Preço</th>
+                  </tr>
+                </thead>
+                <tbody id="overview-open-orders-body">
+                  <tr><td colspan="6" class="empty">Nenhuma ordem aberta</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <button class="btn btn--ghost btn--sm panel__link-btn" type="button" data-goto="orders">Ver todas as ordens →</button>
+          </article>
         </div>
+
+        <!-- hidden ids kept for render() compatibility -->
+        <span class="hidden" id="market-id"></span>
+        <span class="hidden" id="market-window"></span>
       </section>
 
-      <section class="mode-banner" id="mode-banner" aria-live="polite">
-        <div class="mode-banner__main">
-          <span class="mode-banner__label" id="mode-title">Modo</span>
-          <strong id="mode-name">—</strong>
-          <p id="mode-explain">—</p>
-        </div>
-        <dl class="mode-banner__facts">
-          <div><dt>Operador</dt><dd id="operator-state">—</dd></div>
-          <div><dt>Engine</dt><dd id="engine-state">—</dd></div>
-          <div><dt>Entradas</dt><dd id="entry-enabled">—</dd></div>
-          <div><dt>Carteira</dt><dd id="wallet-balance-banner">—</dd></div>
-        </dl>
-      </section>
+      <!-- ═══════════════ VIEW: MERCADO & GATES ═══════════════ -->
+      <section class="view" id="view-market" data-view="market" aria-labelledby="hdr-market" hidden>
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Feed ao vivo</p>
+            <h1 id="hdr-market">Mercado em operação</h1>
+            <p class="page-header__sub" id="market-page-sub">Critérios da estratégia em tempo real — por que entra ou não</p>
+          </div>
+          <div class="page-header__badges">
+            <span class="badge" id="feed-badge">feed</span>
+            <span class="badge" id="market-entry-badge">gates</span>
+          </div>
+        </header>
 
-      <section class="status-grid status-grid--ops" aria-label="Resumo operacional">
-        <article class="stat-card">
-          <span>Estratégia ativa</span>
-          <strong id="strategy-id">—</strong>
-          <em class="stat-card__meta" id="strategy-preset">preset —</em>
-        </article>
-        <article class="stat-card">
-          <span>Ativo / janela</span>
-          <strong id="asset-label">—</strong>
-          <em class="stat-card__meta" id="market-window">—</em>
-        </article>
-        <article class="stat-card">
-          <span>Mercado atual</span>
-          <strong id="market-id">—</strong>
-          <em class="stat-card__meta" id="secs-left">—</em>
-        </article>
-        <article class="stat-card">
-          <span>Aprovação</span>
-          <strong id="approval">—</strong>
-          <em class="stat-card__meta" id="canary-cap">cap —</em>
-        </article>
-        <article class="stat-card">
-          <span>PnL realizado</span>
-          <strong id="pnl-realized">—</strong>
-          <em class="stat-card__meta" id="exposure-notional">exposição —</em>
-        </article>
-        <article class="stat-card">
-          <span>Carteira (USDC)</span>
-          <strong id="wallet-balance">—</strong>
-          <em class="stat-card__meta" id="wallet-note">—</em>
-        </article>
-        <article class="stat-card">
-          <span>Ordens abertas</span>
-          <strong id="open-orders-count">0</strong>
-          <em class="stat-card__meta" id="pending-intents">intents —</em>
-        </article>
-        <article class="stat-card">
-          <span>Commit</span>
-          <strong id="source-commit">—</strong>
-          <em class="stat-card__meta" id="instance-short">instância —</em>
-        </article>
-      </section>
+        <div class="alert hidden" id="market-empty-alert" role="status" data-kind="warning"></div>
 
-      <section class="panel-grid">
-        <article class="panel" id="market">
+        <article class="panel panel--solo market-board" id="market">
           <div class="panel__header">
             <div>
-              <p class="panel__kicker">Feed ao vivo</p>
-              <h2>Mercado em operação</h2>
+              <p class="panel__kicker">Snapshot</p>
+              <h2>Contexto do mercado</h2>
             </div>
-            <span class="badge" id="feed-badge">feed</span>
+            <span class="badge" id="gates-pass-count">0/0</span>
           </div>
-          <dl class="facts facts--dense">
+          <dl class="facts facts--board">
             <div><dt>Ativo</dt><dd id="market-asset">—</dd></div>
             <div><dt>Janela</dt><dd id="market-interval">—</dd></div>
             <div><dt>Market ID</dt><dd id="market-id-full">—</dd></div>
             <div><dt>Tempo restante</dt><dd id="market-secs">—</dd></div>
             <div><dt>Lado favorito</dt><dd id="market-fav">—</dd></div>
-            <div><dt>Ask favorito</dt><dd id="market-ask">—</dd></div>
+            <div><dt>Ask / Bid favorito</dt><dd id="market-ask">—</dd></div>
             <div><dt>Gates de entrada</dt><dd id="market-entry-ok">—</dd></div>
             <div><dt>Fonte de snapshot</dt><dd id="market-source">—</dd></div>
           </dl>
-          <div class="gates-box" id="gates-box">
-            <p class="panel__hint">Gates da estratégia (por que entra ou não)</p>
-            <ul class="gates-list" id="gates-list"></ul>
+          <span class="hidden" id="market-bid"></span>
+
+          <div class="market-board__meta">
+            <div class="meta-pill"><span>Em posição</span><strong id="market-in-position">—</strong></div>
+            <div class="meta-pill"><span>Skip</span><strong id="market-skip">—</strong></div>
+            <div class="meta-pill"><span>Danger</span><strong id="diag-danger">—</strong></div>
+            <div class="meta-pill"><span>Late flip</span><strong id="diag-lateflip">—</strong></div>
+            <div class="meta-pill"><span>Liquidez</span><strong id="diag-liquidity">—</strong></div>
+            <div class="meta-pill"><span>Tier</span><strong id="diag-tier">—</strong></div>
+          </div>
+
+          <div class="gates-board" id="gates-box">
+            <div class="gates-board__header">
+              <div>
+                <p class="panel__kicker">Checklist de entrada · MIDAS</p>
+                <h3 class="gates-board__title">Critérios que precisam passar juntos</h3>
+                <p class="panel__hint" id="gates-board-hint">
+                  Os 9 gates de <code>evaluateEntryGates</code> — entrada só se todos estiverem OK e flat.
+                </p>
+              </div>
+              <div class="gates-board__score">
+                <strong id="gates-pass-count-main">0/9</strong>
+                <span id="gates-verdict">—</span>
+              </div>
+            </div>
+            <div class="gates-groups" id="gates-list"></div>
+            <div class="gates-post" id="gates-post">
+              <p class="panel__kicker">Pós-gates (só se os 9 passarem)</p>
+              <div class="gates-post__row">
+                <div class="gate-card gate-card--meta"><span>Liquidez book</span><strong id="post-liq">—</strong></div>
+                <div class="gate-card gate-card--meta"><span>Tier / budget</span><strong id="post-tier">—</strong></div>
+                <div class="gate-card gate-card--meta"><span>Skip atual</span><strong id="post-skip">—</strong></div>
+              </div>
+            </div>
           </div>
         </article>
 
-        <article class="panel" id="health-panel">
-          <div class="panel__header">
-            <div>
-              <p class="panel__kicker">Dependências</p>
-              <h2>Saúde do sistema</h2>
+        <div class="chart-grid chart-grid--2" style="margin-top:14px">
+          <article class="panel chart-panel chart-panel--hero">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Cruzamento</p>
+                <h2>BTC vs Price-to-Beat</h2>
+                <p class="panel__hint">Mesmo sinal da estratégia: cruzar PTB muda o favorito UP/DOWN.</p>
+              </div>
+              <div class="chart-legend">
+                <span class="chart-legend__item chart-legend__item--btc">BTC</span>
+                <span class="chart-legend__item chart-legend__item--ptb">PTB</span>
+                <span class="badge" id="chart-cross-market-badge">—</span>
+              </div>
             </div>
-            <span class="badge" id="slo-badge">SLO</span>
-          </div>
-          <ul class="health-list" id="health-list"></ul>
-          <dl class="facts facts--dense">
-            <div><dt>Disponibilidade</dt><dd id="health-availability">—</dd></div>
-            <div><dt>Órfãs / abertas</dt><dd id="health-orphans">—</dd></div>
-            <div><dt>User WS</dt><dd id="health-userws">—</dd></div>
-            <div><dt>Recovery</dt><dd id="health-recovery">—</dd></div>
-          </dl>
-        </article>
+            <canvas id="chart-cross-market" class="chart-canvas chart-canvas--lg" width="960" height="220" aria-label="BTC vs PTB mercado"></canvas>
+            <p class="chart-empty" id="chart-cross-market-empty">Coletando BTC e PTB…</p>
+          </article>
+          <article class="panel chart-panel">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Book do favorito</p>
+                <h2>Ask × Bid</h2>
+                <p class="panel__hint">Spread e preço do lado favorito ao longo da sessão.</p>
+              </div>
+              <span class="badge" id="chart-book-badge">—</span>
+            </div>
+            <canvas id="chart-book" class="chart-canvas chart-canvas--lg" width="640" height="220" aria-label="Ask e bid"></canvas>
+            <p class="chart-empty" id="chart-book-empty">Aguardando book (gates de entrada)…</p>
+          </article>
+        </div>
 
-        <article class="panel" id="position-pnl">
-          <div class="panel__header">
-            <div>
-              <p class="panel__kicker">Conta da estratégia</p>
-              <h2>Posição & PnL</h2>
-            </div>
+        <!-- aliases for detail fields still used by JS -->
+        <span class="hidden" id="market-asset-detail"></span>
+        <span class="hidden" id="market-interval-detail"></span>
+        <span class="hidden" id="market-source-detail"></span>
+        <span class="hidden" id="diag-reversed"></span>
+        <span class="hidden" id="diag-closed"></span>
+        <span class="hidden" id="entry-hero"></span>
+      </section>
+
+      <!-- ═══════════════ VIEW: POSIÇÃO & PNL ═══════════════ -->
+      <section class="view" id="view-position" data-view="position" aria-labelledby="hdr-position" hidden>
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Conta da estratégia</p>
+            <h1 id="hdr-position">Posição &amp; PnL</h1>
+            <p class="page-header__sub">Lucro realizado, exposição e limites do canário</p>
+          </div>
+          <div class="page-header__badges">
             <span id="position-badge" class="badge">flat</span>
           </div>
-          <dl class="facts facts--dense">
-            <div><dt>Lado</dt><dd id="position-side">—</dd></div>
-            <div><dt>Quantidade</dt><dd id="position-qty">0</dd></div>
-            <div><dt>Preço médio</dt><dd id="position-avg">—</dd></div>
-            <div><dt>Mercado da posição</dt><dd id="position-market">—</dd></div>
-            <div><dt>PnL realizado</dt><dd id="position-pnl">0</dd></div>
-            <div><dt>Exposição aberta</dt><dd id="position-exposure">—</dd></div>
-            <div><dt>Qty aberta (conta)</dt><dd id="position-open-qty">—</dd></div>
-            <div><dt>Instâncias com risco</dt><dd id="position-instances">—</dd></div>
-          </dl>
-        </article>
+        </header>
 
-        <article class="panel" id="wallet-canary">
+        <section class="pnl-hero" aria-label="Resumo de resultado">
+          <article class="pnl-hero__card pnl-hero__card--main">
+            <span>PnL realizado (sessão)</span>
+            <strong id="position-pnl">$0</strong>
+            <em>acumulado após fills liquidados</em>
+          </article>
+          <article class="pnl-hero__card">
+            <span>Exposição aberta</span>
+            <strong id="position-exposure">—</strong>
+            <em>notional em risco</em>
+          </article>
+          <article class="pnl-hero__card">
+            <span>Qty aberta</span>
+            <strong id="position-open-qty">—</strong>
+            <em>conta da estratégia</em>
+          </article>
+          <article class="pnl-hero__card pnl-hero__card--wallet">
+            <span>Saldo USDC (carteira)</span>
+            <strong id="wallet-balance-detail">—</strong>
+            <em id="wallet-preflight-short">preflight</em>
+          </article>
+        </section>
+
+        <div class="chart-grid chart-grid--2" style="margin-bottom:14px">
+          <article class="panel chart-panel">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Resultado</p>
+                <h2>PnL realizado</h2>
+                <p class="panel__hint">Linha zero = breakeven da sessão.</p>
+              </div>
+              <span class="badge" id="chart-pnl-pos-badge">—</span>
+            </div>
+            <canvas id="chart-pnl-pos" class="chart-canvas chart-canvas--lg" width="640" height="200" aria-label="PnL posição"></canvas>
+            <p class="chart-empty" id="chart-pnl-pos-empty">Coletando PnL…</p>
+          </article>
+          <article class="panel chart-panel">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Risco da posição</p>
+                <h2>Distância assinada</h2>
+                <p class="panel__hint">Cruzar zero com posição aberta = late flip / perigo.</p>
+              </div>
+              <span class="badge" id="chart-dist-pos-badge">—</span>
+            </div>
+            <canvas id="chart-dist-pos" class="chart-canvas chart-canvas--lg" width="640" height="200" aria-label="Distância posição"></canvas>
+            <p class="chart-empty" id="chart-dist-pos-empty">Coletando distância…</p>
+          </article>
+        </div>
+
+        <div class="panel-grid">
+          <article class="panel" id="position-ledger">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">OMS ledger</p>
+                <h2>Posição aberta</h2>
+              </div>
+            </div>
+            <dl class="facts facts--dense">
+              <div><dt>Lado</dt><dd id="position-side">—</dd></div>
+              <div><dt>Quantidade</dt><dd id="position-qty">0</dd></div>
+              <div><dt>Preço médio</dt><dd id="position-avg">—</dd></div>
+              <div><dt>Mercado da posição</dt><dd id="position-market">—</dd></div>
+              <div><dt>Instâncias com risco</dt><dd id="position-instances">—</dd></div>
+            </dl>
+          </article>
+
+          <article class="panel panel--wallet" id="wallet-canary">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Limites & capital</p>
+                <h2>Carteira e canário</h2>
+              </div>
+              <span class="badge badge--warn">P9</span>
+            </div>
+            <dl class="facts facts--dense">
+              <div><dt>Saldo USDC</dt><dd id="wallet-balance-pos">—</dd></div>
+              <div><dt>Allowance</dt><dd id="wallet-allowance">—</dd></div>
+              <div><dt>Preflight</dt><dd id="wallet-preflight">—</dd></div>
+              <div><dt>Hard cap / ordem</dt><dd id="canary-cap-detail">—</dd></div>
+              <div><dt>Entradas / janela</dt><dd id="canary-entries">—</dd></div>
+              <div><dt>Janela de controle</dt><dd id="control-window">—</dd></div>
+              <div><dt>Reverse live</dt><dd id="live-reverse">—</dd></div>
+              <div><dt>Preset canário</dt><dd id="canary-preset">—</dd></div>
+            </dl>
+            <p class="panel__note" id="wallet-explain">
+              Em shadow não há saldo CLOB real. Em live, o saldo vem do preflight (arm / start).
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <!-- ═══════════════ VIEW: ORDENS ═══════════════ -->
+      <section class="view" id="view-orders" data-view="orders" aria-labelledby="hdr-orders" hidden>
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">OMS</p>
+            <h1 id="hdr-orders">Ordens</h1>
+            <p class="page-header__sub">Abertas no livro e histórico recente desta sessão</p>
+          </div>
+          <div class="page-header__badges">
+            <span id="orders-open-badge" class="badge badge--warn">0 abertas</span>
+            <span id="orders-count" class="badge">0 total</span>
+          </div>
+        </header>
+
+        <div class="orders-stats" aria-label="Resumo de ordens">
+          <div class="orders-stat"><span>Abertas</span><strong id="orders-stat-open">0</strong></div>
+          <div class="orders-stat"><span>Matched</span><strong id="orders-stat-matched">0</strong></div>
+          <div class="orders-stat"><span>Canceladas</span><strong id="orders-stat-canceled">0</strong></div>
+          <div class="orders-stat"><span>Rejeitadas</span><strong id="orders-stat-rejected">0</strong></div>
+        </div>
+
+        <article class="panel panel--solo" id="orders">
           <div class="panel__header">
             <div>
-              <p class="panel__kicker">Limites & capital</p>
-              <h2>Carteira e canário</h2>
-            </div>
-            <span class="badge badge--warn">P9</span>
-          </div>
-          <dl class="facts facts--dense">
-            <div><dt>Saldo USDC</dt><dd id="wallet-balance-detail">—</dd></div>
-            <div><dt>Allowance</dt><dd id="wallet-allowance">—</dd></div>
-            <div><dt>Preflight</dt><dd id="wallet-preflight">—</dd></div>
-            <div><dt>Hard cap / ordem</dt><dd id="canary-cap-detail">—</dd></div>
-            <div><dt>Entradas / janela</dt><dd id="canary-entries">—</dd></div>
-            <div><dt>Janela de controle</dt><dd id="control-window">—</dd></div>
-            <div><dt>Reverse live</dt><dd id="live-reverse">—</dd></div>
-            <div><dt>Preset canário</dt><dd id="canary-preset">—</dd></div>
-          </dl>
-          <p class="panel__note" id="wallet-explain">
-            Em shadow não há saldo CLOB real. Em live, o saldo vem do preflight (arm / start).
-          </p>
-        </article>
-
-        <article class="panel panel--wide" id="orders">
-          <div class="panel__header">
-            <div>
-              <p class="panel__kicker">OMS</p>
-              <h2>Ordens</h2>
-              <p class="panel__hint">Abertas = ainda no livro ou em trânsito. Histórico = últimas enviadas nesta sessão.</p>
-            </div>
-            <div class="panel__header-actions">
-              <span id="orders-open-badge" class="badge badge--warn">0 abertas</span>
-              <span id="orders-count" class="badge">0 total</span>
+              <p class="panel__kicker">Livro</p>
+              <h2>Abertas agora</h2>
+              <p class="panel__hint">Ainda no livro ou em trânsito (não terminal).</p>
             </div>
           </div>
-
-          <h3 class="subheading">Abertas agora</h3>
           <div class="table-wrap">
             <table>
               <thead>
@@ -303,15 +616,28 @@
             </table>
           </div>
         </article>
+      </section>
 
-        <article class="panel panel--wide" id="operations">
+      <!-- ═══════════════ VIEW: CONTROLES ═══════════════ -->
+      <section class="view" id="view-controls" data-view="controls" aria-labelledby="hdr-controls" hidden>
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Controle operacional</p>
+            <h1 id="hdr-controls">Controles</h1>
+            <p class="page-header__sub">Armar, pausar e ações de emergência</p>
+          </div>
+          <div class="page-header__badges">
+            <span class="badge badge--accent" id="instance-count">1 ativa</span>
+          </div>
+        </header>
+
+        <article class="panel panel--solo" id="operations">
           <div class="panel__header">
             <div>
-              <p class="panel__kicker">Controle</p>
+              <p class="panel__kicker">Instância</p>
               <h2>O que você precisa no dia a dia</h2>
               <p class="panel__hint panel__mono" id="instance-id">—</p>
             </div>
-            <span class="badge badge--accent" id="instance-count">1 ativa</span>
           </div>
           <div class="control-cards control-cards--primary" id="control-grid-primary">
             <button class="control-card btn--primary" data-action="arm" data-confirm="ARM" type="button">
@@ -357,37 +683,117 @@
             </div>
           </details>
         </article>
+      </section>
 
-        <article class="panel panel--wide" id="strategies">
-          <div class="panel__header">
-            <div>
-              <p class="panel__kicker">Catálogo versionado</p>
-              <h2>Estratégias</h2>
-              <p class="panel__hint">A linha marcada como ATIVA é a que este processo está rodando agora.</p>
-            </div>
-            <span class="badge badge--accent">catálogo</span>
+      <!-- ═══════════════ VIEW: ESTRATÉGIAS ═══════════════ -->
+      <section class="view" id="view-strategies" data-view="strategies" aria-labelledby="hdr-strategies" hidden>
+        <header class="page-header page-header--compact">
+          <div>
+            <p class="eyebrow">Studio operacional</p>
+            <h1 id="hdr-strategies">Estratégias</h1>
+            <p class="page-header__sub">Escolha família → versão/preset → ajuste params → salve ou ative (reinício da Engine aplica)</p>
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th></th><th>Estratégia</th><th>Versão</th><th>Preset</th>
-                  <th>Mercados</th><th>Aprovação</th><th>Hard cap</th>
-                </tr>
-              </thead>
-              <tbody id="catalog-body"><tr><td colspan="7" class="empty">Carregando catálogo…</td></tr></tbody>
-            </table>
+          <div class="page-header__badges">
+            <span class="badge badge--accent" id="strategy-running-badge">rodando —</span>
+            <span class="badge" id="strategy-active-badge">ativa —</span>
           </div>
-        </article>
+        </header>
 
-        <article class="panel panel--wide" id="audit">
-          <div class="panel__header">
-            <div>
-              <p class="panel__kicker">Trilha imutável</p>
-              <h2>Auditoria operacional</h2>
+        <div class="strat-layout" id="strategies">
+          <aside class="panel strat-side">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Famílias</p>
+                <h2>Biblioteca</h2>
+              </div>
             </div>
+            <div class="strat-families" id="strat-families"></div>
+            <p class="panel__note" id="strat-family-note">MIDAS e TFC rodam na engine. APEX: personalize agora; runtime depois.</p>
+          </aside>
+
+          <div class="strat-main">
+            <article class="panel">
+              <div class="panel__header">
+                <div>
+                  <p class="panel__kicker">Seleção</p>
+                  <h2 id="strat-family-title">—</h2>
+                  <p class="panel__hint" id="strat-family-desc">—</p>
+                </div>
+                <span class="badge" id="strat-runnable-badge">—</span>
+              </div>
+              <div class="strat-select-row">
+                <label class="strat-field">
+                  <span>Versão</span>
+                  <select id="strat-version"></select>
+                </label>
+                <label class="strat-field">
+                  <span>Preset</span>
+                  <select id="strat-preset"></select>
+                </label>
+              </div>
+              <div class="strat-preset-meta" id="strat-preset-meta">—</div>
+            </article>
+
+            <article class="panel">
+              <div class="panel__header">
+                <div>
+                  <p class="panel__kicker">Parâmetros</p>
+                  <h2>Personalizar</h2>
+                  <p class="panel__hint" id="strat-params-hint">
+                    Runtime = lido pela engine. Lab-only = existe no data-backtest mas ainda não tem ramo no plugin robot.
+                  </p>
+                </div>
+              </div>
+              <div id="strat-params"></div>
+              <div class="strat-actions">
+                <label class="strat-field strat-field--grow">
+                  <span>Nome da nova versão</span>
+                  <input id="strat-save-name" type="text" placeholder="ex.: midas-dist35-lab" maxlength="80">
+                </label>
+                <button class="btn btn--ghost btn--sm" type="button" id="strat-reset">Resetar preset</button>
+                <button class="btn btn--primary btn--sm" type="button" id="strat-save">Salvar versão</button>
+                <button class="btn btn--warning btn--sm" type="button" id="strat-activate">Ativar para rodar</button>
+              </div>
+              <p class="panel__note" id="strat-action-msg">—</p>
+            </article>
+
+            <article class="panel">
+              <div class="panel__header">
+                <div>
+                  <p class="panel__kicker">Deploy gate</p>
+                  <h2>Catálogo de aprovação</h2>
+                </div>
+              </div>
+              <div class="table-wrap table-wrap--fit">
+                <table>
+                  <thead>
+                    <tr>
+                      <th></th><th>Estratégia</th><th>Versão</th><th>Preset</th>
+                      <th>Mercados</th><th>Aprovação</th><th>Hard cap</th>
+                    </tr>
+                  </thead>
+                  <tbody id="catalog-body"><tr><td colspan="7" class="empty">Carregando…</td></tr></tbody>
+                </table>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══════════════ VIEW: AUDITORIA ═══════════════ -->
+      <section class="view" id="view-audit" data-view="audit" aria-labelledby="hdr-audit" hidden>
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Trilha imutável</p>
+            <h1 id="hdr-audit">Auditoria operacional</h1>
+            <p class="page-header__sub">Ações do operador e eventos críticos da Engine</p>
+          </div>
+          <div class="page-header__badges">
             <span id="audit-count" class="badge">0</span>
           </div>
+        </header>
+
+        <article class="panel panel--solo" id="audit">
           <div class="table-wrap table-wrap--audit">
             <table>
               <thead><tr><th>Horário</th><th>Evento</th><th>Ação</th><th>Resultado</th><th>Detalhe</th></tr></thead>
@@ -395,17 +801,49 @@
             </table>
           </div>
         </article>
+      </section>
 
-        <article class="panel panel--wide" id="diagnostics-panel">
-          <div class="panel__header">
-            <div>
-              <p class="panel__kicker">Observabilidade</p>
-              <h2>Diagnóstico bruto</h2>
-            </div>
+      <!-- ═══════════════ VIEW: SISTEMA ═══════════════ -->
+      <section class="view" id="view-system" data-view="system" aria-labelledby="hdr-system" hidden>
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Observabilidade</p>
+            <h1 id="hdr-system">Sistema</h1>
+            <p class="page-header__sub">Saúde das dependências e diagnóstico bruto</p>
+          </div>
+          <div class="page-header__badges">
+            <span id="slo-badge" class="badge">SLO</span>
             <span id="uptime" class="badge">—</span>
           </div>
-          <pre class="console-box" id="diagnostics">Aguardando dados…</pre>
-        </article>
+        </header>
+
+        <div class="panel-grid">
+          <article class="panel" id="health-panel">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Dependências</p>
+                <h2>Saúde do sistema</h2>
+              </div>
+            </div>
+            <ul class="health-list" id="health-list"></ul>
+            <dl class="facts facts--dense" style="margin-top:14px">
+              <div><dt>Disponibilidade</dt><dd id="health-availability">—</dd></div>
+              <div><dt>Órfãs / abertas</dt><dd id="health-orphans">—</dd></div>
+              <div><dt>User WS</dt><dd id="health-userws">—</dd></div>
+              <div><dt>Recovery</dt><dd id="health-recovery">—</dd></div>
+            </dl>
+          </article>
+
+          <article class="panel" id="diagnostics-panel">
+            <div class="panel__header">
+              <div>
+                <p class="panel__kicker">Debug</p>
+                <h2>Diagnóstico bruto</h2>
+              </div>
+            </div>
+            <pre class="console-box" id="diagnostics">Aguardando dados…</pre>
+          </article>
+        </div>
       </section>
     </main>
   </div>
@@ -420,22 +858,38 @@
         </div>
         <button class="btn btn--icon btn--ghost mobile-nav__close" type="button" aria-label="Fechar">×</button>
       </div>
-      <nav class="mobile-nav__links">
-        <a class="navlink is-active" href="#overview"><span class="navlink__icon">⌁</span><span>Visão geral</span></a>
-        <a class="navlink" href="#market"><span class="navlink__icon">◎</span><span>Mercado</span></a>
-        <a class="navlink" href="#position-pnl"><span class="navlink__icon">$</span><span>Posição & PnL</span></a>
-        <a class="navlink" href="#orders"><span class="navlink__icon">≡</span><span>Ordens</span></a>
-        <a class="navlink" href="#operations"><span class="navlink__icon">⚡</span><span>Controles</span></a>
-        <a class="navlink" href="#strategies"><span class="navlink__icon">◇</span><span>Estratégias</span></a>
-        <a class="navlink" href="#audit"><span class="navlink__icon">☰</span><span>Auditoria</span></a>
-        <a class="navlink" href="#diagnostics-panel"><span class="navlink__icon">⌘</span><span>Diagnóstico</span></a>
+      <nav class="mobile-nav__links" id="mobile-nav-links">
+        <a class="navlink is-active" href="#overview" data-view="overview">
+          <span class="navlink__icon"><svg><use href="#i-grid"/></svg></span><span>Visão geral</span>
+        </a>
+        <a class="navlink" href="#market" data-view="market">
+          <span class="navlink__icon"><svg><use href="#i-activity"/></svg></span><span>Mercado & Gates</span>
+        </a>
+        <a class="navlink" href="#position" data-view="position">
+          <span class="navlink__icon"><svg><use href="#i-chart"/></svg></span><span>Posição & PnL</span>
+        </a>
+        <a class="navlink" href="#orders" data-view="orders">
+          <span class="navlink__icon"><svg><use href="#i-list"/></svg></span><span>Ordens</span>
+        </a>
+        <a class="navlink" href="#controls" data-view="controls">
+          <span class="navlink__icon"><svg><use href="#i-sliders"/></svg></span><span>Controles</span>
+        </a>
+        <a class="navlink" href="#strategies" data-view="strategies">
+          <span class="navlink__icon"><svg><use href="#i-layers"/></svg></span><span>Estratégias</span>
+        </a>
+        <a class="navlink" href="#audit" data-view="audit">
+          <span class="navlink__icon"><svg><use href="#i-scroll"/></svg></span><span>Auditoria</span>
+        </a>
+        <a class="navlink" href="#system" data-view="system">
+          <span class="navlink__icon"><svg><use href="#i-cpu"/></svg></span><span>Sistema</span>
+        </a>
       </nav>
       <div class="mobile-nav__footer">
         <button class="btn btn--ghost btn--sm logout-button" type="button">Sair</button>
       </div>
     </aside>
   </div>
-  <div id="modal-root" aria-hidden="true"></div>
-  <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
+  <div id="modal-root" class="modal-root" aria-hidden="true"></div>
+  <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="false"></div>
 </body>
 </html>

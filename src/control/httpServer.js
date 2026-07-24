@@ -13,6 +13,10 @@ import http from 'node:http';
  * @param {() => object} [opts.getCatalog]
  * @param {() => object} [opts.getInstances]
  * @param {(limit:number) => object[]} [opts.getAudit]
+ * @param {() => object} [opts.getStrategyLibrary]
+ * @param {() => object|null} [opts.getActiveStrategy]
+ * @param {(body:object) => object|Promise<object>} [opts.onSaveStrategyPreset]
+ * @param {(body:object) => object|Promise<object>} [opts.onActivateStrategy]
  * @param {() => Promise<object>|object} [opts.onKill]
  * @param {string} [opts.opsToken] — se setado, POST /control/* exige header x-ops-token
  * @param {number} [opts.port]
@@ -89,6 +93,30 @@ export function createControlServer(opts) {
         const requested = Number(url.searchParams.get('limit') ?? 100);
         const limit = Number.isFinite(requested) ? Math.max(1, Math.min(500, requested)) : 100;
         return send(res, 200, opts.getAudit?.(limit) ?? []);
+      }
+      if (req.method === 'GET' && pathName === '/strategy-library') {
+        return send(res, 200, opts.getStrategyLibrary?.() ?? { families: [] });
+      }
+      if (req.method === 'GET' && pathName === '/strategy-active') {
+        return send(res, 200, opts.getActiveStrategy?.() ?? null);
+      }
+      if (req.method === 'POST' && pathName === '/strategy-library/presets') {
+        if (!authorize(req)) return send(res, 401, { ok: false, reason: 'UNAUTHORIZED' });
+        if (typeof opts.onSaveStrategyPreset !== 'function') {
+          return send(res, 501, { ok: false, reason: 'ACTION_NOT_IMPLEMENTED' });
+        }
+        const body = await readJson(req, 64_000);
+        const result = await opts.onSaveStrategyPreset(body);
+        return send(res, 200, { ok: true, result });
+      }
+      if (req.method === 'POST' && pathName === '/strategy-library/activate') {
+        if (!authorize(req)) return send(res, 401, { ok: false, reason: 'UNAUTHORIZED' });
+        if (typeof opts.onActivateStrategy !== 'function') {
+          return send(res, 501, { ok: false, reason: 'ACTION_NOT_IMPLEMENTED' });
+        }
+        const body = await readJson(req, 64_000);
+        const result = await opts.onActivateStrategy(body);
+        return send(res, 200, { ok: true, result });
       }
       if (req.method === 'POST' && actions.has(pathName)) {
         if (!authorize(req)) return send(res, 401, { ok: false, reason: 'UNAUTHORIZED' });

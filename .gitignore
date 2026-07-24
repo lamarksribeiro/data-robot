@@ -8,3 +8,6 @@ runs/journal-backups/
 runs/execution-audit/
 runs/instances/
 !runs/.gitkeep
+config/custom-presets/
+config/active-strategy.json
+config/*.tmp

@@ -34,16 +34,32 @@ export function buildMarketSnapshot(opts) {
       ? (event.eventEnd.getTime() - nowMs) / 1000
       : null;
 
+  const clobHasBook = Boolean(
+    (state.up?.bestAsk != null || state.up?.bestBid != null) &&
+      (state.down?.bestAsk != null || state.down?.bestBid != null),
+  );
   const feeds = {
     rtdsConnected: Boolean(state.wsRtdsConnected),
     clobConnected: Boolean(state.wsClobConnected),
     rtdsLagMs: state.rtdsReceivedAt != null ? nowMs - state.rtdsReceivedAt : null,
     clobLagMs: state.clobLastAt != null ? nowMs - state.clobLastAt : null,
     rtdsTs: state.rtdsTs ?? null,
+    clobHasBook,
   };
 
-  const health = evaluateFeedHealth(feeds, opts.healthLimits);
+  // Trading: estrito (elegibilidade de entrada).
+  const health = evaluateFeedHealth(feeds, opts.healthLimits, { mode: 'trading', nowMs });
+  // Processo: tolerante (engine ok / degraded).
+  const processHealth = evaluateFeedHealth(feeds, opts.healthLimits, {
+    mode: 'process',
+    nowMs,
+    connectedSinceMs: {
+      rtds: state.rtdsConnectedAt ?? null,
+      clob: state.clobConnectedAt ?? null,
+    },
+  });
   feeds.healthy = health.ok;
+  feeds.processHealthy = processHealth.ok;
 
   return {
     marketId,
@@ -63,6 +79,7 @@ export function buildMarketSnapshot(opts) {
       eventEndMs: event.eventEnd instanceof Date ? event.eventEnd.getTime() : null,
     },
     health,
+    processHealth,
     serverNowMs: opts.serverNowMs ?? null,
   };
 }

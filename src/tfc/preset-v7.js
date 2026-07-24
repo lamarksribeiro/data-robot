@@ -1,4 +1,7 @@
-/** Parâmetros do preset campeão TFC V7 Danger Floor (data-backtest). */
+/**
+ * Parâmetros do preset campeão TFC V7 Danger Floor
+ * (data-backtest labs/terminal/tfc/presets/btc-champion-v7.json + sizing robot).
+ */
 export const TFC_V7 = {
   walletSize: 100,
   entryBudget: 10,
@@ -32,10 +35,55 @@ export const TFC_V7 = {
   hedgeStopEnabled: false,
   hedgeLimitEnabled: false,
   entryMakerEnabled: false,
+  // sizing / execução (robot + evaluate sizing helpers)
   entrySlippageMax: 0.02,
-  minLiquidityRatio: 0.60,
+  minLiquidityRatio: 0.6,
   minShares: 1,
+  entryOrderType: 'GTC',
+  exitOrderType: 'GTC',
 };
+
+/** Keys lidas pelo runtime tfcV7 + evaluate.js */
+export const TFC_RUNTIME_KEYS = Object.freeze([
+  'walletSize',
+  'entryBudget',
+  'minShares',
+  'entrySlippageMax',
+  'minLiquidityRatio',
+  'entryOrderType',
+  'exitOrderType',
+  'minSecondsLeft',
+  'maxSecondsLeft',
+  'maxDistAbs',
+  'minAsk',
+  'maxAsk',
+  'maxSpread',
+  'minOddsSum',
+  'maxOddsSum',
+  'minFlips',
+  'flipWindowSecs',
+  'velocityLookbackSecs',
+  'maxAdverseSpotChange',
+  'minObi',
+  'obiLevels',
+  'stopMinBid',
+  'lateFlipExitEnabled',
+  'lateFlipExitSec',
+  'lateFlipExitCrossDist',
+  'lateFlipMinSec',
+  'lateFlipReverseEnabled',
+  'lateFlipReverseMaxAsk',
+  'lateFlipReverseMinAsk',
+  'dangerExitEnabled',
+  'dangerExitK',
+  'dangerExitFloorSec',
+  'hedgeStopEnabled',
+  'hedgeStopPlaceSec',
+  'stopIfCrossed',
+  'stopCrossDist',
+  'entryMakerEnabled',
+  'hedgeLimitEnabled',
+]);
 
 /** Budget mínimo para micro-testes reais (centavos). */
 export const MICRO_TEST = {

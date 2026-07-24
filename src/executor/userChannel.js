@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 
 /**
  * User channel autenticado. `sim` permanece disponível apenas para CI/shadow.
+ * Live: reconnect automático com backoff (engine não fica degradada em blip de WS).
  */
 export function createUserChannel(opts = {}) {
   const kind = opts.kind ?? 'sim';
@@ -9,9 +10,13 @@ export function createUserChannel(opts = {}) {
   const disconnectListeners = new Set();
   const clock = opts.clock ?? (() => Date.now());
   let heartbeatTimer = null;
+  let reconnectTimer = null;
   let lastHeartbeatMs = null;
   let connected = false;
   let socket = null;
+  let stopped = true;
+  let reconnectAttempt = 0;
+  let intentionalClose = false;
 
   function emit(event) {
     for (const fn of listeners) fn(event);
@@ -35,6 +40,111 @@ export function createUserChannel(opts = {}) {
       markets: Array.isArray(opts.markets) ? opts.markets.filter(Boolean) : [],
       type: 'user',
     };
+  }
+
+  function backoffMs() {
+    const base = Number(opts.reconnectBaseMs ?? 500);
+    const max = Number(opts.reconnectMaxMs ?? 10_000);
+    const exp = Math.min(max, base * 2 ** Math.min(reconnectAttempt, 6));
+    return exp + Math.floor(Math.random() * 300);
+  }
+
+  function scheduleReconnect() {
+    if (stopped || kind !== 'ws' || reconnectTimer || intentionalClose) return;
+    reconnectAttempt += 1;
+    const delay = backoffMs();
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect().catch(() => {
+        scheduleReconnect();
+      });
+    }, delay);
+    reconnectTimer.unref?.();
+  }
+
+  function attachSocketHandlers(sock, resolve, reject, timeout) {
+    sock.once('open', () => {
+      clearTimeout(timeout);
+      connected = true;
+      reconnectAttempt = 0;
+      lastHeartbeatMs = clock();
+      try {
+        sock.send(JSON.stringify(subscription()));
+      } catch (err) {
+        reject(new Error(`user WS subscribe: ${err.message}`));
+        return;
+      }
+      resolve({ ok: true, kind });
+    });
+
+    sock.on('message', (data) => {
+      const text = data.toString();
+      // Qualquer frame conta como liveness (não só PONG).
+      lastHeartbeatMs = clock();
+      if (text === 'PONG') return;
+      try {
+        const parsed = JSON.parse(text);
+        for (const message of Array.isArray(parsed) ? parsed : [parsed]) emit(message);
+      } catch {
+        emit({ event_type: 'protocol_error', reason: 'INVALID_JSON', tsMs: clock() });
+      }
+    });
+
+    sock.once('error', (err) => {
+      clearTimeout(timeout);
+      if (!connected) reject(new Error(`user WS: ${err.message}`));
+    });
+
+    sock.once('close', (code, reason) => {
+      clearTimeout(timeout);
+      const wasConnected = connected;
+      connected = false;
+      socket = null;
+      if (wasConnected) {
+        notifyDisconnect({ code, reason: reason?.toString?.() ?? String(reason), tsMs: clock() });
+      }
+      if (!stopped && !intentionalClose) scheduleReconnect();
+    });
+  }
+
+  function connect() {
+    if (kind !== 'ws') {
+      stopped = false;
+      connected = true;
+      lastHeartbeatMs = clock();
+      return Promise.resolve({ ok: true, kind });
+    }
+    if (connected && socket?.readyState === WebSocket.OPEN) {
+      return Promise.resolve({ ok: true, kind });
+    }
+    stopped = false;
+    intentionalClose = false;
+
+    const payloadCheck = subscription();
+    void payloadCheck;
+    const url = opts.url ?? 'wss://ws-subscriptions-clob.polymarket.com/ws/user';
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        try {
+          socket?.terminate();
+        } catch {
+          /* ignore */
+        }
+        reject(new Error('user WS connect timeout'));
+        scheduleReconnect();
+      }, Number(opts.connectTimeoutMs ?? 10_000));
+
+      try {
+        socket = new WebSocket(url);
+      } catch (err) {
+        clearTimeout(timeout);
+        reject(err);
+        scheduleReconnect();
+        return;
+      }
+      attachSocketHandlers(socket, resolve, reject, timeout);
+    });
   }
 
   return {
@@ -61,57 +171,16 @@ export function createUserChannel(opts = {}) {
       emit(event);
     },
 
-    connect() {
-      if (kind !== 'ws') {
-        connected = true;
-        lastHeartbeatMs = clock();
-        return { ok: true, kind };
-      }
-      if (connected) return Promise.resolve({ ok: true, kind });
-
-      const payload = subscription();
-      const url = opts.url ?? 'wss://ws-subscriptions-clob.polymarket.com/ws/user';
-      return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          socket?.terminate();
-          reject(new Error('user WS connect timeout'));
-        }, Number(opts.connectTimeoutMs ?? 10_000));
-        socket = new WebSocket(url);
-        socket.once('open', () => {
-          clearTimeout(timeout);
-          connected = true;
-          lastHeartbeatMs = clock();
-          socket.send(JSON.stringify(payload));
-          resolve({ ok: true, kind });
-        });
-        socket.on('message', (data) => {
-          const text = data.toString();
-          if (text === 'PONG') {
-            lastHeartbeatMs = clock();
-            return;
-          }
-          try {
-            const parsed = JSON.parse(text);
-            for (const message of Array.isArray(parsed) ? parsed : [parsed]) emit(message);
-          } catch {
-            emit({ event_type: 'protocol_error', reason: 'INVALID_JSON', tsMs: clock() });
-          }
-        });
-        socket.once('error', (err) => {
-          clearTimeout(timeout);
-          if (!connected) reject(new Error(`user WS: ${err.message}`));
-        });
-        socket.once('close', (code, reason) => {
-          clearTimeout(timeout);
-          const wasConnected = connected;
-          connected = false;
-          if (wasConnected) notifyDisconnect({ code, reason: reason.toString(), tsMs: clock() });
-        });
-      });
-    },
+    connect,
 
     disconnect({ cancelOnDisconnect = true } = {}) {
+      stopped = true;
+      intentionalClose = true;
       connected = false;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
         heartbeatTimer = null;
@@ -126,8 +195,15 @@ export function createUserChannel(opts = {}) {
     startHeartbeat(intervalMs = 10_000, onBeat) {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
       heartbeatTimer = setInterval(() => {
-        if (kind === 'ws' && socket?.readyState === WebSocket.OPEN) socket.send('PING');
-        else lastHeartbeatMs = clock();
+        if (kind === 'ws' && socket?.readyState === WebSocket.OPEN) {
+          try {
+            socket.send('PING');
+          } catch {
+            /* ignore */
+          }
+        } else if (kind !== 'ws') {
+          lastHeartbeatMs = clock();
+        }
         if (typeof onBeat === 'function') onBeat(lastHeartbeatMs);
       }, intervalMs);
       if (heartbeatTimer.unref) heartbeatTimer.unref();
@@ -141,6 +217,7 @@ export function createUserChannel(opts = {}) {
       if (!fetcher) return { ok: false, reason: 'REST_FETCHER_REQUIRED' };
       const events = await fetcher();
       for (const e of events ?? []) emit(e);
+      lastHeartbeatMs = clock();
       return { ok: true, events, source: 'rest-poll' };
     },
   };

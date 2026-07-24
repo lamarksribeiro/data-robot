@@ -32,6 +32,8 @@
     "engine:soak": "node scripts/soak-run.js",
     "p9:readiness": "node --test test/p9-service.test.js",
     "start": "node scripts/ui-server.js",
+    "local": "node scripts/local-up.js",
+    "start:all": "node scripts/local-up.js",
     "dev": "sirv public --port 3200 --host 0.0.0.0 --dev",
     "ui:dev": "npm run dev",
     "ui:start": "npm start"

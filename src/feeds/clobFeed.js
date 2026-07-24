@@ -2,24 +2,38 @@ import { WebSocket } from 'ws';
 import config from '../config.js';
 
 const DEPTH = 10;
-const RECONNECT_MS = 500;
+const RECONNECT_BASE_MS = 400;
+const RECONNECT_MAX_MS = 8_000;
+const PING_MS = 10_000;
+const RESEED_MS = 5_000;
+const STALE_RESEED_MS = 8_000;
 
 /**
  * @param {ReturnType<import('./marketState.js').createMarketState>} state
  * @param {object} [opts]
  * @param {() => void} [opts.onUpdate]
+ * @param {() => number} [opts.clock]
  */
 export function createClobFeed(state, opts = {}) {
+  const clock = opts.clock ?? Date.now;
   let ws = null;
   let pingTimer = null;
   let reconnectTimer = null;
   let seedTimer = null;
+  let reseedTimer = null;
   let subscribedTokens = [];
   let stopped = false;
+  let reconnectAttempt = 0;
+  let connectedAtMs = null;
   const onUpdate = typeof opts.onUpdate === 'function' ? opts.onUpdate : () => {};
 
   const rawBids = { up: new Map(), down: new Map() };
   const rawAsks = { up: new Map(), down: new Map() };
+
+  function backoffMs() {
+    const exp = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** Math.min(reconnectAttempt, 5));
+    return exp + Math.floor(Math.random() * 250);
+  }
 
   function syncBest(side) {
     const bids = [...rawBids[side].entries()]
@@ -35,7 +49,7 @@ export function createClobFeed(state, opts = {}) {
     state[side].asks = asks.slice(0, DEPTH);
     state[side].bestBid = bids[0]?.price ?? null;
     state[side].bestAsk = asks[0]?.price ?? null;
-    state.clobLastAt = Date.now();
+    state.clobLastAt = clock();
   }
 
   function setLevel(book, priceStr, size) {
@@ -51,17 +65,39 @@ export function createClobFeed(state, opts = {}) {
     syncBest(side);
   }
 
+  function scheduleReconnect() {
+    if (stopped || reconnectTimer) return;
+    reconnectAttempt += 1;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, backoffMs());
+    reconnectTimer.unref?.();
+  }
+
   function connect() {
     if (stopped || ws) return;
     const socket = new WebSocket(config.clobWsUrl);
     ws = socket;
 
     socket.onopen = () => {
+      if (stopped || ws !== socket) return;
+      connectedAtMs = clock();
+      reconnectAttempt = 0;
       state.wsClobConnected = true;
+      state.clobConnectedAt = connectedAtMs;
       if (subscribedTokens.length) sendSubscribe();
+      if (pingTimer) clearInterval(pingTimer);
       pingTimer = setInterval(() => {
-        if (socket.readyState === WebSocket.OPEN) socket.send('PING');
-      }, 10000);
+        if (socket.readyState === WebSocket.OPEN) {
+          try {
+            socket.send('PING');
+          } catch {
+            /* ignore */
+          }
+        }
+      }, PING_MS);
+      pingTimer.unref?.();
     };
 
     socket.onmessage = (event) => {
@@ -74,27 +110,34 @@ export function createClobFeed(state, opts = {}) {
           if (item?.event_type) updated = processMessage(item) || updated;
         }
         if (updated) onUpdate();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     };
 
     socket.onclose = () => {
+      if (ws !== socket) return;
       state.wsClobConnected = false;
-      cleanup();
-      if (!stopped) reconnectTimer = setTimeout(connect, RECONNECT_MS);
+      state.clobConnectedAt = null;
+      if (pingTimer) {
+        clearInterval(pingTimer);
+        pingTimer = null;
+      }
+      ws = null;
+      connectedAtMs = null;
+      // NÃO zera book: mantém último top-of-book até resync (process health + menos CLOB_NO_SAMPLE).
+      if (!stopped) scheduleReconnect();
     };
 
     socket.onerror = () => {};
   }
 
-  function cleanup() {
-    if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
-    ws = null;
-  }
-
   async function seedSideFromRest(side, tokenId) {
     if (!tokenId || stopped) return;
     try {
-      const res = await fetch(`${config.clobHttpUrl}/book?token_id=${encodeURIComponent(tokenId)}`);
+      const res = await fetch(`${config.clobHttpUrl}/book?token_id=${encodeURIComponent(tokenId)}`, {
+        signal: AbortSignal.timeout(4_000),
+      });
       if (!res.ok) return;
       const data = await res.json();
       rebuild(side, data.bids || [], data.asks || []);
@@ -113,7 +156,6 @@ export function createClobFeed(state, opts = {}) {
 
   function scheduleSeed() {
     if (seedTimer) clearTimeout(seedTimer);
-    // Seed imediato + reforço curto (WS às vezes atrasa o book snapshot).
     void seedBooksFromRest();
     seedTimer = setTimeout(() => {
       if (stopped) return;
@@ -124,13 +166,28 @@ export function createClobFeed(state, opts = {}) {
     }, 750);
   }
 
+  function maybeReseedIfStale() {
+    if (stopped || !subscribedTokens.length) return;
+    const lag = state.clobLastAt == null ? Infinity : clock() - state.clobLastAt;
+    const empty =
+      (state.up.bestAsk == null && state.up.bestBid == null) ||
+      (state.down.bestAsk == null && state.down.bestBid == null);
+    if (empty || lag >= STALE_RESEED_MS) void seedBooksFromRest();
+  }
+
   function sendSubscribe() {
     if (!subscribedTokens.length || !ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({
-      assets_ids: subscribedTokens,
-      operation: 'subscribe',
-      custom_feature_enabled: true,
-    }));
+    try {
+      ws.send(
+        JSON.stringify({
+          assets_ids: subscribedTokens,
+          operation: 'subscribe',
+          custom_feature_enabled: true,
+        }),
+      );
+    } catch {
+      /* ignore */
+    }
     scheduleSeed();
   }
 
@@ -142,7 +199,8 @@ export function createClobFeed(state, opts = {}) {
     if (data.event_type === 'book') {
       rebuild(side, data.bids || [], data.asks || []);
       return true;
-    } else if (data.event_type === 'price_change') {
+    }
+    if (data.event_type === 'price_change') {
       let changed = false;
       for (const c of data.changes || []) {
         const size = parseFloat(c.size || 0);
@@ -157,41 +215,60 @@ export function createClobFeed(state, opts = {}) {
       }
       if (changed) syncBest(side);
       return changed;
-    } else if (data.event_type === 'best_bid_ask') {
+    }
+    if (data.event_type === 'best_bid_ask') {
       if (data.best_bid != null) state[side].bestBid = parseFloat(data.best_bid);
       if (data.best_ask != null) state[side].bestAsk = parseFloat(data.best_ask);
-      state.clobLastAt = Date.now();
+      state.clobLastAt = clock();
       return true;
     }
     return false;
   }
 
   connect();
+  reseedTimer = setInterval(maybeReseedIfStale, RESEED_MS);
+  reseedTimer.unref?.();
 
   return {
     subscribe(upTokenId, downTokenId) {
       state.upTokenId = upTokenId;
       state.downTokenId = downTokenId;
       subscribedTokens = [upTokenId, downTokenId];
-      rawBids.up.clear(); rawBids.down.clear();
-      rawAsks.up.clear(); rawAsks.down.clear();
+      rawBids.up.clear();
+      rawBids.down.clear();
+      rawAsks.up.clear();
+      rawAsks.down.clear();
       state.up = { bestBid: null, bestAsk: null, bids: [], asks: [] };
       state.down = { bestBid: null, bestAsk: null, bids: [], asks: [] };
+      state.clobLastAt = null;
       sendSubscribe();
-      // Se WS ainda não abriu, seed REST já deixa book acionável.
       scheduleSeed();
     },
     stop() {
       stopped = true;
-      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-      if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
-      if (seedTimer) { clearTimeout(seedTimer); seedTimer = null; }
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (pingTimer) {
+        clearInterval(pingTimer);
+        pingTimer = null;
+      }
+      if (seedTimer) {
+        clearTimeout(seedTimer);
+        seedTimer = null;
+      }
+      if (reseedTimer) {
+        clearInterval(reseedTimer);
+        reseedTimer = null;
+      }
       if (ws) {
         const s = ws;
         ws = null;
         if (s.readyState === WebSocket.OPEN || s.readyState === WebSocket.CONNECTING) s.close();
       }
       state.wsClobConnected = false;
+      state.clobConnectedAt = null;
     },
   };
 }
