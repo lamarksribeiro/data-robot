@@ -459,7 +459,13 @@ describe('dashboard autenticado', () => {
     let armed = false;
     const engine = http.createServer((req, res) => {
       res.setHeader('content-type', 'application/json');
-      if (req.url === '/status') return res.end(JSON.stringify({ state: 'ARMED' }));
+      if (req.url === '/status') {
+        if (req.headers['x-ops-token'] !== 'ops-secret') {
+          res.statusCode = 401;
+          return res.end(JSON.stringify({ ok: false, reason: 'UNAUTHORIZED' }));
+        }
+        return res.end(JSON.stringify({ state: 'ARMED' }));
+      }
       if (req.url === '/control/arm' && req.headers['x-ops-token'] === 'ops-secret') {
         let body = '';
         req.on('data', (chunk) => { body += chunk; });

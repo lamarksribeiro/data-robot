@@ -80,11 +80,13 @@ export function createUiServer(opts = {}) {
   async function proxyEngine(req, res, enginePath, method = 'GET', body = null) {
     const headers = { accept: 'application/json' };
     let requestBody;
-    if (method !== 'GET') {
-      if (!opts.engineOpsToken) {
-        return json(res, 503, { ok: false, reason: 'ENGINE_OPS_TOKEN_NOT_CONFIGURED' });
-      }
+    // GETs operacionais da engine também exigem x-ops-token (status/audit/catalog/etc.).
+    if (opts.engineOpsToken) {
       headers['x-ops-token'] = opts.engineOpsToken;
+    } else if (method !== 'GET') {
+      return json(res, 503, { ok: false, reason: 'ENGINE_OPS_TOKEN_NOT_CONFIGURED' });
+    }
+    if (method !== 'GET') {
       headers['content-type'] = 'application/json';
       requestBody = JSON.stringify(body ?? {});
     }
