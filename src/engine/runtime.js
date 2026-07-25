@@ -407,6 +407,79 @@ export function createEngine(opts) {
     return result;
   }
 
+  /**
+   * Libera posição para fila de settlement async (Gamma ainda não fechou).
+   * Trading fica flat; PnL é aplicado depois via settleReleasedPosition.
+   */
+  function releasePositionForSettlementQueue() {
+    if (!(position.qty > 0)) return null;
+    const released = {
+      marketId: position.marketId,
+      side: position.side,
+      qty: position.qty,
+      avgPrice: position.avgPrice,
+      releasedAtMs: clock(),
+    };
+    const realizedPnl = position.realizedPnl ?? 0;
+    position = emptyPosition({ realizedPnl });
+    pendingIntents.clear();
+    haltReason = null;
+    if (state === 'HALTED' || state === 'POSITION_OPEN' || state === 'EXIT_PENDING') {
+      transition('ARMED', 'position-released-for-settlement');
+    }
+    if (typeof riskEngine.accountBook?.set === 'function') {
+      riskEngine.accountBook.set(strategyInstanceId, 0);
+    }
+    journal.push({ type: 'settlement_queued', ...released, tsMs: clock() });
+    return released;
+  }
+
+  /**
+   * Aplica settlement de posição já liberada (fila async).
+   * @param {{ marketId: string, side: string, qty: number, avgPrice: number|null, releasedAtMs?: number }} released
+   * @param {{ price: number, reason?: string, toMarketId?: string|null }} opts
+   */
+  function settleReleasedPosition(released, opts = {}) {
+    const price = Number(opts.price);
+    if (!Number.isFinite(price) || price < 0 || price > 1) {
+      throw new Error('settleReleasedPosition: price inválido');
+    }
+    const qty = Number(released?.qty) || 0;
+    if (qty <= 0) return { settled: false, reason: 'FLAT' };
+    const avg = released.avgPrice;
+    const side = released.side;
+    const marketId = released.marketId;
+    let pnlDelta = 0;
+    if (avg != null) pnlDelta = (price - avg) * qty;
+    if (pnlDelta !== 0 && typeof riskEngine.recordPnl === 'function') {
+      riskEngine.recordPnl(pnlDelta);
+    }
+    const realizedPnl = (position.realizedPnl ?? 0) + pnlDelta;
+    position = { ...position, realizedPnl };
+    if (typeof sink.oms?.settlePosition === 'function') {
+      sink.oms.settlePosition({
+        strategyInstanceId,
+        price,
+        marketId,
+        reason: opts.reason ?? 'settlement',
+      });
+    }
+    const result = {
+      settled: true,
+      side,
+      qty,
+      avgPrice: avg,
+      settlementPrice: price,
+      pnlDelta,
+      realizedPnl,
+      marketId,
+      reason: opts.reason ?? 'settlement',
+      toMarketId: opts.toMarketId ?? null,
+    };
+    journal.push({ type: 'settlement', ...result, async: true, tsMs: clock() });
+    return result;
+  }
+
   const api = {
     get state() {
       return state;
@@ -433,6 +506,8 @@ export function createEngine(opts) {
       return riskEngine;
     },
     settlePosition,
+    releasePositionForSettlementQueue,
+    settleReleasedPosition,
     getLastSnapshot() {
       return lastSnapshot ? structuredClone(lastSnapshot) : null;
     },

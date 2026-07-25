@@ -202,6 +202,11 @@ export function createUiServer(opts = {}) {
         const qs = url.searchParams.toString();
         return proxyEngine(req, res, qs ? `/audit?${qs}` : '/audit');
       }
+      if (req.method === 'GET' && url.pathname === '/api/engine/trades') {
+        if (!requireSession(req, res)) return;
+        const qs = url.searchParams.toString();
+        return proxyEngine(req, res, qs ? `/trades?${qs}` : '/trades');
+      }
 
       const controlRoutes = new Map([
         ['/api/engine/control/arm', { path: '/control/arm', confirmation: 'ARM' }],

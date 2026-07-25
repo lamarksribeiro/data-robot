@@ -985,6 +985,151 @@ function renderOpenOrders(orders = [], targetId = 'open-orders-body', cols = 10)
   }
 }
 
+function tradePathLabel(trade) {
+  if (trade.exitKind === 'SETTLEMENT') return 'settlement';
+  if (trade.exitKind === 'REVERSE') return 'reverse';
+  if (trade.exitKind === 'EXIT') return 'exit';
+  return '—';
+}
+
+function tradeStatusLabel(status) {
+  if (status === 'settlement_pending') return 'aguardando Gamma';
+  if (status === 'closed') return 'fechado';
+  if (status === 'open') return 'aberto';
+  return status || '—';
+}
+
+function formatEntryExit(trade) {
+  const entry = trade.entryPrice != null ? number(trade.entryPrice, 3) : '—';
+  const exit = trade.exitPrice != null ? number(trade.exitPrice, 3) : '—';
+  return `${entry} → ${exit}`;
+}
+
+function gotoAuditForMarket(marketId) {
+  const q = $('audit-q');
+  if (q) q.value = marketId;
+  showView('audit');
+  refreshAudit({ silent: true });
+}
+
+function renderSettlementBanner(status) {
+  const banner = $('settlement-pending-banner');
+  if (!banner) return;
+  const pending = status.settlementPending ?? [];
+  if (!pending.length) {
+    banner.classList.add('hidden');
+    return;
+  }
+  banner.classList.remove('hidden');
+  const markets = pending.map((p) => shortId(p.marketId, 16)).join(', ');
+  text(
+    'settlement-pending-title',
+    pending.length === 1 ? 'Settlement em background' : `${pending.length} settlements em background`,
+  );
+  text(
+    'settlement-pending-body',
+    `PnL do${pending.length === 1 ? '' : 's'} mercado ${markets} aguardando fechamento no Gamma (1–2 min). Trading continua no evento novo.`,
+  );
+}
+
+function renderTrades(trades = []) {
+  const body = $('trades-body');
+  if (!body) return;
+  body.replaceChildren();
+  const closed = trades.filter((t) => t.status === 'closed' || t.status === 'settlement_pending');
+  text('trades-count', `${closed.length} trade${closed.length === 1 ? '' : 's'}`);
+  if (!closed.length) {
+    emptyRow(body, 7, 'Nenhum trade fechado nesta sessão');
+    return;
+  }
+  for (const trade of closed) {
+    const row = document.createElement('tr');
+    if (trade.status === 'settlement_pending') row.className = 'row--pending';
+    const marketBtn = document.createElement('button');
+    marketBtn.type = 'button';
+    marketBtn.className = 'linkish';
+    marketBtn.textContent = shortId(trade.marketId, 22);
+    marketBtn.title = trade.marketId;
+    marketBtn.addEventListener('click', () => gotoAuditForMarket(trade.marketId));
+
+    const cells = [
+      marketBtn,
+      trade.side || '—',
+      formatEntryExit(trade),
+      trade.pnl != null ? money(trade.pnl) : '—',
+      trade.durationMs != null ? duration(trade.durationMs) : '—',
+      tradePathLabel(trade),
+      tradeStatusLabel(trade.status),
+    ];
+    for (const [i, value] of cells.entries()) {
+      const td = document.createElement('td');
+      if (i === 3 && trade.pnl != null) {
+        const strong = document.createElement('strong');
+        strong.textContent = value;
+        setPnlTone(strong, trade.pnl);
+        td.append(strong);
+      } else if (value instanceof HTMLElement) {
+        td.append(value);
+      } else {
+        td.textContent = value;
+      }
+      if (i === 6 && trade.status === 'settlement_pending') {
+        td.innerHTML = '<span class="badge badge--warn">aguardando Gamma</span>';
+      }
+      row.append(td);
+    }
+    body.append(row);
+  }
+}
+
+function renderPositionTradesMini(trades = []) {
+  const list = $('position-trades-mini');
+  if (!list) return;
+  list.replaceChildren();
+  const recent = trades
+    .filter((t) => t.status === 'closed' || t.status === 'settlement_pending')
+    .slice(0, 3);
+  if (!recent.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'Nenhum trade fechado ainda';
+    list.append(li);
+    return;
+  }
+  for (const trade of recent) {
+    const li = document.createElement('li');
+    li.className = 'trade-mini-item';
+    const left = document.createElement('span');
+    left.textContent = `${shortId(trade.marketId, 14)} · ${trade.side || '—'} · ${tradePathLabel(trade)}`;
+    const right = document.createElement('strong');
+    if (trade.pnl != null) {
+      right.textContent = money(trade.pnl);
+      setPnlTone(right, trade.pnl);
+    } else if (trade.status === 'settlement_pending') {
+      right.textContent = 'Gamma…';
+      right.className = 'is-pending';
+    } else {
+      right.textContent = '—';
+    }
+    li.append(left, right);
+    list.append(li);
+  }
+}
+
+async function refreshTrades({ silent = false } = {}) {
+  const seq = ++tradesFetchSeq;
+  try {
+    const rows = await api('/api/engine/trades?limit=50');
+    if (seq !== tradesFetchSeq) return;
+    tradesCache = Array.isArray(rows) ? rows : [];
+    renderTrades(tradesCache);
+    renderPositionTradesMini(tradesCache);
+  } catch (error) {
+    if (error.status === 401) return showLogin();
+    if (!silent) showAlert(`Journal indisponível: ${error.message}`);
+  }
+}
+
 function renderOrders(orders = []) {
   const body = $('orders-body');
   body.replaceChildren();
@@ -1069,6 +1214,8 @@ const AUDIT_PRESETS = {
 
 let auditRowsCache = [];
 let auditFetchSeq = 0;
+let tradesCache = [];
+let tradesFetchSeq = 0;
 
 function auditTypeLabel(type) {
   return AUDIT_TYPE_LABELS[type] || type || '—';
@@ -1690,6 +1837,7 @@ function renderGuide(status, health) {
   const live = mode === 'live';
   const armed = status.operatorState === 'ARMED';
   const halted = status.state === 'HALTED' || health?.halted === true;
+  const settlementPending = status.settlementPending ?? [];
   const bal = status.preflight?.checks?.balance?.balanceUsd;
   const cta = $('guide-cta');
   const gotoControls = $('guide-goto-controls');
@@ -1993,6 +2141,7 @@ function render(status, health, instances) {
 
   renderMode(status, health);
   renderGuide(status, health);
+  renderSettlementBanner(status);
 
   text('strategy-id', pres.displayTitle);
   text(
@@ -2870,6 +3019,7 @@ async function refresh() {
     const healthView = status.health ?? health;
     render(status, healthView, instances);
     renderCatalog(catalog, status.strategyId, status.canary?.presetId || status.catalog?.presetId);
+    await refreshTrades({ silent: true });
     if (currentView === 'audit') await refreshAudit({ silent: true });
     if (currentView === 'strategies') await loadStrategyStudio();
   } catch (error) {
@@ -2910,6 +3060,7 @@ function showView(viewId, { pushHash = true } = {}) {
   requestAnimationFrame(() => renderCharts());
   if (id === 'strategies') loadStrategyStudio();
   if (id === 'audit') refreshAudit({ silent: true });
+  if (id === 'orders' || id === 'position') refreshTrades({ silent: true });
 }
 
 window.addEventListener('resize', () => {

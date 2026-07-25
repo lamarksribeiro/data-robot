@@ -200,6 +200,11 @@
           <p class="ops-bar__explain hidden" id="mode-explain"></p>
         </section>
 
+        <div class="settlement-banner hidden" id="settlement-pending-banner" role="status" aria-live="polite">
+          <strong id="settlement-pending-title">Settlement em background</strong>
+          <p id="settlement-pending-body">—</p>
+        </div>
+
         <section class="kpi-strip" aria-label="Indicadores-chave">
           <article class="kpi-card kpi-card--pnl">
             <span class="kpi-card__label">PnL realizado</span>
@@ -519,6 +524,20 @@
           </article>
         </section>
 
+        <article class="panel" id="position-recent-trades">
+          <div class="panel__header">
+            <div>
+              <p class="panel__kicker">Journal</p>
+              <h2>Últimas rodadas</h2>
+              <p class="panel__hint">Três trades mais recentes com PnL realizado.</p>
+            </div>
+            <button class="btn btn--ghost btn--sm" type="button" data-goto="orders">Ver todos</button>
+          </div>
+          <ul class="trade-mini-list" id="position-trades-mini">
+            <li class="empty">Nenhum trade fechado ainda</li>
+          </ul>
+        </article>
+
         <div class="chart-grid chart-grid--2" style="margin-bottom:14px">
           <article class="panel chart-panel">
             <div class="panel__header">
@@ -639,6 +658,27 @@
                 </tr>
               </thead>
               <tbody id="orders-body"><tr><td colspan="10" class="empty">Nenhuma ordem</td></tr></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel panel--solo" id="closed-trades">
+          <div class="panel__header">
+            <div>
+              <p class="panel__kicker">Journal</p>
+              <h2>Trades fechados</h2>
+              <p class="panel__hint">PnL por entrada — settlement, exit ou reverse. Clique no mercado para filtrar a Auditoria.</p>
+            </div>
+            <span class="badge" id="trades-count">0 trades</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mercado</th><th>Lado</th><th>Entry → Exit</th><th>PnL</th><th>Duração</th><th>Path</th><th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="trades-body"><tr><td colspan="7" class="empty">Nenhum trade fechado nesta sessão</td></tr></tbody>
             </table>
           </div>
         </article>

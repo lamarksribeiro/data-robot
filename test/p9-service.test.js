@@ -273,7 +273,7 @@ describe('proteção de rotação com posição live', () => {
     );
   });
 
-  it('entra em HALTED se Gamma não resolve o mercado antigo', async () => {
+  it('enfileira settlement e continua ARMED se Gamma ainda não resolve', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p9-engine-'));
     cleanup.push(() => fs.rmSync(dir, { recursive: true, force: true }));
     const sink = {
@@ -322,11 +322,18 @@ describe('proteção de rotação com posição live', () => {
     await app.ingestSynthetic(fixtureSnapshot('market-a'));
     assert.ok(app.engine.position.qty > 0);
     const result = await app.ingestSynthetic(fixtureSnapshot('market-b'));
-    assert.equal(result.reason, 'POSITION_REQUIRES_SETTLEMENT');
-    assert.equal(app.engine.state, 'HALTED');
-    assert.equal(app.engine.getStatus().haltReason, 'market-rotated-with-position');
-    assert.equal(app.status().operatorState, 'HALTED');
-    assert.equal(app.status().entryEnabled, false);
+    assert.notEqual(result?.reason, 'POSITION_REQUIRES_SETTLEMENT');
+    assert.notEqual(app.engine.state, 'HALTED');
+    assert.equal(app.status().operatorState, 'ARMED');
+    assert.equal(app.status().entryEnabled, true);
+    assert.equal(app.status().settlementPending.length, 1);
+    assert.equal(app.status().settlementPending[0].marketId, 'market-a');
+    assert.ok(
+      app.engine.position.qty === 0 || app.engine.position.marketId === 'market-b',
+      'posição flat ou reentrada no mercado novo',
+    );
+    const audit = app.executionAudit.listRecent(30);
+    assert.ok(audit.some((row) => row.type === 'settlement_queued'));
   });
 });
 

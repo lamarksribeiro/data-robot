@@ -13,6 +13,7 @@ import http from 'node:http';
  * @param {() => object} [opts.getCatalog]
  * @param {() => object} [opts.getInstances]
  * @param {(limitOrOpts:number|object) => object[]} [opts.getAudit]
+ * @param {(limit?:number) => object[]} [opts.getTrades]
  * @param {() => object} [opts.getStrategyLibrary]
  * @param {() => object|null} [opts.getActiveStrategy]
  * @param {(body:object) => object|Promise<object>} [opts.onSaveStrategyPreset]
@@ -38,6 +39,7 @@ export function createControlServer(opts) {
     '/catalog',
     '/instances',
     '/audit',
+    '/trades',
     '/strategy-library',
     '/strategy-active',
   ]);
@@ -116,6 +118,11 @@ export function createControlServer(opts) {
           q: url.searchParams.get('q') ?? undefined,
         };
         return send(res, 200, opts.getAudit?.(query) ?? []);
+      }
+      if (req.method === 'GET' && pathName === '/trades') {
+        const requested = Number(url.searchParams.get('limit') ?? 50);
+        const limit = Number.isFinite(requested) ? Math.max(1, Math.min(200, requested)) : 50;
+        return send(res, 200, opts.getTrades?.(limit) ?? []);
       }
       if (req.method === 'GET' && pathName === '/strategy-library') {
         return send(res, 200, opts.getStrategyLibrary?.() ?? { families: [] });

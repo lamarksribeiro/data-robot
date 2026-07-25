@@ -6,6 +6,7 @@
 import { bootstrapEngine } from '../composition/bootstrap.js';
 import { defaultPresetFor } from '../composition/presets.js';
 import { createOmsSink } from '../oms/omsSink.js';
+import { buildTradeJournal } from '../oms/tradeJournal.js';
 import { createMetrics } from '../observability/metrics.js';
 import { createLogger } from '../observability/logger.js';
 import { createAlertHub } from '../observability/alerts.js';
@@ -61,6 +62,8 @@ export function createEngineApp(opts = {}) {
   let operatorChangedAtMs = null;
   let operatorQueue = Promise.resolve();
   let latestPreflight = opts.preflight ?? null;
+  /** @type {Array<{marketId:string,side:string,qty:number,avgPrice:number|null,releasedAtMs:number,queuedAtMs:number,toMarketId?:string|null}>} */
+  let pendingSettlements = [];
   let sourceStatus = snapshotSource
     ? { kind: snapshotSource.kind ?? 'custom', running: false, ok: false, reason: 'NOT_STARTED' }
     : { kind: 'manual', running: false, ok: null, reason: null };
@@ -212,6 +215,16 @@ export function createEngineApp(opts = {}) {
       operatorState,
       operatorChangedAtMs,
       entryEnabled: engine.risk.entryEnabled !== false,
+      settlementPending: pendingSettlements.map((p) => ({
+        marketId: p.marketId,
+        side: p.side,
+        qty: p.qty,
+        avgPrice: p.avgPrice,
+        queuedAtMs: p.queuedAtMs,
+        releasedAtMs: p.releasedAtMs,
+        toMarketId: p.toMarketId ?? null,
+        ageMs: Date.now() - (p.queuedAtMs ?? p.releasedAtMs ?? Date.now()),
+      })),
     };
   }
 
@@ -465,6 +478,47 @@ export function createEngineApp(opts = {}) {
     return metrics.snapshot();
   }
 
+  async function processPendingSettlements(snapshot) {
+    if (!pendingSettlements.length || mode !== 'live') return;
+    const remaining = [];
+    for (const pending of pendingSettlements) {
+      const resolution = await resolveBinarySettlementPrice(pending.marketId, pending.side, {
+        fetchFn: opts.fetchFn,
+      });
+      if (resolution.ok) {
+        const settled = engine.settleReleasedPosition(pending, {
+          price: resolution.settlementPrice,
+          reason: 'binary_expiry_settlement',
+          toMarketId: snapshot?.marketId ?? pending.toMarketId ?? null,
+        });
+        executionAudit.append('position_settled', {
+          fromMarketId: pending.marketId,
+          toMarketId: snapshot?.marketId ?? pending.toMarketId ?? null,
+          winner: resolution.winner,
+          async: true,
+          ...settled,
+        });
+        logger.info('position_settled_async', {
+          fromMarketId: pending.marketId,
+          toMarketId: snapshot?.marketId ?? pending.toMarketId ?? null,
+          pnlDelta: settled.pnlDelta,
+          operatorState,
+        });
+        if (typeof opts.beforeArm === 'function') {
+          try {
+            const next = await opts.beforeArm();
+            if (next) applyPreflight(next);
+          } catch {
+            /* mantém preflight anterior */
+          }
+        }
+      } else {
+        remaining.push(pending);
+      }
+    }
+    pendingSettlements = remaining;
+  }
+
   async function ingest(snapshot, useMarketGate) {
     // Ordem FAK/ENTER de mercado anterior sem posição: cancelar (não pode restar como GTC).
     if (mode === 'live' && snapshot?.marketId && typeof sink.cancelOpenOrders === 'function') {
@@ -491,6 +545,8 @@ export function createEngineApp(opts = {}) {
         // Se ainda ENTRY_PENDING flat sem pending, rearma via eventos CANCEL do sink.
       }
     }
+
+    await processPendingSettlements(snapshot);
 
     if (
       mode === 'live' &&
@@ -542,25 +598,37 @@ export function createEngineApp(opts = {}) {
         }
         // segue o ingest no mercado novo (flat)
       } else {
-        if (engine.state === 'HALTED') {
-          return { skipped: true, reason: 'ALREADY_HALTED_PENDING_SETTLEMENT' };
+        const released = engine.releasePositionForSettlementQueue();
+        if (released) {
+          const pending = {
+            ...released,
+            queuedAtMs: Date.now(),
+            toMarketId: snapshot.marketId,
+          };
+          if (!pendingSettlements.some((p) => p.marketId === pending.marketId)) {
+            pendingSettlements.push(pending);
+          }
+          executionAudit.append('settlement_queued', {
+            fromMarketId: released.marketId,
+            toMarketId: snapshot.marketId,
+            side: released.side,
+            qty: released.qty,
+            avgPrice: released.avgPrice,
+            resolution,
+          });
+          logger.warn('settlement_queued_on_rotation', {
+            fromMarketId: released.marketId,
+            toMarketId: snapshot.marketId,
+            reason: resolution.reason ?? 'MARKET_STILL_OPEN',
+            operatorState,
+          });
         }
-        const reason = 'market-rotated-with-position';
-        executionAudit.append('protective_halt', {
-          reason,
-          fromMarketId,
-          toMarketId: snapshot.marketId,
-          position: engine.position,
-          resolution,
-        });
-        // Bloqueia novas entradas até o Gamma resolver; settlement automático rearma.
-        engine.risk.setEntryEnabled(false);
-        if (operatorState !== 'HALTED') {
-          operatorState = 'HALTED';
+        // Continua no mercado novo — settlement em background; não HALT.
+        if (operatorState !== 'ARMED' && engine.risk.entryEnabled !== false) {
+          operatorState = 'ARMED';
           operatorChangedAtMs = Date.now();
         }
-        await engine.safeShutdown(reason);
-        return { skipped: true, reason: 'POSITION_REQUIRES_SETTLEMENT' };
+        engine.risk.setEntryEnabled(true);
       }
     }
     const t0 = performance.now();
@@ -717,6 +785,13 @@ export function createEngineApp(opts = {}) {
       },
     ],
     getAudit: (limitOrOpts) => executionAudit.listRecent(limitOrOpts),
+    getTrades: (limit = 50) =>
+      buildTradeJournal({
+        auditRows: executionAudit.listRecent({ limit: 500 }),
+        orders: sink.oms?.listOrders?.() ?? [],
+        settlementPending: pendingSettlements,
+        limit,
+      }),
     getStrategyLibrary: opts.getStrategyLibrary,
     getActiveStrategy: opts.getActiveStrategy,
     onSaveStrategyPreset: opts.onSaveStrategyPreset,
