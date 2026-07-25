@@ -9,9 +9,35 @@ const RESEED_MS = 5_000;
 const STALE_RESEED_MS = 8_000;
 
 /**
+ * Normaliza o evento oficial de resolução do Market WebSocket.
+ * @param {object} data
+ */
+export function normalizeMarketResolvedMessage(data) {
+  if (data?.event_type !== 'market_resolved') return null;
+  const winningOutcome = String(data.winning_outcome ?? '').trim();
+  const winningAssetId = String(data.winning_asset_id ?? '').trim();
+  const slug = String(data.slug ?? data.event_message?.slug ?? '').trim() || null;
+  const conditionId =
+    String(data.condition_id ?? data.market ?? '').trim() || null;
+  if (!winningOutcome || (!slug && !conditionId)) return null;
+  const parsedTs = Number(data.timestamp);
+  return {
+    marketId: slug ?? conditionId,
+    slug,
+    conditionId,
+    winningOutcome,
+    winningAssetId: winningAssetId || null,
+    assetIds: Array.isArray(data.assets_ids) ? data.assets_ids.map(String) : [],
+    resolvedAtMs: Number.isFinite(parsedTs) ? parsedTs : null,
+    source: 'clob_ws',
+  };
+}
+
+/**
  * @param {ReturnType<import('./marketState.js').createMarketState>} state
  * @param {object} [opts]
  * @param {() => void} [opts.onUpdate]
+ * @param {(resolution:object) => void|Promise<void>} [opts.onResolution]
  * @param {() => number} [opts.clock]
  */
 export function createClobFeed(state, opts = {}) {
@@ -26,6 +52,9 @@ export function createClobFeed(state, opts = {}) {
   let reconnectAttempt = 0;
   let connectedAtMs = null;
   const onUpdate = typeof opts.onUpdate === 'function' ? opts.onUpdate : () => {};
+  const onResolution =
+    typeof opts.onResolution === 'function' ? opts.onResolution : () => {};
+  const seenResolutions = new Map();
 
   const rawBids = { up: new Map(), down: new Map() };
   const rawAsks = { up: new Map(), down: new Map() };
@@ -197,6 +226,19 @@ export function createClobFeed(state, opts = {}) {
   }
 
   function processMessage(data) {
+    if (data.event_type === 'market_resolved') {
+      const resolution = normalizeMarketResolvedMessage(data);
+      if (!resolution) return false;
+      const key = `${resolution.conditionId ?? resolution.slug}:${resolution.winningOutcome}`;
+      if (seenResolutions.has(key)) return false;
+      seenResolutions.set(key, clock());
+      if (seenResolutions.size > 1000) {
+        seenResolutions.delete(seenResolutions.keys().next().value);
+      }
+      void Promise.resolve(onResolution(resolution)).catch(() => {});
+      return true;
+    }
+
     const assetId = data.asset_id || '';
     const side = assetId === state.upTokenId ? 'up' : assetId === state.downTokenId ? 'down' : null;
     if (!side) return false;

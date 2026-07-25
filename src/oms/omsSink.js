@@ -364,9 +364,18 @@ export function createOmsSink(opts = {}) {
       const executionEvents = [];
       try {
         const cancelResult = await transport.cancel(raw);
-        for (const event of cancelResult.events ?? []) {
-          const applied = applyExternalEvent(event, { notify });
-          executionEvents.push(...(applied.executionEvents ?? []));
+        if (cancelResult.accepted) {
+          for (const event of cancelResult.events ?? []) {
+            const applied = applyExternalEvent(event, { notify });
+            executionEvents.push(...(applied.executionEvents ?? []));
+          }
+        } else {
+          // Cancel API falhou (ordem já unmatched/partial kill no CLOB). Não aplicar REJECT:
+          // com fill parcial isso gerava audit CANCEL_FAILED enganoso; forçamos CANCEL local.
+          lastChannelError = {
+            reason: 'FAK_KILL_CANCEL_FAILED',
+            detail: cancelResult.events?.[0]?.reason ?? reason,
+          };
         }
       } catch (err) {
         lastChannelError = { reason: 'FAK_KILL_CANCEL_FAILED', detail: err.message };

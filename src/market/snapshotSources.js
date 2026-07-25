@@ -31,6 +31,8 @@ function normalizeHandlers(handlers) {
     onSnapshot: handlers.onSnapshot,
     onStatus: typeof handlers.onStatus === 'function' ? handlers.onStatus : () => {},
     onError: typeof handlers.onError === 'function' ? handlers.onError : () => {},
+    onResolution:
+      typeof handlers.onResolution === 'function' ? handlers.onResolution : () => {},
   };
 }
 
@@ -467,7 +469,10 @@ export function createBtc5mSnapshotSource(opts = {}) {
           });
         },
       });
-      clob = makeClob(state, { onUpdate: requestSnapshot });
+      clob = makeClob(state, {
+        onUpdate: requestSnapshot,
+        onResolution: (resolution) => handlers.onResolution(resolution),
+      });
       await loop.start();
     },
     pollNow: () => loop.pollNow(),

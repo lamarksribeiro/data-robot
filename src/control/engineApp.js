@@ -13,7 +13,10 @@ import { createAlertHub } from '../observability/alerts.js';
 import { evaluateSlos, DEFAULT_SLOS } from '../observability/slo.js';
 import { createJournalBackup } from '../observability/journalBackup.js';
 import { createExecutionAudit } from '../observability/executionAudit.js';
-import { resolveBinarySettlementPrice } from '../market/resolveBinarySettlement.js';
+import {
+  resolveBinarySettlementPrice,
+  settlementPriceForWinningOutcome,
+} from '../market/resolveBinarySettlement.js';
 import { createFeedHealthGate } from '../market/health.js';
 import { buildHealthReport } from './health.js';
 import { createControlServer } from './httpServer.js';
@@ -57,6 +60,7 @@ export function createEngineApp(opts = {}) {
   let lastProcessFeedsOk = true;
   let recoveryOk = opts.restoreOnStart !== true;
   let autoCheckpointTimer = null;
+  let settlementTimer = null;
   let started = false;
   let startedAtMs = null;
   let operatorState = startArmed ? 'ARMED' : 'DISARMED';
@@ -65,6 +69,9 @@ export function createEngineApp(opts = {}) {
   let latestPreflight = opts.preflight ?? null;
   /** @type {Array<{marketId:string,side:string,qty:number,avgPrice:number|null,releasedAtMs:number,queuedAtMs:number,toMarketId?:string|null}>} */
   let pendingSettlements = [];
+  let lastSnapshotForSettlement = null;
+  let settlementQueue = Promise.resolve();
+  const marketIdentities = new Map();
   /** Throttle do poll Gamma (ingest pode ser 50ms; não martelar a API). */
   let lastSettlementPollAtMs = 0;
   const settlementPollMs = Math.max(
@@ -224,12 +231,15 @@ export function createEngineApp(opts = {}) {
       entryEnabled: engine.risk.entryEnabled !== false,
       settlementPending: pendingSettlements.map((p) => ({
         marketId: p.marketId,
+        conditionId: p.conditionId ?? null,
         side: p.side,
         qty: p.qty,
         avgPrice: p.avgPrice,
         queuedAtMs: p.queuedAtMs,
         releasedAtMs: p.releasedAtMs,
         toMarketId: p.toMarketId ?? null,
+        lastCheckedAtMs: p.lastCheckedAtMs ?? null,
+        lastReason: p.lastReason ?? null,
         ageMs: Date.now() - (p.queuedAtMs ?? p.releasedAtMs ?? Date.now()),
       })),
     };
@@ -496,6 +506,8 @@ export function createEngineApp(opts = {}) {
       const resolution = await resolveBinarySettlementPrice(pending.marketId, pending.side, {
         fetchFn: opts.fetchFn,
       });
+      // Um market_resolved do WS pode ter concluído enquanto o Gamma respondia.
+      if (!pendingSettlements.includes(pending)) continue;
       if (resolution.ok) {
         const settled = engine.settleReleasedPosition(pending, {
           price: resolution.settlementPrice,
@@ -517,6 +529,7 @@ export function createEngineApp(opts = {}) {
           early: resolution.early === true,
           operatorState,
         });
+        if (opts.persistOnStop === true || opts.restoreOnStart === true) checkpoint();
         if (typeof opts.beforeArm === 'function') {
           try {
             const next = await opts.beforeArm();
@@ -526,13 +539,112 @@ export function createEngineApp(opts = {}) {
           }
         }
       } else {
+        pending.lastCheckedAtMs = Date.now();
+        pending.lastReason = resolution.reason ?? 'SETTLEMENT_UNRESOLVED';
         remaining.push(pending);
       }
     }
     pendingSettlements = remaining;
   }
 
+  function resolutionMatchesMarket(resolution, marketId, conditionId = null) {
+    const resolutionIds = [
+      resolution?.marketId,
+      resolution?.slug,
+      resolution?.conditionId,
+    ]
+      .filter(Boolean)
+      .map(String);
+    const positionIds = [marketId, conditionId].filter(Boolean).map(String);
+    return positionIds.some((id) => resolutionIds.includes(id));
+  }
+
+  async function applyMarketResolution(resolution) {
+    if (mode !== 'live' || !resolution?.winningOutcome) {
+      return { settled: false, reason: 'IGNORED' };
+    }
+
+    const current = engine.position;
+    const currentIdentity = marketIdentities.get(current?.marketId);
+    if (
+      current?.qty > 0 &&
+      resolutionMatchesMarket(resolution, current.marketId, currentIdentity?.conditionId)
+    ) {
+      const price = settlementPriceForWinningOutcome(current.side, resolution.winningOutcome);
+      if (price == null) return { settled: false, reason: 'WINNER_INVALID' };
+      const settled = engine.settlePosition({
+        price,
+        reason: 'binary_expiry_settlement',
+        marketId: current.marketId,
+      });
+      executionAudit.append('position_settled', {
+        fromMarketId: current.marketId,
+        toMarketId: lastSnapshotForSettlement?.marketId ?? null,
+        winner: resolution.winningOutcome,
+        resolutionSource: resolution.source ?? 'clob_ws',
+        resolvedAtMs: resolution.resolvedAtMs ?? null,
+        ...settled,
+      });
+      logger.info('position_settled_from_resolution', {
+        fromMarketId: current.marketId,
+        winner: resolution.winningOutcome,
+        pnlDelta: settled.pnlDelta,
+        resolutionSource: resolution.source ?? 'clob_ws',
+      });
+      if (opts.persistOnStop === true || opts.restoreOnStart === true) checkpoint();
+      return settled;
+    }
+
+    const pending = pendingSettlements.find((candidate) =>
+      resolutionMatchesMarket(resolution, candidate.marketId, candidate.conditionId),
+    );
+    if (!pending) return { settled: false, reason: 'POSITION_NOT_FOUND' };
+    const price = settlementPriceForWinningOutcome(pending.side, resolution.winningOutcome);
+    if (price == null) return { settled: false, reason: 'WINNER_INVALID' };
+    const settled = engine.settleReleasedPosition(pending, {
+      price,
+      reason: 'binary_expiry_settlement',
+      toMarketId: lastSnapshotForSettlement?.marketId ?? pending.toMarketId ?? null,
+    });
+    pendingSettlements = pendingSettlements.filter((candidate) => candidate !== pending);
+    executionAudit.append('position_settled', {
+      fromMarketId: pending.marketId,
+      toMarketId: lastSnapshotForSettlement?.marketId ?? pending.toMarketId ?? null,
+      winner: resolution.winningOutcome,
+      async: true,
+      resolutionSource: resolution.source ?? 'clob_ws',
+      resolvedAtMs: resolution.resolvedAtMs ?? null,
+      ...settled,
+    });
+    logger.info('position_settled_from_resolution', {
+      fromMarketId: pending.marketId,
+      winner: resolution.winningOutcome,
+      pnlDelta: settled.pnlDelta,
+      resolutionSource: resolution.source ?? 'clob_ws',
+    });
+    if (opts.persistOnStop === true || opts.restoreOnStart === true) checkpoint();
+    return settled;
+  }
+
+  function enqueueMarketResolution(resolution) {
+    const run = settlementQueue.then(() => applyMarketResolution(resolution));
+    settlementQueue = run.catch((error) => {
+      logger.warn('market_resolution_failed', {
+        marketId: resolution?.marketId ?? null,
+        reason: error.message,
+      });
+    });
+    return run;
+  }
+
   async function ingest(snapshot, useMarketGate) {
+    lastSnapshotForSettlement = snapshot ?? lastSnapshotForSettlement;
+    if (snapshot?.marketId && snapshot?.identity) {
+      marketIdentities.set(snapshot.marketId, { ...snapshot.identity });
+      if (marketIdentities.size > 20) {
+        marketIdentities.delete(marketIdentities.keys().next().value);
+      }
+    }
     // Ordem FAK/ENTER de mercado anterior sem posição: cancelar (não pode restar como GTC).
     if (mode === 'live' && snapshot?.marketId && typeof sink.cancelOpenOrders === 'function') {
       const open = sink.oms?.openOrders?.() ?? [];
@@ -601,6 +713,7 @@ export function createEngineApp(opts = {}) {
           settlementPrice: resolution.settlementPrice,
           operatorState,
         });
+        if (opts.persistOnStop === true || opts.restoreOnStart === true) checkpoint();
         // Atualiza saldo exibido quando houver revalidate (live).
         if (typeof opts.beforeArm === 'function') {
           try {
@@ -614,8 +727,12 @@ export function createEngineApp(opts = {}) {
       } else {
         const released = engine.releasePositionForSettlementQueue();
         if (released) {
+          const releasedIdentity = marketIdentities.get(released.marketId);
           const pending = {
             ...released,
+            conditionId: releasedIdentity?.conditionId ?? null,
+            upTokenId: releasedIdentity?.upTokenId ?? null,
+            downTokenId: releasedIdentity?.downTokenId ?? null,
             queuedAtMs: Date.now(),
             toMarketId: snapshot.marketId,
           };
@@ -636,6 +753,7 @@ export function createEngineApp(opts = {}) {
             reason: resolution.reason ?? 'MARKET_STILL_OPEN',
             operatorState,
           });
+          if (opts.persistOnStop === true || opts.restoreOnStart === true) checkpoint();
         }
         // Continua no mercado novo — settlement em background; não HALT.
         if (operatorState !== 'ARMED' && engine.risk.entryEnabled !== false) {
@@ -761,7 +879,10 @@ export function createEngineApp(opts = {}) {
   }
 
   function checkpoint() {
-    lastCheckpoint = engine.checkpoint();
+    lastCheckpoint = {
+      ...engine.checkpoint(),
+      pendingSettlements: pendingSettlements.map((pending) => ({ ...pending })),
+    };
     if (sink.oms?.journal) {
       backup.save(sink.oms.journal.snapshot(), 'checkpoint');
     }
@@ -887,6 +1008,11 @@ export function createEngineApp(opts = {}) {
         if (latest) {
           lastCheckpoint = backup.loadCheckpoint(latest);
           engine.restore(lastCheckpoint);
+          pendingSettlements = Array.isArray(lastCheckpoint.pendingSettlements)
+            ? lastCheckpoint.pendingSettlements
+                .filter((pending) => pending?.marketId && pending?.side && Number(pending?.qty) > 0)
+                .map((pending) => ({ ...pending }))
+            : [];
           const previousFeed = lastCheckpoint.lastSnapshot?.feeds?.healthy;
           lastFeedsOk = previousFeed === true;
         }
@@ -922,6 +1048,7 @@ export function createEngineApp(opts = {}) {
             onSnapshot: ingestMarketSnapshot,
             onStatus: updateSourceStatus,
             onError: noteSourceError,
+            onResolution: enqueueMarketResolution,
           });
         } catch (error) {
           updateSourceStatus({ running: false, ok: false, reason: 'START_FAILED' });
@@ -946,6 +1073,19 @@ export function createEngineApp(opts = {}) {
         autoCheckpointTimer = setInterval(checkpoint, autoCheckpointMs);
         if (autoCheckpointTimer.unref) autoCheckpointTimer.unref();
       }
+      if (mode === 'live') {
+        settlementTimer = setInterval(() => {
+          void processPendingSettlements(lastSnapshotForSettlement).catch((error) => {
+            logger.warn('settlement_poll_failed', { reason: error.message });
+          });
+        }, settlementPollMs);
+        settlementTimer.unref?.();
+        if (pendingSettlements.length > 0) {
+          void processPendingSettlements(lastSnapshotForSettlement, { force: true }).catch(
+            (error) => logger.warn('settlement_restore_poll_failed', { reason: error.message }),
+          );
+        }
+      }
       return status();
     },
 
@@ -954,6 +1094,10 @@ export function createEngineApp(opts = {}) {
       if (autoCheckpointTimer) {
         clearInterval(autoCheckpointTimer);
         autoCheckpointTimer = null;
+      }
+      if (settlementTimer) {
+        clearInterval(settlementTimer);
+        settlementTimer = null;
       }
       if (snapshotSource) {
         try {

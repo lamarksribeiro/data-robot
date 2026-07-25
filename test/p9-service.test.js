@@ -399,6 +399,151 @@ describe('proteção de rotação com posição live', () => {
     const audit = app.executionAudit.listRecent(40);
     assert.ok(audit.some((row) => row.type === 'position_settled' && row.early === true));
   });
+
+  it('confirma P&L imediatamente pelo market_resolved do CLOB', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p9-engine-ws-resolution-'));
+    cleanup.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+    let sourceHandlers = null;
+    const snapshotSource = {
+      kind: 'test-resolution',
+      start: async (handlers) => {
+        sourceHandlers = handlers;
+      },
+      stop: async () => {},
+    };
+    const sink = {
+      userChannel: { connected: true, lastHeartbeatMs: Date.now() },
+      start: async () => ({ ok: true }),
+      assertReady: () => true,
+      reconcileAll: async () => ({ ok: true, unresolved: [], orphans: [] }),
+      submit: async (intent) => ({
+        accepted: true,
+        events: [{
+          eventId: `fill-${intent.intentId}`,
+          intentId: intent.intentId,
+          type: 'FILL',
+          side: intent.side,
+          qty: 2,
+          price: 0.5,
+          tsMs: Date.now(),
+        }],
+      }),
+      cancelOpenOrders: async () => ({ canceled: [], failed: [] }),
+      dispose: () => {},
+    };
+    const app = createEngineApp({
+      mode: 'live',
+      liveEnabled: true,
+      strategyId: 'fixture-price-cross',
+      strategyInstanceId: 'fixture:live',
+      preset: { threshold: 1, budget: 1, maxPrice: 0.5 },
+      riskOpts: { preflightChecks: passingChecks() },
+      sink,
+      snapshotSource,
+      fetchFn: async () => ({
+        ok: true,
+        json: async () => [{
+          closed: false,
+          markets: [{
+            closed: false,
+            outcomes: '["Up","Down"]',
+            outcomePrices: '["0.5","0.5"]',
+          }],
+        }],
+      }),
+      settlementPollMs: 60_000,
+      serveHttp: false,
+      backupDir: path.join(dir, 'backup'),
+      executionAuditDir: path.join(dir, 'audit'),
+      startArmed: true,
+    });
+    cleanup.push(() => app.stop());
+    await app.start();
+    await app.ingestSynthetic(fixtureSnapshot('market-a'));
+    await app.ingestSynthetic(fixtureSnapshot('market-b'));
+    assert.equal(app.status().settlementPending.length, 1);
+
+    await sourceHandlers.onResolution({
+      marketId: 'market-a',
+      slug: 'market-a',
+      winningOutcome: 'Up',
+      resolvedAtMs: Date.now(),
+      source: 'clob_ws',
+    });
+
+    assert.equal(app.status().settlementPending.length, 0);
+    assert.equal(app.status().position.realizedPnl, 1);
+    const audit = app.executionAudit.listRecent(40);
+    assert.ok(
+      audit.some(
+        (row) => row.type === 'position_settled' && row.resolutionSource === 'clob_ws',
+      ),
+    );
+  });
+
+  it('persiste settlement pendente no checkpoint e restaura após restart', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p9-engine-pending-restore-'));
+    cleanup.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const makeSink = () => ({
+      userChannel: { connected: true, lastHeartbeatMs: Date.now() },
+      start: async () => ({ ok: true }),
+      assertReady: () => true,
+      reconcileAll: async () => ({ ok: true, unresolved: [], orphans: [] }),
+      submit: async (intent) => ({
+        accepted: true,
+        events: [{
+          eventId: `fill-${intent.intentId}`,
+          intentId: intent.intentId,
+          type: 'FILL',
+          side: intent.side,
+          qty: 2,
+          price: 0.5,
+          tsMs: Date.now(),
+        }],
+      }),
+      cancelOpenOrders: async () => ({ canceled: [], failed: [] }),
+      dispose: () => {},
+    });
+    const unresolvedFetch = async () => ({
+      ok: true,
+      json: async () => [{
+        closed: false,
+        markets: [{
+          closed: false,
+          outcomes: '["Up","Down"]',
+          outcomePrices: '["0.5","0.5"]',
+        }],
+      }],
+    });
+    const common = {
+      mode: 'live',
+      liveEnabled: true,
+      strategyId: 'fixture-price-cross',
+      strategyInstanceId: 'fixture:live',
+      preset: { threshold: 1, budget: 1, maxPrice: 0.5 },
+      riskOpts: { preflightChecks: passingChecks() },
+      fetchFn: unresolvedFetch,
+      settlementPollMs: 60_000,
+      serveHttp: false,
+      backupDir: path.join(dir, 'backup'),
+      executionAuditDir: path.join(dir, 'audit'),
+      startArmed: true,
+      restoreOnStart: true,
+      persistOnStop: true,
+    };
+    const first = createEngineApp({ ...common, sink: makeSink() });
+    await first.start();
+    await first.ingestSynthetic(fixtureSnapshot('market-a'));
+    await first.ingestSynthetic(fixtureSnapshot('market-b'));
+    assert.equal(first.status().settlementPending.length, 1);
+    await first.stop();
+
+    const second = createEngineApp({ ...common, sink: makeSink() });
+    cleanup.push(() => second.stop());
+    await second.start();
+    assert.equal(second.status().settlementPending.length, 1);
+    assert.equal(second.status().settlementPending[0].marketId, 'market-a');
+  });
 });
 
 describe('ciclo operacional da instância', () => {

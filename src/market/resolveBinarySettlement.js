@@ -20,6 +20,25 @@ export function outcomePricesLookResolved(prices) {
 }
 
 /**
+ * Converte o vencedor publicado pelo CLOB no preço final do lado carregado.
+ * @param {'UP'|'DOWN'|string} side
+ * @param {string} winningOutcome
+ * @returns {0|1|null}
+ */
+export function settlementPriceForWinningOutcome(side, winningOutcome) {
+  const sideKey = String(side || '').trim().toUpperCase();
+  const winnerKey = String(winningOutcome || '').trim().toUpperCase();
+  if (!sideKey || !winnerKey) return null;
+  const aliases =
+    sideKey === 'UP'
+      ? ['UP', 'YES', 'HIGHER']
+      : sideKey === 'DOWN'
+        ? ['DOWN', 'NO', 'LOWER']
+        : [sideKey];
+  return aliases.includes(winnerKey) ? 1 : 0;
+}
+
+/**
  * @param {string} marketId slug (ex.: btc-updown-5m-1784793300)
  * @param {'UP'|'DOWN'|string} side
  * @param {{ fetchFn?: typeof fetch, gammaBase?: string }} [opts]
@@ -30,10 +49,15 @@ export async function resolveBinarySettlementPrice(marketId, side, opts = {}) {
   if (!slug) return { ok: false, reason: 'MISSING_MARKET_ID' };
   const fetchFn = opts.fetchFn ?? fetch;
   const gammaBase = opts.gammaBase ?? 'https://gamma-api.polymarket.com';
-  const url = `${gammaBase}/events?slug=${encodeURIComponent(slug)}`;
+  // Query única + no-cache evitam uma resposta intermediária retida no edge
+  // durante os poucos segundos críticos após o fim do evento.
+  const url = `${gammaBase}/events?slug=${encodeURIComponent(slug)}&_ts=${Date.now()}`;
   let payload;
   try {
-    const res = await fetchFn(url, { headers: { accept: 'application/json' } });
+    const res = await fetchFn(url, {
+      cache: 'no-store',
+      headers: { accept: 'application/json', 'cache-control': 'no-cache' },
+    });
     if (!res.ok) return { ok: false, reason: `GAMMA_HTTP_${res.status}` };
     payload = await res.json();
   } catch (error) {

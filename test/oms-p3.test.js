@@ -329,6 +329,82 @@ describe('FAK terminalização (anti-ordem-presa)', () => {
     sink.dispose();
   });
 
+  it('ENTER FAK parcial (2.11/3) terminaliza MATCHED sem REJECT CANCEL_FAILED', async () => {
+    const { Side, OrderType } = await import('@polymarket/clob-client-v2');
+    const { createLiveTransport, createMockClobClient } = await import('../src/executor/liveTransport.js');
+    const client = createMockClobClient({ behavior: 'fak-partial', partialSize: 2.11 });
+    const sink = createOmsSink({
+      mode: 'shadow',
+      transport: createLiveTransport({ client, Side, OrderType }),
+      finalizeImmediateOrders: true,
+      immediateOrderTimeoutMs: 400,
+      immediateOrderPollMs: 40,
+    });
+    const result = await sink.submit({
+      intentId: 'fak-partial-1',
+      kind: 'ENTER',
+      side: 'DOWN',
+      marketId: 'm-1',
+      strategyInstanceId: 'inst-1',
+      quantity: 3,
+      maxPrice: 0.62,
+      reason: 'test',
+      tokenId: 'tok-down',
+      orderType: 'FAK',
+    });
+    assert.equal(result.accepted, true);
+    const order = sink.oms.getOrder('fak-partial-1');
+    assert.equal(order.state, 'MATCHED', `esperava MATCHED após fill parcial, got ${order.state}`);
+    assert.ok(Math.abs(order.qtyFilled - 2.11) < 1e-9);
+    assert.equal(sink.oms.openOrders().length, 0);
+    assert.ok(result.events.some((e) => e.type === 'PARTIAL' && Number(e.qty) > 0));
+    assert.ok(result.events.some((e) => e.type === 'CANCEL' && Number(e.qty) > 0));
+    assert.equal(
+      result.events.some((e) => e.type === 'REJECT'),
+      false,
+      'não deve emitir REJECT/CANCEL_FAILED após fill parcial',
+    );
+    const pos = sink.oms.position('inst-1');
+    assert.ok(pos && Math.abs(pos.qty - 2.11) < 1e-9);
+    sink.dispose();
+  });
+
+  it('CANCEL com qtyFilled>0 vira MATCHED no OMS', () => {
+    const oms = createOms();
+    oms.registerIntent(
+      intent({ intentId: 'partial-cancel', quantity: 3, orderType: 'FAK', maxPrice: 0.62 }),
+    );
+    oms.applyExchangeEvent({
+      eventId: 'ack-1',
+      intentId: 'partial-cancel',
+      type: 'ACK',
+      qty: 0,
+      price: 0.62,
+      tsMs: 1,
+    });
+    oms.applyExchangeEvent({
+      eventId: 'partial-1',
+      intentId: 'partial-cancel',
+      type: 'PARTIAL',
+      qty: 2.11,
+      price: 0.62,
+      tsMs: 2,
+    });
+    const canceled = oms.applyExchangeEvent({
+      eventId: 'cancel-1',
+      intentId: 'partial-cancel',
+      type: 'CANCEL',
+      qty: 0,
+      price: 0.62,
+      reason: 'fak_timeout_killed',
+      tsMs: 3,
+    });
+    assert.equal(canceled.order.state, 'MATCHED');
+    assert.ok(Math.abs(canceled.order.qtyFilled - 2.11) < 1e-9);
+    assert.equal(canceled.executionEvents[0].type, 'CANCEL');
+    assert.ok(Number(canceled.executionEvents[0].qty) > 0);
+  });
+
   it('CANCEL sem fill tira a engine de ENTRY_PENDING para ARMED', async () => {
     let submitted = false;
     const engine = bootstrapEngine({

@@ -198,12 +198,34 @@ export function createOms(opts = {}) {
         }),
       );
     } else if (type === 'CANCEL') {
-      transition(order, order.state === 'LIVE' || order.state === 'PARTIAL' ? 'CANCEL_PENDING' : order.state);
-      transition(order, 'CANCELED', { source: 'CANCEL' });
-      executionEvents.push(toExecEvent(order, 'CANCEL', event));
+      // FAK/FOK (e GTC parcial): fill mantido + resto cancelado → MATCHED, não CANCELED.
+      // CANCELED com qtyFilled>0 parecia "ordem cancelada" na UI/audit apesar do fill válido.
+      const hadFill = Number(order.qtyFilled) > 0;
+      if (order.state === 'LIVE' || order.state === 'PARTIAL') {
+        transition(order, 'CANCEL_PENDING', { source: 'CANCEL' });
+      }
+      if (hadFill) {
+        transition(order, 'MATCHED', {
+          source: 'CANCEL',
+          reason: event.reason ?? 'remainder_canceled',
+        });
+      } else {
+        transition(order, 'CANCELED', { source: 'CANCEL', reason: event.reason });
+      }
+      executionEvents.push(
+        toExecEvent(order, 'CANCEL', {
+          ...event,
+          // qty no CANCEL = filled (para audit/filled=true); 0 se miss total
+          qty: hadFill ? order.qtyFilled : 0,
+        }),
+      );
     } else if (type === 'REJECT') {
-      transition(order, 'REJECTED', { source: 'REJECT', reason: event.reason });
-      executionEvents.push(toExecEvent(order, 'REJECT', event));
+      const moved = transition(order, 'REJECTED', { source: 'REJECT', reason: event.reason });
+      // Não emitir REJECT se a transição foi bloqueada (ex.: PARTIAL→REJECTED inválido):
+      // o caller deve forçar CANCEL do resto; senão o audit mostra CANCEL_FAILED falso.
+      if (moved) {
+        executionEvents.push(toExecEvent(order, 'REJECT', event));
+      }
     } else if (type === 'UNKNOWN') {
       transition(order, 'UNKNOWN', { source: 'UNKNOWN' });
       executionEvents.push(toExecEvent(order, 'UNKNOWN', event));

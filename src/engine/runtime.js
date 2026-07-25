@@ -451,9 +451,16 @@ export function createEngine(opts) {
         latencyMs:
           meta.submitStartedAtMs != null ? Math.max(0, clock() - meta.submitStartedAtMs) : null,
         bookAtSubmit: meta.bookAtSubmit ?? null,
-        filled: event.type === 'FILL' || event.type === 'PARTIAL',
+        filled:
+          event.type === 'FILL' ||
+          event.type === 'PARTIAL' ||
+          (event.type === 'CANCEL' && Number(event.qty) > 0),
       });
-      if (event.type === 'FILL' || event.type === 'PARTIAL') {
+      if (
+        event.type === 'FILL' ||
+        event.type === 'PARTIAL' ||
+        (event.type === 'CANCEL' && Number(event.qty) > 0)
+      ) {
         lastUnfilledEnter = null;
         lastRetryGateAuditKey = null;
       }

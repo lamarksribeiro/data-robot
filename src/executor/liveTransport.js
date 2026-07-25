@@ -322,9 +322,13 @@ export function createLiveTransport(opts) {
           CANCEL_TIMEOUT_MS,
           'cancel',
         );
+        const msg = String(resp?.errorMsg ?? resp?.message ?? '');
+        const alreadyGone =
+          /already|not found|does not exist|unknown order|unmatched|canceled|cancelled/i.test(msg);
         const ok =
           resp?.success === true ||
-          (Array.isArray(resp?.canceled) && resp.canceled.includes(exchangeOrderId));
+          (Array.isArray(resp?.canceled) && resp.canceled.includes(exchangeOrderId)) ||
+          alreadyGone;
         log.push({ action: 'cancel', intentId: order.intentId, exchangeOrderId, ok, tsMs });
         return {
           accepted: ok,
@@ -336,12 +340,39 @@ export function createLiveTransport(opts) {
               type: ok ? 'CANCEL' : 'REJECT',
               qty: 0,
               price: null,
-              reason: ok ? 'clob_cancel' : resp?.errorMsg || 'CANCEL_FAILED',
+              reason: ok
+                ? alreadyGone && resp?.success !== true
+                  ? 'clob_cancel_already_gone'
+                  : 'clob_cancel'
+                : resp?.errorMsg || 'CANCEL_FAILED',
               tsMs,
             },
           ],
         };
       } catch (err) {
+        const message = errorMessage(err) || 'CANCEL_ERROR';
+        const alreadyGone =
+          /already|not found|does not exist|unknown order|404/i.test(message) ||
+          err?.response?.status === 404 ||
+          err?.status === 404;
+        // Cancel idempotente: ordem já sumiu do book = sucesso para FAK remainder.
+        if (alreadyGone) {
+          return {
+            accepted: true,
+            events: [
+              {
+                eventId: `live-cancel-gone-${order.intentId}`,
+                intentId: order.intentId,
+                exchangeOrderId,
+                type: 'CANCEL',
+                qty: 0,
+                price: null,
+                reason: 'clob_cancel_already_gone',
+                tsMs,
+              },
+            ],
+          };
+        }
         return {
           accepted: false,
           events: [
@@ -352,7 +383,7 @@ export function createLiveTransport(opts) {
               type: 'REJECT',
               qty: 0,
               price: null,
-              reason: errorMessage(err) || 'CANCEL_ERROR',
+              reason: message,
               tsMs,
             },
           ],
@@ -635,13 +666,19 @@ export function createMockClobClient(opts = {}) {
       seq += 1;
       const orderID = `mock-ord-${seq}`;
       const status = behavior === 'matched' ? 'matched' : 'live';
+      const partialMatched =
+        behavior === 'fak-partial'
+          ? String(Math.min(Number(args.size) || 0, Number(opts.partialSize ?? 2.11)))
+          : behavior === 'matched'
+            ? String(args.size)
+            : '0';
       orders.set(orderID, {
         ...args,
         id: orderID,
         orderID,
         status,
         original_size: String(args.size),
-        size_matched: behavior === 'matched' ? String(args.size) : '0',
+        size_matched: partialMatched,
         price: String(args.price),
         associate_trades: [],
       });
@@ -649,12 +686,23 @@ export function createMockClobClient(opts = {}) {
         success: true,
         orderID,
         status,
-        takingAmount: behavior === 'matched' ? String(args.size) : '0',
-        makingAmount: behavior === 'matched' ? String(args.size * args.price) : '0',
+        takingAmount: behavior === 'matched' ? String(args.size) : partialMatched,
+        makingAmount:
+          behavior === 'matched' || behavior === 'fak-partial'
+            ? String(Number(partialMatched) * Number(args.price))
+            : '0',
         tradeIDs: [],
       };
     },
     async cancelOrder({ orderID }) {
+      // fak-partial: simula CLOB que já matou o resto (cancel falha / already gone).
+      if (behavior === 'fak-partial') {
+        if (!orders.has(orderID)) {
+          return { success: false, errorMsg: 'order not found', canceled: [] };
+        }
+        orders.delete(orderID);
+        return { success: false, errorMsg: 'order already unmatched', canceled: [] };
+      }
       if (!orders.has(orderID)) return { success: false, canceled: [] };
       orders.delete(orderID);
       return { success: true, canceled: [orderID] };
@@ -673,6 +721,14 @@ export function createMockClobClient(opts = {}) {
           ...order,
           status: 'unmatched',
           size_matched: '0',
+        };
+      }
+      // fak-partial: fica LIVE com size_matched parcial até o kill local.
+      if (behavior === 'fak-partial') {
+        return {
+          ...order,
+          status: 'live',
+          size_matched: order.size_matched,
         };
       }
       return { ...order };
