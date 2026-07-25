@@ -119,7 +119,7 @@ describe('MIDAS micro-live canary', () => {
     assert.equal(hasLiveFlag(['node', 'x', '--live']), true);
   });
 
-  it('EXIT danger inclui tokenId e orderType FAK no canário', async () => {
+  it('EXIT danger inclui tokenId e orderType GTC (fill garantido) no canário', async () => {
     const { createMidasV1Strategy } = await import('../src/strategy/midasV1.js');
     const { buildStrategyContext } = await import('../src/engine/contract.js');
     const strategy = createMidasV1Strategy();
@@ -153,7 +153,7 @@ describe('MIDAS micro-live canary', () => {
     const exit = out.intents.find((i) => i.kind === 'EXIT');
     assert.ok(exit, `esperava EXIT, intents=${JSON.stringify(out.intents)} diag=${JSON.stringify(out.diagnostics)}`);
     assert.equal(exit.tokenId, 'up');
-    assert.equal(exit.orderType, 'FAK');
+    assert.equal(exit.orderType, 'GTC');
     assert.ok(Number(exit.minPrice) >= 0.05);
   });
 });

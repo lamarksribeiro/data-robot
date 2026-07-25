@@ -472,7 +472,12 @@ export function createMidasV1Strategy(opts = {}) {
             exitTokenId: resolveTokenId(snapshot, ctx.position.side),
             exitSide: ctx.position.side,
             exitQuantity: ctx.position.qty,
-            orderType: params.exitOrderType ?? params.entryOrderType ?? 'GTC',
+            // Pernas da saga têm perfis de risco diferentes: comprar o lado novo
+            // (enter) usa a mesma política de entrada normal; vender o lado velho
+            // (exit) é protetora e usa a política de saída — reverseSaga.js aplica
+            // cada uma à perna correta (nunca reusar um só orderType nas duas).
+            orderType: params.entryOrderType ?? 'GTC',
+            exitOrderType: params.exitOrderType ?? params.entryOrderType ?? 'GTC',
           });
           return { state: next, intents, diagnostics };
         }

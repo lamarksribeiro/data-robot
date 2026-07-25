@@ -57,7 +57,12 @@ export async function executeReverseSaga(opts) {
     return reject(intent, 'NO_POSITION_TO_REVERSE', clock);
   }
 
-  const orderType = intent.orderType ?? 'FAK';
+  // Pernas independentes de propósito: exit (vender o lado velho) é protetora
+  // e usa exitOrderType; enter (comprar o lado novo) segue a política normal de
+  // entrada. Nunca reusar o mesmo orderType nas duas — GTC na saída não deve
+  // "vazar" para a compra do lado oposto.
+  const enterOrderType = intent.orderType ?? 'FAK';
+  const exitOrderType = intent.exitOrderType ?? enterOrderType;
   const exitIntent = {
     intentId: `${intent.intentId}:exit`,
     kind: 'EXIT',
@@ -71,7 +76,7 @@ export async function executeReverseSaga(opts) {
     deadlineMs: intent.deadlineMs,
     reason: `${intent.reason ?? 'late_flip_reverse'}:exit`,
     presetId: intent.presetId ?? null,
-    orderType,
+    orderType: exitOrderType,
     tokenId: intent.exitTokenId ?? null,
   };
 
@@ -123,7 +128,7 @@ export async function executeReverseSaga(opts) {
     deadlineMs: intent.deadlineMs,
     reason: `${intent.reason ?? 'late_flip_reverse'}:enter`,
     presetId: intent.presetId ?? null,
-    orderType,
+    orderType: enterOrderType,
     tokenId: intent.tokenId ?? null,
   };
 

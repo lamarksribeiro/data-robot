@@ -106,12 +106,23 @@ export const MIDAS_AGGRESSIVE_V1 = {
   tierAskBudgetFactor: 2.0,
 };
 
+/**
+ * exitOrderType = 'GTC' (não FAK): a perna de saída é protetora (danger/early-warn/
+ * late-flip-exit e a perna EXIT da saga REVERSE) e precisa de fill garantido, não
+ * fill-or-kill. FAK na saída falha sem retry quando o book do lado a sair está fino
+ * perto do expiry (comum aos 4-8s), deixando a posição presa no lado perdedor
+ * (`REVERSE_EXIT_INCOMPLETE` em reverseSaga.js). O preço de saída já é calculado
+ * como marketable (buildExitOrderFields em midasV1.js: minPrice ≈ bid), então GTC
+ * cruza o book imediatamente na prática — só não é morta se não achar contraparte,
+ * ficando como ordem residual em vez de reject silencioso. Entrada continua FAK
+ * (controla slippage; não há urgência de proteção em não entrar).
+ */
 export const MICRO_AGGRESSIVE = Object.freeze({
   entryBudget: 2,
   maxEntryBudget: 4,
   minShares: 1,
   entryOrderType: 'FAK',
-  exitOrderType: 'FAK',
+  exitOrderType: 'GTC',
 });
 
 /** @deprecated Prefer MICRO_AGGRESSIVE */
@@ -120,7 +131,7 @@ export const MICRO_ROBUST = Object.freeze({
   maxEntryBudget: 3,
   minShares: 1,
   entryOrderType: 'FAK',
-  exitOrderType: 'FAK',
+  exitOrderType: 'GTC',
 });
 
 export const CANARY_LIMITS = Object.freeze({

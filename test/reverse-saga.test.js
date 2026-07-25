@@ -87,6 +87,11 @@ describe('MIDAS reverse saga', () => {
     assert.ok(parent, `esperava REVERSE pai; orders=${orders.map((o) => o.kind + ':' + o.intentId)}`);
     assert.ok(exitLeg, 'esperava perna EXIT');
     assert.ok(enterLeg, 'esperava perna ENTER');
+    // Pernas não podem compartilhar orderType: exit é protetora (exitOrderType do
+    // preset), enter segue a entrada normal (entryOrderType) — nunca o inverso.
+    assert.equal(exitLeg.orderType, canaryMidasPreset().exitOrderType);
+    assert.equal(enterLeg.orderType, canaryMidasPreset().entryOrderType);
+    assert.notEqual(exitLeg.orderType, enterLeg.orderType);
     assert.equal(engine.position.side, 'DOWN');
     assert.ok(engine.position.qty > 0);
     assert.notEqual(engine.position.side, entrySide);
