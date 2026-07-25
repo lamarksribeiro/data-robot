@@ -3,7 +3,7 @@
 import { AssetType, OrderType, Side } from '@polymarket/clob-client-v2';
 import config from '../config.js';
 import { buildClobClient } from '../clob/buildClient.js';
-import { fetchPositionsValueUsd } from '../clob/portfolioValue.js';
+import { buildPolymarketPortfolio, fetchPositionsValueUsd } from '../clob/portfolioValue.js';
 import { resolveSignatureType } from '../clob/signatureType.js';
 import { createSigner } from '../clob/wallet.js';
 import { createLiveTransport } from '../executor/liveTransport.js';
@@ -25,9 +25,9 @@ function parseCollateral(value) {
 }
 
 /**
- * Leitura read-only de saldo/allowance USDC no CLOB + valor de posições (Data API).
- * UI deve preferir portfolioUsd (cash + posições), alinhado à carteira Polymarket.
- * Não habilita trading; não substitui preflight live completo.
+ * Lê a carteira direto das mesmas fontes da UI Polymarket:
+ * CLOB cash + Data API /value → Portfolio.
+ * Faz updateBalanceAllowance antes do get para sincronizar o cache CLOB.
  */
 export async function fetchWalletSnapshot(opts = {}) {
   if (!config.polymarketPrivateKey) {
@@ -41,6 +41,14 @@ export async function fetchWalletSnapshot(opts = {}) {
   const client =
     opts.client ?? buildClobClient({ wallet, signatureType, funderAddress, throwOnError: true });
 
+  if (opts.skipBalanceSync !== true && typeof client.updateBalanceAllowance === 'function') {
+    try {
+      await client.updateBalanceAllowance({ asset_type: AssetType.COLLATERAL });
+    } catch {
+      /* segue com get — sync é best-effort */
+    }
+  }
+
   const bal = await client.getBalanceAllowance({ asset_type: AssetType.COLLATERAL });
   const cashUsd = parseCollateral(bal?.balance);
   const rawAllowance = Math.max(
@@ -48,7 +56,6 @@ export async function fetchWalletSnapshot(opts = {}) {
     ...Object.values(bal?.allowances ?? {}).map((v) => parseCollateral(v)),
     0,
   );
-  // CLOB às vezes devolve allowance “max uint” — trata como efetivamente ilimitado p/ UI.
   const allowanceUsd = rawAllowance > 1e9 ? null : rawAllowance;
 
   const positionsValueUsd = await fetchPositionsValueUsd({
@@ -57,12 +64,14 @@ export async function fetchWalletSnapshot(opts = {}) {
     dataApiBase: opts.dataApiBase ?? config.dataApiBase,
     timeoutMs: opts.timeoutMs,
   });
-  const portfolioUsd =
-    positionsValueUsd != null && Number.isFinite(cashUsd)
-      ? cashUsd + positionsValueUsd
-      : Number.isFinite(cashUsd)
-        ? cashUsd
-        : null;
+
+  const portfolio = buildPolymarketPortfolio({
+    cashUsd,
+    positionsValueUsd,
+    allowanceUsd,
+    allowanceUnlimited: rawAllowance > 1e9,
+    funderAddress,
+  });
 
   return {
     ok: true,
@@ -71,15 +80,8 @@ export async function fetchWalletSnapshot(opts = {}) {
     checks: {
       balance: {
         ok: Number.isFinite(cashUsd),
-        // balanceUsd = portfolio (exibição / equity); cashUsd = spendable CLOB.
-        balanceUsd: portfolioUsd ?? cashUsd,
-        cashUsd,
-        positionsValueUsd,
-        portfolioUsd,
-        allowanceUsd,
-        allowanceUnlimited: rawAllowance > 1e9,
+        ...portfolio,
         minBalanceUsd: 0,
-        source: positionsValueUsd != null ? 'clob+data-api' : 'clob-read',
       },
     },
   };

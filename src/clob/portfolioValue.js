@@ -1,6 +1,8 @@
 /**
- * Valor mark-to-market das posições abertas via Data API pública.
- * A Polymarket monta o portfolio como cash CLOB + este valor.
+ * Carteira alinhada à UI Polymarket:
+ * - Cash        = CLOB getBalanceAllowance(COLLATERAL)
+ * - Positions   = Data API GET /value?user=<funder>
+ * - Portfolio   = Cash + Positions  (header "Portfolio" no site)
  */
 
 /**
@@ -25,4 +27,38 @@ export async function fetchPositionsValueUsd(opts) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Monta o mesmo trio Cash / Positions / Portfolio que a Polymarket exibe.
+ * @param {{
+ *   cashUsd: number,
+ *   positionsValueUsd?: number|null,
+ *   allowanceUsd?: number|null,
+ *   allowanceUnlimited?: boolean,
+ *   funderAddress?: string,
+ * }} parts
+ */
+export function buildPolymarketPortfolio(parts) {
+  const cashUsd = Number(parts.cashUsd);
+  const positionsValueUsd =
+    parts.positionsValueUsd == null ? null : Number(parts.positionsValueUsd);
+  const portfolioUsd =
+    Number.isFinite(cashUsd) && positionsValueUsd != null && Number.isFinite(positionsValueUsd)
+      ? cashUsd + positionsValueUsd
+      : Number.isFinite(cashUsd)
+        ? cashUsd
+        : null;
+  return {
+    cashUsd: Number.isFinite(cashUsd) ? cashUsd : null,
+    positionsValueUsd:
+      positionsValueUsd != null && Number.isFinite(positionsValueUsd) ? positionsValueUsd : null,
+    portfolioUsd,
+    // balanceUsd = número do header Portfolio na Polymarket
+    balanceUsd: portfolioUsd,
+    allowanceUsd: parts.allowanceUsd ?? null,
+    allowanceUnlimited: parts.allowanceUnlimited === true,
+    funderAddress: parts.funderAddress ?? null,
+    source: 'polymarket',
+  };
 }

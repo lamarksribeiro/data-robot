@@ -6,7 +6,7 @@
 import { bootstrapEngine } from '../composition/bootstrap.js';
 import { defaultPresetFor } from '../composition/presets.js';
 import { createOmsSink } from '../oms/omsSink.js';
-import { buildTradeJournal } from '../oms/tradeJournal.js';
+import { buildTradeJournal, summarizeTradePnl } from '../oms/tradeJournal.js';
 import { createMetrics } from '../observability/metrics.js';
 import { createLogger } from '../observability/logger.js';
 import { createAlertHub } from '../observability/alerts.js';
@@ -927,13 +927,41 @@ export function createEngineApp(opts = {}) {
       },
     ],
     getAudit: (limitOrOpts) => executionAudit.listRecent(limitOrOpts),
-    getTrades: (limit = 50) =>
-      buildTradeJournal({
-        auditRows: executionAudit.listRecent({ limit: 500 }),
+    getTrades: (query = {}) => {
+      const pageSize = Math.max(
+        5,
+        Math.min(100, Number(query.pageSize ?? query.limit ?? 25) || 25),
+      );
+      const page = Math.max(1, Number(query.page ?? 1) || 1);
+      const auditRows = executionAudit.listRecent({
+        limit: 5000,
+        types: 'decision,position_settled,settlement_queued',
+      });
+      const all = buildTradeJournal({
+        auditRows,
         orders: sink.oms?.listOrders?.() ?? [],
         settlementPending: pendingSettlements,
-        limit,
-      }),
+        limit: 1000,
+      });
+      const visible = all.filter(
+        (t) => t.status === 'closed' || t.status === 'settlement_pending',
+      );
+      const summary = summarizeTradePnl(all);
+      const total = visible.length;
+      const totalPages = Math.max(1, Math.ceil(total / pageSize));
+      const safePage = Math.min(page, totalPages);
+      const start = (safePage - 1) * pageSize;
+      return {
+        trades: visible.slice(start, start + pageSize),
+        summary,
+        total,
+        page: safePage,
+        pageSize,
+        totalPages,
+        scope: 'robot',
+      };
+    },
+    getWallet: opts.getWallet,
     getStrategyLibrary: opts.getStrategyLibrary,
     getActiveStrategy: opts.getActiveStrategy,
     onSaveStrategyPreset: opts.onSaveStrategyPreset,

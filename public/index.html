@@ -12,9 +12,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/styles.css?v=1.16.16">
+  <link rel="stylesheet" href="/styles.css?v=1.16.18">
 
-  <script src="/js/dashboard.js?v=1.16.16" defer></script>
+  <script src="/js/dashboard.js?v=1.16.18" defer></script>
   <script src="/js/mascot.js?v=1.16.9" defer></script>
 </head>
 <body>
@@ -212,7 +212,7 @@
             <em class="kpi-card__meta" id="pnl-breakdown">ganhos — · perdas —</em>
           </article>
           <article class="kpi-card kpi-card--wallet">
-            <span class="kpi-card__label">Carteira</span>
+            <span class="kpi-card__label">Portfolio Polymarket</span>
             <strong class="kpi-card__value" id="wallet-balance">—</strong>
             <em class="kpi-card__meta" id="wallet-note">—</em>
           </article>
@@ -496,7 +496,7 @@
           <div>
             <p class="eyebrow">Conta da estratégia</p>
             <h1 id="hdr-position">Posição &amp; PnL</h1>
-            <p class="page-header__sub">PnL líquido = ganhos − perdas · carteira alinhada à Polymarket</p>
+            <p class="page-header__sub">Resultado desde o início deste robô · ganhos, perdas e taxa de acerto</p>
           </div>
           <div class="page-header__badges">
             <span id="position-badge" class="badge">flat</span>
@@ -505,9 +505,9 @@
 
         <section class="pnl-hero" aria-label="Resumo de resultado">
           <article class="pnl-hero__card pnl-hero__card--main">
-            <span>PnL líquido (sessão)</span>
+            <span>PnL líquido (robô)</span>
             <strong id="position-pnl">$0</strong>
-            <em id="position-pnl-hint">ganhos − perdas dos trades fechados</em>
+            <em id="position-pnl-hint">desde o início deste robô · ganhos − perdas</em>
           </article>
           <article class="pnl-hero__card pnl-hero__card--won">
             <span>Ganhos</span>
@@ -519,15 +519,15 @@
             <strong id="position-pnl-lost">—</strong>
             <em id="position-pnl-lost-meta">trades no vermelho</em>
           </article>
+          <article class="pnl-hero__card pnl-hero__card--rate">
+            <span>Taxa de acerto</span>
+            <strong id="position-win-rate">—</strong>
+            <em id="position-win-rate-meta">wins / (wins + losses)</em>
+          </article>
           <article class="pnl-hero__card">
             <span>Exposição aberta</span>
             <strong id="position-exposure">—</strong>
             <em id="position-exposure-hint">notional em risco</em>
-          </article>
-          <article class="pnl-hero__card">
-            <span>Qty aberta</span>
-            <strong id="position-open-qty">—</strong>
-            <em>conta da estratégia</em>
           </article>
           <article class="pnl-hero__card pnl-hero__card--wallet">
             <span>Carteira (portfolio)</span>
@@ -536,18 +536,41 @@
           </article>
         </section>
 
-        <article class="panel" id="position-recent-trades">
+        <article class="panel panel--solo" id="position-recent-trades">
           <div class="panel__header">
             <div>
-              <p class="panel__kicker">Journal</p>
-              <h2>Últimas rodadas</h2>
-              <p class="panel__hint">Três trades mais recentes com PnL realizado.</p>
+              <p class="panel__kicker">Journal do robô</p>
+              <h2>Histórico de resultados</h2>
+              <p class="panel__hint" id="position-trades-scope">
+                Cada trade fechado desde que este robô/estratégia começou a operar (audit persistente).
+              </p>
             </div>
-            <button class="btn btn--ghost btn--sm" type="button" data-goto="orders">Ver todos</button>
+            <span class="badge" id="position-trades-count">0 trades</span>
           </div>
-          <ul class="trade-mini-list" id="position-trades-mini">
-            <li class="empty">Nenhum trade fechado ainda</li>
-          </ul>
+          <div class="table-wrap table-wrap--fit">
+            <table>
+              <thead>
+                <tr>
+                  <th>Quando</th>
+                  <th>Mercado</th>
+                  <th>Lado</th>
+                  <th>Entry → Exit</th>
+                  <th>Resultado</th>
+                  <th>PnL</th>
+                  <th>Path</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="position-trades-body">
+                <tr><td colspan="8" class="empty">Nenhum trade fechado ainda</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="position-trades-pager" hidden>
+            <button type="button" class="btn btn--ghost btn--sm" id="position-trades-prev">← Anterior</button>
+            <span class="pager__label" id="position-trades-page-label">1 / 1</span>
+            <button type="button" class="btn btn--ghost btn--sm" id="position-trades-next">Próxima →</button>
+          </div>
         </article>
 
         <div class="chart-grid chart-grid--2" style="margin-bottom:14px">
@@ -555,8 +578,8 @@
             <div class="panel__header">
               <div>
                 <p class="panel__kicker">Resultado</p>
-                <h2>PnL realizado</h2>
-                <p class="panel__hint">Linha zero = breakeven da sessão.</p>
+                <h2>PnL acumulado</h2>
+                <p class="panel__hint">Linha zero = breakeven desde o início deste robô.</p>
               </div>
               <span class="badge" id="chart-pnl-pos-badge">—</span>
             </div>
@@ -679,9 +702,9 @@
         <article class="panel panel--solo" id="closed-trades">
           <div class="panel__header">
             <div>
-              <p class="panel__kicker">Journal</p>
+              <p class="panel__kicker">Journal do robô</p>
               <h2>Trades fechados</h2>
-              <p class="panel__hint">Detalhe por entrada (settlement / exit / reverse). O resumo ganhos vs perdas fica em Posição &amp; PnL.</p>
+              <p class="panel__hint">Histórico completo desde o início deste robô. Resumo em Posição &amp; PnL.</p>
             </div>
             <span class="badge" id="trades-count">0 trades</span>
           </div>
@@ -689,11 +712,24 @@
             <table>
               <thead>
                 <tr>
-                  <th>Mercado</th><th>Lado</th><th>Entry → Exit</th><th>PnL</th><th>Duração</th><th>Path</th><th>Status</th>
+                  <th>Quando</th>
+                  <th>Mercado</th>
+                  <th>Lado</th>
+                  <th>Entry → Exit</th>
+                  <th>Resultado</th>
+                  <th>PnL</th>
+                  <th>Duração</th>
+                  <th>Path</th>
+                  <th>Status</th>
                 </tr>
               </thead>
-              <tbody id="trades-body"><tr><td colspan="7" class="empty">Nenhum trade fechado nesta sessão</td></tr></tbody>
+              <tbody id="trades-body"><tr><td colspan="9" class="empty">Nenhum trade fechado ainda</td></tr></tbody>
             </table>
+          </div>
+          <div class="pager" id="orders-trades-pager" hidden>
+            <button type="button" class="btn btn--ghost btn--sm" id="orders-trades-prev">← Anterior</button>
+            <span class="pager__label" id="orders-trades-page-label">1 / 1</span>
+            <button type="button" class="btn btn--ghost btn--sm" id="orders-trades-next">Próxima →</button>
           </div>
         </article>
       </section>

@@ -207,6 +207,10 @@ export function createUiServer(opts = {}) {
         const qs = url.searchParams.toString();
         return proxyEngine(req, res, qs ? `/trades?${qs}` : '/trades');
       }
+      if (req.method === 'GET' && url.pathname === '/api/engine/wallet') {
+        if (!requireSession(req, res)) return;
+        return proxyEngine(req, res, '/wallet');
+      }
 
       const controlRoutes = new Map([
         ['/api/engine/control/arm', { path: '/control/arm', confirmation: 'ARM' }],

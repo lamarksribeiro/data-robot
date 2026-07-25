@@ -1,6 +1,6 @@
 import { AssetType } from '@polymarket/clob-client-v2';
 import config from '../config.js';
-import { fetchPositionsValueUsd } from '../clob/portfolioValue.js';
+import { buildPolymarketPortfolio, fetchPositionsValueUsd } from '../clob/portfolioValue.js';
 
 function normalizeServerTimeMs(value) {
   const n = Number(value);
@@ -75,6 +75,13 @@ export async function runLivePreflight(opts) {
   }
 
   try {
+    if (opts.skipBalanceSync !== true && typeof client.updateBalanceAllowance === 'function') {
+      try {
+        await client.updateBalanceAllowance({ asset_type: AssetType.COLLATERAL });
+      } catch {
+        /* sync best-effort */
+      }
+    }
     const bal = await client.getBalanceAllowance({ asset_type: AssetType.COLLATERAL });
     const cashUsd = parseCollateral(bal?.balance);
     const allowanceUsd = Math.max(
@@ -88,18 +95,18 @@ export async function runLivePreflight(opts) {
       dataApiBase: opts.dataApiBase ?? config.dataApiBase,
       timeoutMs: opts.timeoutMs,
     });
-    const portfolioUsd =
-      positionsValueUsd != null ? cashUsd + positionsValueUsd : cashUsd;
-    // Preflight de risco usa cash spendable; balanceUsd = portfolio p/ UI/equity.
-    checks.balance = {
-      ok: cashUsd >= minBalanceUsd && allowanceUsd >= minBalanceUsd,
-      balanceUsd: portfolioUsd,
+    const portfolio = buildPolymarketPortfolio({
       cashUsd,
       positionsValueUsd,
-      portfolioUsd,
       allowanceUsd,
+      allowanceUnlimited: allowanceUsd > 1e9,
+      funderAddress,
+    });
+    // Preflight de risco usa cash spendable; balanceUsd/portfolio = header Polymarket.
+    checks.balance = {
+      ok: cashUsd >= minBalanceUsd && allowanceUsd >= minBalanceUsd,
+      ...portfolio,
       minBalanceUsd,
-      source: positionsValueUsd != null ? 'clob+data-api' : 'clob-read',
     };
   } catch (err) {
     checks.balance = { ok: false, reason: err.message || 'BALANCE_FAILED' };

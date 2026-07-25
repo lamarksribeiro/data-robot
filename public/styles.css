@@ -1667,7 +1667,7 @@ table { min-width: 920px; }
 
 .pnl-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) repeat(2, minmax(0, 1fr)) repeat(3, minmax(0, 0.9fr));
+  grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr)) repeat(2, minmax(0, 0.95fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -1717,6 +1717,39 @@ table { min-width: 920px; }
   background: rgba(239, 68, 68, 0.06);
 }
 .pnl-hero__card--lost strong { color: #f87171; }
+.pnl-hero__card--rate {
+  border-color: rgba(96, 165, 250, 0.28);
+  background: rgba(59, 130, 246, 0.06);
+}
+.pnl-hero__card--rate strong { color: #93c5fd; }
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+.pager__label {
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  min-width: 64px;
+  text-align: center;
+}
+.trade-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.trade-result--win { color: var(--ok); }
+.trade-result--loss { color: #f87171; }
+.trade-result--flat { color: var(--text-3); }
+.trade-result--pending { color: #fbbf24; }
 
 .orders-stats {
   display: grid;

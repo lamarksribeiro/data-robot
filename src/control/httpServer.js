@@ -120,9 +120,18 @@ export function createControlServer(opts) {
         return send(res, 200, opts.getAudit?.(query) ?? []);
       }
       if (req.method === 'GET' && pathName === '/trades') {
-        const requested = Number(url.searchParams.get('limit') ?? 50);
-        const limit = Number.isFinite(requested) ? Math.max(1, Math.min(200, requested)) : 50;
-        return send(res, 200, opts.getTrades?.(limit) ?? []);
+        const page = Number(url.searchParams.get('page') ?? 1);
+        const pageSize = Number(
+          url.searchParams.get('pageSize') ?? url.searchParams.get('limit') ?? 25,
+        );
+        return send(res, 200, opts.getTrades?.({ page, pageSize }) ?? { trades: [], total: 0 });
+      }
+      if (req.method === 'GET' && pathName === '/wallet') {
+        if (typeof opts.getWallet !== 'function') {
+          return send(res, 501, { ok: false, reason: 'WALLET_NOT_CONFIGURED' });
+        }
+        const wallet = await opts.getWallet();
+        return send(res, 200, wallet);
       }
       if (req.method === 'GET' && pathName === '/strategy-library') {
         return send(res, 200, opts.getStrategyLibrary?.() ?? { families: [] });

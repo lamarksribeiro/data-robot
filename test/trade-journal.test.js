@@ -149,5 +149,7 @@ describe('tradeJournal', () => {
     assert.equal(summary.losses, 1);
     assert.equal(summary.pending, 1);
     assert.equal(summary.closed, 3);
+    assert.equal(summary.decided, 3);
+    assert.equal(summary.winRate, 2 / 3);
   });
 });

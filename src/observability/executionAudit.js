@@ -17,7 +17,7 @@ function normalizeListOpts(limitOrOpts = 100) {
     const opts = limitOrOpts;
     const requested = Number(opts.limit ?? 200);
     return {
-      limit: Number.isFinite(requested) ? Math.max(1, Math.min(1000, requested)) : 200,
+      limit: Number.isFinite(requested) ? Math.max(1, Math.min(5000, requested)) : 200,
       types: new Set(parseCsv(opts.types ?? opts.type)),
       excludeTypes: new Set(parseCsv(opts.excludeTypes ?? opts.exclude)),
       action: opts.action != null && opts.action !== '' ? String(opts.action) : null,
@@ -32,7 +32,7 @@ function normalizeListOpts(limitOrOpts = 100) {
   }
   const requested = Number(limitOrOpts ?? 100);
   return {
-    limit: Number.isFinite(requested) ? Math.max(1, Math.min(1000, requested)) : 100,
+    limit: Number.isFinite(requested) ? Math.max(1, Math.min(5000, requested)) : 100,
     types: new Set(),
     excludeTypes: new Set(),
     action: null,

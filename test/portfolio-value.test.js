@@ -14,6 +14,18 @@ describe('portfolioValue', () => {
     assert.equal(value, 12.5);
   });
 
+  it('buildPolymarketPortfolio espelha Cash + Positions = Portfolio', async () => {
+    const { buildPolymarketPortfolio } = await import('../src/clob/portfolioValue.js');
+    const row = buildPolymarketPortfolio({
+      cashUsd: 100,
+      positionsValueUsd: 28.8,
+      funderAddress: '0x1111111111111111111111111111111111111111',
+    });
+    assert.equal(row.portfolioUsd, 128.8);
+    assert.equal(row.balanceUsd, 128.8);
+    assert.equal(row.source, 'polymarket');
+  });
+
   it('retorna null para endereço inválido ou falha de rede', async () => {
     assert.equal(await fetchPositionsValueUsd({ funderAddress: 'not-an-address' }), null);
     const failed = await fetchPositionsValueUsd({

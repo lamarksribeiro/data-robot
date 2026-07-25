@@ -69,6 +69,7 @@ describe('preflight fail-closed', () => {
     assert.equal(result.checks.balance.positionsValueUsd, 0.75);
     assert.equal(result.checks.balance.portfolioUsd, 2.75);
     assert.equal(result.checks.balance.balanceUsd, 2.75);
+    assert.equal(result.checks.balance.source, 'polymarket');
   });
 
   it('geoblock injetado falha no start', () => {

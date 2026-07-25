@@ -45,6 +45,7 @@ export function summarizeTradePnl(trades = []) {
   let losses = 0;
   let pending = 0;
   let closed = 0;
+  let breakeven = 0;
   for (const trade of trades) {
     if (trade?.status === 'settlement_pending') {
       pending += 1;
@@ -61,9 +62,23 @@ export function summarizeTradePnl(trades = []) {
     } else if (pnl < 0) {
       lost += Math.abs(pnl);
       losses += 1;
+    } else {
+      breakeven += 1;
     }
   }
-  return { net, won, lost, wins, losses, pending, closed };
+  const decided = wins + losses;
+  return {
+    net,
+    won,
+    lost,
+    wins,
+    losses,
+    pending,
+    closed,
+    breakeven,
+    decided,
+    winRate: decided > 0 ? wins / decided : null,
+  };
 }
 
 /**
@@ -74,7 +89,7 @@ export function summarizeTradePnl(trades = []) {
  * @param {number} [opts.limit]
  */
 export function buildTradeJournal(opts = {}) {
-  const limit = Math.max(1, Math.min(200, Number(opts.limit) || 50));
+  const limit = Math.max(1, Math.min(1000, Number(opts.limit) || 200));
   const orders = opts.orders ?? [];
   const rows = [...(opts.auditRows ?? [])].reverse();
   const tradesByMarket = new Map();

@@ -320,6 +320,25 @@ const app = createEngineApp({
   deployment,
   preflight: runtime?.preflight ?? null,
   beforeArm: runtime?.revalidatePreflight,
+  getWallet: config.polymarketPrivateKey
+    ? async () => {
+        const snap = await fetchWalletSnapshot();
+        if (typeof app.setPreflight === 'function') app.setPreflight(snap);
+        const bal = snap.checks?.balance ?? {};
+        return {
+          ok: snap.ok === true,
+          checkedAt: snap.checkedAt,
+          portfolioUsd: bal.portfolioUsd ?? bal.balanceUsd ?? null,
+          cashUsd: bal.cashUsd ?? null,
+          positionsValueUsd: bal.positionsValueUsd ?? null,
+          balanceUsd: bal.balanceUsd ?? bal.portfolioUsd ?? null,
+          allowanceUsd: bal.allowanceUsd ?? null,
+          allowanceUnlimited: bal.allowanceUnlimited === true,
+          source: bal.source ?? 'polymarket',
+          funderAddress: bal.funderAddress ?? null,
+        };
+      }
+    : null,
   startArmed:
     process.env.ENGINE_START_ARMED == null
       ? mode !== 'live'
@@ -355,18 +374,19 @@ console.log(
   `[engine:serve] mode=${mode} strategy=${strategyId} source=${sourceKind} approval=${catalogEntry.approval} port=${app.httpServer.port}`,
 );
 
-// Atualiza saldo periodicamente em shadow (só leitura) para o dashboard local.
+// Atualiza carteira periodicamente (live e shadow) — mesmas fontes da UI Polymarket.
 let walletRefreshTimer = null;
-if (mode !== 'live' && config.polymarketPrivateKey && typeof app.setPreflight === 'function') {
-  const refreshMs = Number(process.env.ENGINE_WALLET_REFRESH_MS || 60_000);
-  walletRefreshTimer = setInterval(async () => {
+if (config.polymarketPrivateKey && typeof app.setPreflight === 'function') {
+  const refreshMs = Number(process.env.ENGINE_WALLET_REFRESH_MS || 20_000);
+  const tick = async () => {
     try {
       const snap = await fetchWalletSnapshot();
       app.setPreflight(snap);
     } catch {
       /* silent — UI mantém último snapshot */
     }
-  }, Math.max(15_000, refreshMs));
+  };
+  walletRefreshTimer = setInterval(tick, Math.max(10_000, refreshMs));
   walletRefreshTimer.unref?.();
 }
 

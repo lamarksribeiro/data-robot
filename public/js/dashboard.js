@@ -634,6 +634,7 @@ function summarizeTradePnl(trades = []) {
   let losses = 0;
   let pending = 0;
   let closed = 0;
+  let breakeven = 0;
   for (const trade of trades) {
     if (trade?.status === 'settlement_pending') {
       pending += 1;
@@ -650,13 +651,45 @@ function summarizeTradePnl(trades = []) {
     } else if (pnl < 0) {
       lost += Math.abs(pnl);
       losses += 1;
+    } else {
+      breakeven += 1;
     }
   }
-  return { net, won, lost, wins, losses, pending, closed };
+  const decided = wins + losses;
+  return {
+    net,
+    won,
+    lost,
+    wins,
+    losses,
+    pending,
+    closed,
+    breakeven,
+    decided,
+    winRate: decided > 0 ? wins / decided : null,
+  };
 }
 
-function renderPnlBreakdown(trades = [], fallbackNet = null) {
-  const summary = summarizeTradePnl(trades);
+function formatWinRate(rate) {
+  if (rate == null || !Number.isFinite(Number(rate))) return '—';
+  return `${(Number(rate) * 100).toFixed(0)}%`;
+}
+
+function tradeResultLabel(trade) {
+  if (trade?.status === 'settlement_pending') {
+    return { text: 'pendente', cls: 'trade-result--pending' };
+  }
+  const pnl = Number(trade?.pnl);
+  if (!Number.isFinite(pnl)) return { text: '—', cls: 'trade-result--flat' };
+  if (pnl > 0) return { text: 'ganho', cls: 'trade-result--win' };
+  if (pnl < 0) return { text: 'perda', cls: 'trade-result--loss' };
+  return { text: 'zero', cls: 'trade-result--flat' };
+}
+
+function renderPnlBreakdown(summaryOrTrades = [], fallbackNet = null) {
+  const summary = Array.isArray(summaryOrTrades)
+    ? summarizeTradePnl(summaryOrTrades)
+    : summaryOrTrades ?? summarizeTradePnl([]);
   const net =
     summary.closed > 0
       ? summary.net
@@ -669,7 +702,7 @@ function renderPnlBreakdown(trades = [], fallbackNet = null) {
   text(
     'pnl-breakdown',
     summary.closed > 0
-      ? `${money(summary.won)} ganho · −$${Math.abs(summary.lost).toFixed(2)} perdido`
+      ? `${money(summary.won)} ganho · −$${Math.abs(summary.lost).toFixed(2)} perdido · acerto ${formatWinRate(summary.winRate)}`
       : summary.pending > 0
         ? `${summary.pending} aguardando settlement`
         : 'ainda sem trades fechados',
@@ -691,15 +724,25 @@ function renderPnlBreakdown(trades = [], fallbackNet = null) {
       ? `${summary.losses} trade${summary.losses === 1 ? '' : 's'} no vermelho`
       : 'nenhuma perda ainda',
   );
+  text('position-win-rate', formatWinRate(summary.winRate));
+  text(
+    'position-win-rate-meta',
+    summary.decided > 0
+      ? `${summary.wins}W / ${summary.losses}L` +
+          (summary.breakeven ? ` · ${summary.breakeven} empate` : '')
+      : summary.pending > 0
+        ? `${summary.pending} aguardando`
+        : 'sem trades decididos',
+  );
 
   const pnlHint = $('position-pnl-hint');
   if (pnlHint) {
     if (summary.closed > 0) {
-      pnlHint.textContent = `= ${money(summary.won)} ganhos − $${summary.lost.toFixed(2)} perdas`;
+      pnlHint.textContent = `desde o início deste robô · = ${money(summary.won)} − $${summary.lost.toFixed(2)}`;
     } else if (summary.pending > 0) {
       pnlHint.textContent = `${summary.pending} trade(s) aguardando Gamma`;
     } else {
-      pnlHint.textContent = 'ganhos − perdas dos trades fechados';
+      pnlHint.textContent = 'desde o início deste robô · ganhos − perdas';
     }
   }
 }
@@ -1111,19 +1154,18 @@ function renderSettlementBanner(status) {
   );
 }
 
-function renderTrades(trades = []) {
-  const body = $('trades-body');
+function renderTradesTable(trades = [], bodyId, colCount) {
+  const body = $(bodyId);
   if (!body) return;
   body.replaceChildren();
-  const closed = trades.filter((t) => t.status === 'closed' || t.status === 'settlement_pending');
-  text('trades-count', `${closed.length} trade${closed.length === 1 ? '' : 's'}`);
-  if (!closed.length) {
-    emptyRow(body, 7, 'Nenhum trade fechado nesta sessão');
+  if (!trades.length) {
+    emptyRow(body, colCount, 'Nenhum trade fechado ainda');
     return;
   }
-  for (const trade of closed) {
+  for (const trade of trades) {
     const row = document.createElement('tr');
     if (trade.status === 'settlement_pending') row.className = 'row--pending';
+
     const marketBtn = document.createElement('button');
     marketBtn.type = 'button';
     marketBtn.className = 'linkish';
@@ -1131,18 +1173,40 @@ function renderTrades(trades = []) {
     marketBtn.title = trade.marketId;
     marketBtn.addEventListener('click', () => gotoAuditForMarket(trade.marketId));
 
-    const cells = [
-      marketBtn,
-      trade.side || '—',
-      formatEntryExit(trade),
-      trade.pnl != null ? money(trade.pnl) : '—',
-      trade.durationMs != null ? duration(trade.durationMs) : '—',
-      tradePathLabel(trade),
-      tradeStatusLabel(trade.status),
-    ];
+    const result = tradeResultLabel(trade);
+    const resultEl = document.createElement('span');
+    resultEl.className = `trade-result ${result.cls}`;
+    resultEl.textContent = result.text;
+
+    const when = trade.closedAtMs || trade.openedAtMs;
+    const cells =
+      bodyId === 'position-trades-body'
+        ? [
+            when ? fmtTime(when) : '—',
+            marketBtn,
+            trade.side || '—',
+            formatEntryExit(trade),
+            resultEl,
+            trade.pnl != null ? money(trade.pnl) : '—',
+            tradePathLabel(trade),
+            tradeStatusLabel(trade.status),
+          ]
+        : [
+            when ? fmtTime(when) : '—',
+            marketBtn,
+            trade.side || '—',
+            formatEntryExit(trade),
+            resultEl,
+            trade.pnl != null ? money(trade.pnl) : '—',
+            trade.durationMs != null ? duration(trade.durationMs) : '—',
+            tradePathLabel(trade),
+            tradeStatusLabel(trade.status),
+          ];
+
     for (const [i, value] of cells.entries()) {
       const td = document.createElement('td');
-      if (i === 3 && trade.pnl != null) {
+      const isPnlCol = bodyId === 'position-trades-body' ? i === 5 : i === 5;
+      if (isPnlCol && trade.pnl != null) {
         const strong = document.createElement('strong');
         strong.textContent = value;
         setPnlTone(strong, trade.pnl);
@@ -1152,8 +1216,16 @@ function renderTrades(trades = []) {
       } else {
         td.textContent = value;
       }
-      if (i === 6 && trade.status === 'settlement_pending') {
-        td.innerHTML = '<span class="badge badge--warn">aguardando Gamma</span>';
+      if (
+        ((bodyId === 'position-trades-body' && i === 7) ||
+          (bodyId === 'trades-body' && i === 8)) &&
+        trade.status === 'settlement_pending'
+      ) {
+        td.replaceChildren();
+        const badge = document.createElement('span');
+        badge.className = 'badge badge--warn';
+        badge.textContent = 'aguardando Gamma';
+        td.append(badge);
       }
       row.append(td);
     }
@@ -1161,53 +1233,91 @@ function renderTrades(trades = []) {
   }
 }
 
-function renderPositionTradesMini(trades = []) {
-  const list = $('position-trades-mini');
-  if (!list) return;
-  list.replaceChildren();
-  const recent = trades
-    .filter((t) => t.status === 'closed' || t.status === 'settlement_pending')
-    .slice(0, 3);
-  if (!recent.length) {
-    const li = document.createElement('li');
-    li.className = 'empty';
-    li.textContent = 'Nenhum trade fechado ainda';
-    list.append(li);
+function renderPager(prefix, page, totalPages, total) {
+  const pager = $(`${prefix}-pager`);
+  const label = $(`${prefix}-page-label`);
+  const prev = $(`${prefix}-prev`);
+  const next = $(`${prefix}-next`);
+  if (!pager || !label) return;
+  if (total <= 0) {
+    pager.hidden = true;
     return;
   }
-  for (const trade of recent) {
-    const li = document.createElement('li');
-    li.className = 'trade-mini-item';
-    const left = document.createElement('span');
-    left.textContent = `${shortId(trade.marketId, 14)} · ${trade.side || '—'} · ${tradePathLabel(trade)}`;
-    const right = document.createElement('strong');
-    if (trade.pnl != null) {
-      right.textContent = money(trade.pnl);
-      setPnlTone(right, trade.pnl);
-    } else if (trade.status === 'settlement_pending') {
-      right.textContent = 'Gamma…';
-      right.className = 'is-pending';
-    } else {
-      right.textContent = '—';
-    }
-    li.append(left, right);
-    list.append(li);
-  }
+  pager.hidden = totalPages <= 1;
+  label.textContent = `${page} / ${totalPages} · ${total}`;
+  if (prev) prev.disabled = page <= 1;
+  if (next) next.disabled = page >= totalPages;
 }
 
-async function refreshTrades({ silent = false } = {}) {
+function renderTrades(payload = {}) {
+  const trades = Array.isArray(payload) ? payload : payload.trades ?? [];
+  const total = Array.isArray(payload) ? trades.length : Number(payload.total ?? trades.length);
+  const page = Array.isArray(payload) ? 1 : Number(payload.page ?? 1);
+  const totalPages = Array.isArray(payload)
+    ? 1
+    : Number(payload.totalPages ?? 1);
+  text(
+    'trades-count',
+    `${total} trade${total === 1 ? '' : 's'}`,
+  );
+  text(
+    'position-trades-count',
+    `${total} trade${total === 1 ? '' : 's'}`,
+  );
+  renderTradesTable(trades, 'trades-body', 9);
+  renderTradesTable(trades, 'position-trades-body', 8);
+  renderPager('orders-trades', page, totalPages, total);
+  renderPager('position-trades', page, totalPages, total);
+}
+
+let tradesCache = [];
+let tradesSummary = null;
+let tradesPage = 1;
+const TRADES_PAGE_SIZE = 25;
+let tradesFetchSeq = 0;
+
+async function refreshTrades({ silent = false, page } = {}) {
   const seq = ++tradesFetchSeq;
+  const nextPage = Math.max(1, Number(page ?? tradesPage) || 1);
   try {
-    const rows = await api('/api/engine/trades?limit=50');
+    const payload = await api(
+      `/api/engine/trades?page=${nextPage}&pageSize=${TRADES_PAGE_SIZE}`,
+    );
     if (seq !== tradesFetchSeq) return;
-    tradesCache = Array.isArray(rows) ? rows : [];
-    renderTrades(tradesCache);
-    renderPositionTradesMini(tradesCache);
-    renderPnlBreakdown(tradesCache, lastStatus?.position?.realizedPnl);
+    const normalized = Array.isArray(payload)
+      ? {
+          trades: payload,
+          summary: summarizeTradePnl(payload),
+          total: payload.length,
+          page: 1,
+          totalPages: 1,
+          pageSize: payload.length,
+        }
+      : payload;
+    tradesCache = Array.isArray(normalized.trades) ? normalized.trades : [];
+    tradesSummary = normalized.summary ?? summarizeTradePnl(tradesCache);
+    tradesPage = Number(normalized.page ?? nextPage) || 1;
+    renderTrades(normalized);
+    renderPnlBreakdown(tradesSummary, lastStatus?.position?.realizedPnl);
   } catch (error) {
     if (error.status === 401) return showLogin();
     if (!silent) showAlert(`Journal indisponível: ${error.message}`);
   }
+}
+
+function wireTradesPagers() {
+  $('position-trades-prev')?.addEventListener('click', () => {
+    if (tradesPage > 1) refreshTrades({ silent: true, page: tradesPage - 1 });
+  });
+  $('position-trades-next')?.addEventListener('click', () => {
+    refreshTrades({ silent: true, page: tradesPage + 1 });
+  });
+  $('orders-trades-prev')?.addEventListener('click', () => {
+    if (tradesPage > 1) refreshTrades({ silent: true, page: tradesPage - 1 });
+  });
+  $('orders-trades-next')?.addEventListener('click', () => {
+    refreshTrades({ silent: true, page: tradesPage + 1 });
+  });
 }
 
 function renderOrders(orders = []) {
@@ -1294,8 +1404,6 @@ const AUDIT_PRESETS = {
 
 let auditRowsCache = [];
 let auditFetchSeq = 0;
-let tradesCache = [];
-let tradesFetchSeq = 0;
 
 function auditTypeLabel(type) {
   return AUDIT_TYPE_LABELS[type] || type || '—';
@@ -2057,8 +2165,7 @@ function renderMode(status, health) {
 function renderWallet(status) {
   const mode = String(status.mode || '').toLowerCase();
   const bal = status.preflight?.checks?.balance;
-  const portfolioUsd =
-    bal?.portfolioUsd ?? bal?.balanceUsd;
+  const portfolioUsd = bal?.portfolioUsd ?? bal?.balanceUsd;
   const cashUsd = bal?.cashUsd ?? (bal?.positionsValueUsd == null ? bal?.balanceUsd : null);
   const positionsValueUsd = bal?.positionsValueUsd;
   const allowanceUsd =
@@ -2076,14 +2183,12 @@ function renderWallet(status) {
         : 'ainda não ativou';
   const walletNote =
     Number.isFinite(Number(positionsValueUsd)) && Number(positionsValueUsd) > 0
-      ? `cash ${money(cashUsd)} · pos ${money(positionsValueUsd)}`
+      ? `Polymarket · cash ${money(cashUsd)} · pos ${money(positionsValueUsd)}`
       : Number.isFinite(Number(cashUsd))
-        ? `cash ${money(cashUsd)}`
-        : mode === 'shadow' || mode === 'dry-run'
-          ? 'shadow · portfolio'
-          : 'via preflight';
+        ? `Polymarket · cash ${money(cashUsd)}`
+        : 'Polymarket';
   const explain =
-    'Portfolio = cash livre no CLOB + valor mark-to-market das posições (Data API), como na Polymarket.';
+    'Mesmas fontes da UI Polymarket: Cash (CLOB) + Positions (/value) = Portfolio.';
 
   text('overview-wallet-mode', mode === 'live' ? 'live' : mode || '—');
   text('overview-canary-cap', status.canary ? money(status.canary.hardCapUsd) : '—');
@@ -2096,9 +2201,9 @@ function renderWallet(status) {
   text('overview-live-reverse', status.canary ? (status.canary.liveReverse ? 'ativado' : 'bloqueado') : '—');
 
   const hasPortfolio = Number.isFinite(Number(portfolioUsd));
-  if ((mode === 'shadow' || mode === 'dry-run') && !hasPortfolio) {
+  if (!hasPortfolio) {
     text('wallet-balance', 'n/a');
-    text('wallet-note', 'shadow · sem snapshot');
+    text('wallet-note', 'sem leitura Polymarket');
     text('wallet-balance-detail', 'n/a');
     text('wallet-balance-pos', 'n/a');
     text('wallet-cash-pos', '—');
@@ -2113,20 +2218,17 @@ function renderWallet(status) {
     text('overview-wallet-preflight', preflightLabel);
     text(
       'wallet-explain',
-      'Sem snapshot de carteira. Confira POLYMARKET_* no .env e reinicie com npm run local.',
+      'Sem snapshot Polymarket. Confira POLYMARKET_* no .env e reinicie com npm run local.',
     );
     text(
       'overview-wallet-explain',
-      'Carteira indisponível neste tick. Em shadow o portfolio vem de CLOB + Data API se as chaves estiverem no .env.',
+      'Carteira indisponível. O endpoint /wallet lê CLOB + Data API como o site.',
     );
     return;
   }
 
   text('wallet-balance', money(portfolioUsd));
-  text(
-    'wallet-note',
-    bal?.ok === false ? 'preflight falhou' : walletNote,
-  );
+  text('wallet-note', bal?.ok === false ? 'preflight falhou' : walletNote);
   text('wallet-balance-detail', money(portfolioUsd));
   text('wallet-balance-pos', money(portfolioUsd));
   text('wallet-cash-pos', money(cashUsd));
@@ -2143,13 +2245,7 @@ function renderWallet(status) {
     'wallet-preflight-short',
     Number.isFinite(Number(positionsValueUsd))
       ? `cash ${money(cashUsd)} + pos ${money(positionsValueUsd)}`
-      : mode === 'shadow' || mode === 'dry-run'
-        ? 'leitura CLOB'
-        : status.preflight?.ok
-          ? 'preflight OK'
-          : status.preflight
-            ? 'preflight falhou'
-            : 'sem preflight',
+      : `cash ${money(cashUsd)}`,
   );
   text('overview-wallet-balance', money(portfolioUsd));
   text('overview-wallet-cash', money(cashUsd));
@@ -2165,6 +2261,42 @@ function renderWallet(status) {
   text('wallet-explain', explain);
   text('overview-wallet-explain', explain);
   text('wallet-balance-banner', money(portfolioUsd));
+}
+
+let walletFetchSeq = 0;
+
+async function refreshWalletLive({ silent = true } = {}) {
+  const seq = ++walletFetchSeq;
+  try {
+    const wallet = await api('/api/engine/wallet');
+    if (seq !== walletFetchSeq) return;
+    if (!lastStatus) lastStatus = {};
+    const balance = {
+      ok: wallet.ok !== false,
+      balanceUsd: wallet.portfolioUsd ?? wallet.balanceUsd ?? null,
+      portfolioUsd: wallet.portfolioUsd ?? wallet.balanceUsd ?? null,
+      cashUsd: wallet.cashUsd ?? null,
+      positionsValueUsd: wallet.positionsValueUsd ?? null,
+      allowanceUsd: wallet.allowanceUsd ?? null,
+      allowanceUnlimited: wallet.allowanceUnlimited === true,
+      source: wallet.source || 'polymarket',
+      funderAddress: wallet.funderAddress ?? null,
+    };
+    lastStatus.preflight = {
+      ...(lastStatus.preflight || {}),
+      ok: wallet.ok !== false,
+      checkedAt: wallet.checkedAt ?? new Date().toISOString(),
+      checks: {
+        ...(lastStatus.preflight?.checks || {}),
+        balance,
+      },
+    };
+    renderWallet(lastStatus);
+  } catch (error) {
+    if (error.status === 401) return showLogin();
+    if (error.body?.reason === 'WALLET_NOT_CONFIGURED') return;
+    if (!silent) showAlert(`Carteira Polymarket indisponível: ${error.message}`);
+  }
 }
 
 function renderDiagnosticsExtras(status) {
@@ -2248,7 +2380,7 @@ function render(status, health, instances) {
         : `teto ${money(status.canary.hardCapUsd)}`
       : 'canário —',
   );
-  renderPnlBreakdown(tradesCache, pos.realizedPnl);
+  renderPnlBreakdown(tradesSummary ?? tradesCache, pos.realizedPnl);
 
   const hasPos = Number(pos.qty) > 0;
   text('overview-position', hasPos ? `${pos.side || '—'} · ${number(pos.qty)}` : 'FLAT');
@@ -3100,7 +3232,10 @@ async function refresh() {
     const healthView = status.health ?? health;
     render(status, healthView, instances);
     renderCatalog(catalog, status.strategyId, status.canary?.presetId || status.catalog?.presetId);
-    await refreshTrades({ silent: true });
+    await Promise.all([
+      refreshTrades({ silent: true }),
+      refreshWalletLive({ silent: true }),
+    ]);
     if (currentView === 'audit') await refreshAudit({ silent: true });
     if (currentView === 'strategies') await loadStrategyStudio();
   } catch (error) {
@@ -3313,6 +3448,7 @@ document.addEventListener('keydown', (event) => {
 
 wireStrategyStudio();
 wireAuditFilters();
+wireTradesPagers();
 
 api('/api/session')
   .then((session) => (session.authenticated ? showDashboard() : showLogin()))
