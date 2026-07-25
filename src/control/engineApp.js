@@ -34,7 +34,10 @@ export function createEngineApp(opts = {}) {
   const metrics = opts.metrics ?? createMetrics({ clock: opts.clock });
   const logger = opts.logger ?? createLogger({ service: 'data-robot-engine' });
   const alerts = opts.alerts ?? createAlertHub();
-  const backup = opts.journalBackup ?? createJournalBackup({ dir: opts.backupDir });
+  const backup = opts.journalBackup ?? createJournalBackup({
+    dir: opts.backupDir,
+    maxCheckpointFiles: opts.maxCheckpointFiles ?? Number(process.env.ENGINE_CHECKPOINT_KEEP || 5),
+  });
   const executionAudit =
     opts.executionAudit ?? createExecutionAudit({ dir: opts.executionAuditDir, clock: opts.clock });
   const sink = opts.sink ?? createOmsSink({ mode, clock: opts.clock });
@@ -883,9 +886,6 @@ export function createEngineApp(opts = {}) {
       ...engine.checkpoint(),
       pendingSettlements: pendingSettlements.map((pending) => ({ ...pending })),
     };
-    if (sink.oms?.journal) {
-      backup.save(sink.oms.journal.snapshot(), 'checkpoint');
-    }
     backup.saveCheckpoint?.(lastCheckpoint, 'engine');
     executionAudit.append('checkpoint', {
       state: engine.state,

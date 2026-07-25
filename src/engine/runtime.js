@@ -12,6 +12,7 @@ import {
   emptyPosition,
 } from './schemas.js';
 import { createSinkForMode } from './sinks.js';
+import { slimOmsJournalSnapshot } from '../oms/journal.js';
 import {
   ENGINE_STATE_VERSION,
   buildEngineCheckpoint,
@@ -933,7 +934,7 @@ export function createEngine(opts) {
       if (typeof sink.oms?.checkpoint === 'function') {
         sink.oms.checkpoint();
       }
-      const omsJournal =
+      const omsJournalFull =
         typeof sink.oms?.journal?.snapshot === 'function' ? sink.oms.journal.snapshot() : null;
       const cp = buildEngineCheckpoint({
         clock,
@@ -953,7 +954,7 @@ export function createEngine(opts) {
         omsCheckpoint: null,
         journalTail: journal.slice(-50),
       });
-      cp.omsJournal = omsJournal;
+      cp.omsJournal = slimOmsJournalSnapshot(omsJournalFull);
       journal.push({ type: 'checkpoint', tsMs: clock(), schemaVersion: ENGINE_STATE_VERSION });
       return cp;
     },

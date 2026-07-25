@@ -182,6 +182,21 @@ describe('journal restart', () => {
     );
     assert.equal(oms2.position('inst-1').qty, 9);
   });
+
+  it('checkpoint compacta journal em memória', async () => {
+    const oms = createOms();
+    const exec = createExecutor({ oms, transport: createSimTransport() });
+    await exec.executeIntent(intent({ intentId: 'c-1', quantity: 3 }));
+    oms.checkpoint();
+    const afterFirst = oms.journal.length;
+    await exec.executeIntent(intent({ intentId: 'c-2', quantity: 2 }));
+    oms.checkpoint();
+    assert.ok(oms.journal.length < afterFirst + 5, 'journal deveria compactar após checkpoint');
+    const snap = oms.journal.snapshot();
+    const checkpoints = snap.filter((e) => e.type === 'checkpoint');
+    assert.equal(checkpoints.length, 1);
+    assert.equal(oms.position('inst-1').qty, 5);
+  });
 });
 
 describe('OMS sink + engine', () => {

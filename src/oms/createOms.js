@@ -2,7 +2,7 @@
  * OMS — idempotência, estados de ordem, fills parciais, sem expor exchange id à strategy.
  */
 
-import { createJournal } from './journal.js';
+import { compactOmsJournalEntries, createJournal } from './journal.js';
 import { createPositionLedger } from './positionLedger.js';
 import { canTransition, isTerminal, ORDER_STATES } from './states.js';
 import { materializeOrderRequest } from './marketRules.js';
@@ -309,6 +309,10 @@ export function createOms(opts = {}) {
     journal.replaceAll(entries.map((e) => ({ ...e })));
   }
 
+  function compactJournal() {
+    journal.replaceAll(compactOmsJournalEntries(journal.snapshot()));
+  }
+
   function checkpoint() {
     const orders = {};
     for (const [k, v] of byIntent) {
@@ -319,6 +323,7 @@ export function createOms(opts = {}) {
       positions: positions.exportAll(),
       seenEventIds: [...seenEventIds],
     });
+    compactJournal();
     return entry;
   }
 

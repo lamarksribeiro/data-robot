@@ -93,6 +93,25 @@ describe('observability', () => {
     assert.equal(loaded[0].type, 'x');
     fs.rmSync(dir, { recursive: true, force: true });
   });
+
+  it('checkpoint latest + retenção timestamped', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jr-cp-'));
+    const bak = createJournalBackup({ dir, maxCheckpointFiles: 3 });
+    for (let i = 0; i < 6; i += 1) {
+      bak.saveCheckpoint({ seq: i, position: { qty: i } }, 'engine');
+    }
+    const latest = bak.latestCheckpoint('engine');
+    assert.ok(latest?.endsWith('checkpoint-engine-latest.json'));
+    const loaded = bak.loadCheckpoint(latest);
+    assert.equal(loaded.seq, 5);
+
+    const files = fs.readdirSync(dir).filter((f) => f.startsWith('checkpoint-engine-'));
+    const timestamped = files.filter((f) => !f.endsWith('-latest.json'));
+    assert.equal(timestamped.length, 3);
+    assert.ok(files.includes('checkpoint-engine-latest.json'));
+    assert.equal(files.filter((f) => f.startsWith('journal-checkpoint-')).length, 0);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
 });
 
 describe('health probes', () => {
@@ -295,6 +314,35 @@ describe('engine app + soak', () => {
     await restored.start();
     assert.equal(restored.engine.position.qty, qty);
     await restored.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('checkpoints automáticos mantêm omsJournal slim e sem journal-checkpoint dump', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engine-slim-'));
+    const app = createEngineApp({
+      mode: 'shadow',
+      serveHttp: false,
+      backupDir: dir,
+      maxCheckpointFiles: 3,
+      strategyId: 'fixture-price-cross',
+    });
+    await app.start();
+    for (let i = 0; i < 4; i += 1) {
+      await app.ingestSynthetic(snapshot({ btc: 100 + i }));
+      app.checkpoint();
+    }
+    await app.stop();
+
+    const latest = path.join(dir, 'checkpoint-engine-latest.json');
+    assert.ok(fs.existsSync(latest));
+    const payload = JSON.parse(fs.readFileSync(latest, 'utf8'));
+    const omsJournal = payload.checkpoint?.omsJournal ?? [];
+    assert.ok(omsJournal.length <= 1, `omsJournal deveria ser slim, veio ${omsJournal.length}`);
+    if (omsJournal.length === 1) assert.equal(omsJournal[0].type, 'checkpoint');
+
+    const files = fs.readdirSync(dir);
+    assert.equal(files.filter((f) => f.startsWith('journal-checkpoint-')).length, 0);
+    assert.ok(files.filter((f) => f.startsWith('checkpoint-engine-') && !f.endsWith('-latest.json')).length <= 3);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });

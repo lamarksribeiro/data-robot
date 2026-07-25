@@ -312,6 +312,7 @@ const app = createEngineApp({
   restoreOnStart: true,
   persistOnStop: true,
   autoCheckpointMs: Number(process.env.ENGINE_CHECKPOINT_MS || 30_000),
+  maxCheckpointFiles: Number(process.env.ENGINE_CHECKPOINT_KEEP || 5),
   backupDir: path.join(instanceStateDir, 'journal-backups'),
   executionAuditDir: path.join(instanceStateDir, 'execution-audit'),
   snapshotSource,

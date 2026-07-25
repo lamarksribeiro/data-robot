@@ -2,6 +2,42 @@
  * Journal append-only do OMS — base de recovery (P3/P4).
  */
 
+/**
+ * Mantém só o último checkpoint OMS (restore usa apenas esse entry).
+ * @param {object[]|null|undefined} entries
+ * @returns {object[]|null}
+ */
+export function slimOmsJournalSnapshot(entries) {
+  if (!entries?.length) return entries ?? null;
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    if (entries[i]?.type === 'checkpoint') {
+      return [{ ...entries[i] }];
+    }
+  }
+  return entries.map((e) => ({ ...e }));
+}
+
+/**
+ * Compacta journal em memória: último checkpoint + eventos não-checkpoint posteriores.
+ * @param {object[]} entries
+ * @returns {object[]}
+ */
+export function compactOmsJournalEntries(entries) {
+  if (!entries?.length) return [];
+  let lastCheckpointIdx = -1;
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    if (entries[i]?.type === 'checkpoint') {
+      lastCheckpointIdx = i;
+      break;
+    }
+  }
+  if (lastCheckpointIdx < 0) return entries.map((e) => ({ ...e }));
+  return [
+    { ...entries[lastCheckpointIdx] },
+    ...entries.slice(lastCheckpointIdx + 1).filter((e) => e?.type !== 'checkpoint').map((e) => ({ ...e })),
+  ];
+}
+
 export function createJournal(opts = {}) {
   const clock = opts.clock ?? (() => Date.now());
   /** @type {object[]} */
