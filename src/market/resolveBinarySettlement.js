@@ -1,12 +1,29 @@
 /**
  * Resolve preço de settlement ($0/$1) de mercado binário Polymarket via Gamma.
+ *
+ * A UI da Polymarket costuma mostrar o vencedor (outcomePrices em 0/1) antes de
+ * `closed: true`. Aceitamos resolução antecipada quando os preços já estão
+ * binários ou UMA/auto-resolve já marcou resolved.
  */
+
+/**
+ * @param {unknown} prices
+ * @returns {boolean}
+ */
+export function outcomePricesLookResolved(prices) {
+  if (!Array.isArray(prices) || prices.length < 2) return false;
+  const nums = prices.map((p) => Number(p));
+  if (nums.some((n) => !Number.isFinite(n))) return false;
+  const hi = Math.max(...nums);
+  const lo = Math.min(...nums);
+  return hi >= 0.99 && lo <= 0.01;
+}
 
 /**
  * @param {string} marketId slug (ex.: btc-updown-5m-1784793300)
  * @param {'UP'|'DOWN'|string} side
  * @param {{ fetchFn?: typeof fetch, gammaBase?: string }} [opts]
- * @returns {Promise<{ ok: boolean, closed?: boolean, settlementPrice?: number, winner?: string|null, reason?: string }>}
+ * @returns {Promise<{ ok: boolean, closed?: boolean, settlementPrice?: number, winner?: string|null, reason?: string, early?: boolean }>}
  */
 export async function resolveBinarySettlementPrice(marketId, side, opts = {}) {
   const slug = String(marketId || '').trim();
@@ -26,8 +43,6 @@ export async function resolveBinarySettlementPrice(marketId, side, opts = {}) {
   if (!event) return { ok: false, reason: 'GAMMA_NOT_FOUND' };
   const market = Array.isArray(event.markets) ? event.markets[0] : null;
   if (!market) return { ok: false, reason: 'GAMMA_NO_MARKET' };
-  const closed = event.closed === true || market.closed === true;
-  if (!closed) return { ok: false, closed: false, reason: 'MARKET_STILL_OPEN' };
 
   let outcomes = market.outcomes;
   let prices = market.outcomePrices;
@@ -35,10 +50,18 @@ export async function resolveBinarySettlementPrice(marketId, side, opts = {}) {
     if (typeof outcomes === 'string') outcomes = JSON.parse(outcomes);
     if (typeof prices === 'string') prices = JSON.parse(prices);
   } catch {
-    return { ok: false, closed: true, reason: 'GAMMA_PARSE_FAILED' };
+    return { ok: false, reason: 'GAMMA_PARSE_FAILED' };
   }
   if (!Array.isArray(outcomes) || !Array.isArray(prices) || outcomes.length !== prices.length) {
-    return { ok: false, closed: true, reason: 'GAMMA_OUTCOMES_INVALID' };
+    return { ok: false, reason: 'GAMMA_OUTCOMES_INVALID' };
+  }
+
+  const closed = event.closed === true || market.closed === true;
+  const umaResolved = String(market.umaResolutionStatus ?? '').toLowerCase() === 'resolved';
+  const autoResolved = market.automaticallyResolved === true || event.automaticallyResolved === true;
+  const pricesReady = outcomePricesLookResolved(prices);
+  if (!closed && !umaResolved && !autoResolved && !pricesReady) {
+    return { ok: false, closed: false, reason: 'MARKET_STILL_OPEN' };
   }
 
   const sideKey = String(side || '').toUpperCase();
@@ -54,11 +77,17 @@ export async function resolveBinarySettlementPrice(marketId, side, opts = {}) {
   if (!Number.isFinite(settlementPrice)) {
     return { ok: false, closed: true, reason: 'PRICE_INVALID' };
   }
+  // Fechou formalmente sem preços 0/1 ainda — evita settle com mid intermediário.
+  if (!pricesReady) {
+    return { ok: false, closed: true, reason: 'OUTCOME_PRICES_NOT_FINAL' };
+  }
+
   const winnerIdx = prices.findIndex((p) => Number(p) >= 0.99);
   return {
     ok: true,
-    closed: true,
+    closed,
     settlementPrice,
     winner: winnerIdx >= 0 ? String(outcomes[winnerIdx]) : null,
+    early: !closed,
   };
 }

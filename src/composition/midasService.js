@@ -142,7 +142,13 @@ export async function prepareMidasCanaryRuntime(opts = {}) {
       maxDailyLoss: positive(opts.maxDailyLoss, requestedCap),
       maxSlippage: CANARY_LIMITS.maxSlippage,
       allowLiveReverse: opts.allowLiveReverse !== false,
-      // 0 = ilimitado; default contínuo (1 ENTER/evento via ONE_INTENT_PER_EVENT).
+      // 0 = ilimitado na control window; por evento: até maxEntryAttemptsPerEvent
+      // (FAK miss libera o slot ONE_INTENT para retry na janela terminal).
+      maxEntryAttemptsPerEvent: Number.isFinite(Number(opts.maxEntryAttemptsPerEvent))
+        ? Math.max(1, Number(opts.maxEntryAttemptsPerEvent))
+        : Number.isFinite(Number(process.env.ENGINE_MAX_ENTRY_ATTEMPTS_PER_EVENT))
+          ? Math.max(1, Number(process.env.ENGINE_MAX_ENTRY_ATTEMPTS_PER_EVENT))
+          : 5,
       maxEntriesPerControlWindow: Number.isFinite(Number(opts.maxEntriesPerControlWindow))
         ? Math.max(0, Number(opts.maxEntriesPerControlWindow))
         : 0,

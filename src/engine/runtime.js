@@ -21,6 +21,7 @@ import {
 const EXPECTED_POLICY_DENIALS = new Set([
   'ONE_POSITION_PER_INSTANCE',
   'ONE_INTENT_PER_EVENT',
+  'ENTRY_ATTEMPTS_EXHAUSTED',
   'CONTROL_WINDOW_LIMIT',
   'BELOW_TACTICAL_FLOOR',
   'CANARY_BUDGET_EXCEEDED',
@@ -282,6 +283,16 @@ export function createEngine(opts) {
 
     if (event.type === 'FILL' || event.type === 'CANCEL' || event.type === 'REJECT') {
       if (event.intentId) pendingIntents.delete(event.intentId);
+    }
+
+    // FAK/FOK (ou cancel) sem fill: libera ONE_INTENT slot para retry na janela terminal.
+    if (
+      (event.type === 'CANCEL' || event.type === 'REJECT') &&
+      pendingBefore?.kind === 'ENTER' &&
+      position.qty <= 0 &&
+      typeof riskEngine.releaseUnfilledEnter === 'function'
+    ) {
+      riskEngine.releaseUnfilledEnter(pendingBefore);
     }
 
     // ENTER/EXIT/REVERSE sem fill: voltar a ARMED (não ficar preso em *_PENDING).

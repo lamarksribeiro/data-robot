@@ -32,6 +32,8 @@ export function createRiskEngine(opts = {}) {
     tacticalFloorSec: opts.tacticalFloorSec ?? 4,
     onePositionPerInstance: opts.onePositionPerInstance !== false,
     oneIntentPerEvent: opts.oneIntentPerEvent !== false,
+    /** Tentativas de ENTER por marketId (inclui a 1ª). FAK miss libera o slot até este teto. */
+    maxEntryAttemptsPerEvent: Math.max(1, Number(opts.maxEntryAttemptsPerEvent ?? 5)),
     maxEntriesPerControlWindow: Math.max(0, Number(opts.maxEntriesPerControlWindow ?? 0)),
     controlWindowMs: Math.max(1, Number(opts.controlWindowMs ?? 24 * 60 * 60 * 1000)),
     maxSlippage: opts.maxSlippage ?? null,
@@ -60,12 +62,18 @@ export function createRiskEngine(opts = {}) {
   const eventNotional = new Map();
   /** @type {number[]} */
   const orderTimestamps = [];
-  /** Eventos que já consumiram a única entrada permitida da instância. */
+  /** Eventos com ENTER em voo ou já filled (slot ocupado — libera em FAK miss). */
   const enteredEvents = new Set();
+  /** Tentativas de ENTER aceitas por eventKey (não zera no miss — limita retries). */
+  const entryAttempts = new Map();
   /** Timestamps de ENTER aceitos; persistidos para limitar o canário entre restarts. */
   const entryTimestamps = [];
   let dailyRealizedPnl = opts.dailyRealizedPnl ?? 0;
   let entryEnabled = opts.entryEnabled !== false;
+
+  function eventKeyFor(intent) {
+    return `${intent.strategyInstanceId}:${intent.marketId}`;
+  }
 
   function deny(reasonCode, detail, meta = {}) {
     const decision = { allow: false, reasonCode, detail };
@@ -213,14 +221,26 @@ export function createRiskEngine(opts = {}) {
       return deny(RISK_REASON.ONE_POSITION_PER_INSTANCE, { qty: position.qty }, meta);
     }
 
-    if (
-      limits.oneIntentPerEvent &&
-      intent.kind === 'ENTER' &&
-      (enteredEvents.has(`${intent.strategyInstanceId}:${intent.marketId}`) ||
-        (Array.isArray(ctx.openIntents) &&
-          ctx.openIntents.some((i) => i.marketId === intent.marketId && i.kind === 'ENTER')))
-    ) {
-      return deny(RISK_REASON.ONE_INTENT_PER_EVENT, { marketId: intent.marketId }, meta);
+    if (limits.oneIntentPerEvent && intent.kind === 'ENTER') {
+      const eventKey = eventKeyFor(intent);
+      const openEnter =
+        Array.isArray(ctx.openIntents) &&
+        ctx.openIntents.some((i) => i.marketId === intent.marketId && i.kind === 'ENTER');
+      if (enteredEvents.has(eventKey) || openEnter) {
+        return deny(RISK_REASON.ONE_INTENT_PER_EVENT, { marketId: intent.marketId }, meta);
+      }
+      const attempts = entryAttempts.get(eventKey) ?? 0;
+      if (attempts >= limits.maxEntryAttemptsPerEvent) {
+        return deny(
+          RISK_REASON.ENTRY_ATTEMPTS_EXHAUSTED,
+          {
+            marketId: intent.marketId,
+            attempts,
+            max: limits.maxEntryAttemptsPerEvent,
+          },
+          meta,
+        );
+      }
     }
 
     if (
@@ -314,14 +334,40 @@ export function createRiskEngine(opts = {}) {
     orderTimestamps.push(clock());
     if ((intent.kind === 'ENTER' || intent.kind === 'REVERSE') && notional != null) {
       accountBook.tryReserve(intent.strategyInstanceId, notional);
-      const eventKey = `${intent.strategyInstanceId}:${intent.marketId}`;
+      const eventKey = eventKeyFor(intent);
       eventNotional.set(eventKey, (eventNotional.get(eventKey) ?? 0) + notional);
     }
     if (intent.kind === 'ENTER') {
-      enteredEvents.add(`${intent.strategyInstanceId}:${intent.marketId}`);
+      const eventKey = eventKeyFor(intent);
+      enteredEvents.add(eventKey);
+      entryAttempts.set(eventKey, (entryAttempts.get(eventKey) ?? 0) + 1);
       entryTimestamps.push(clock());
     }
     circuit.recordSuccess();
+  }
+
+  /**
+   * ENTER sem fill (FAK/FOK reject ou cancel): libera slot para nova tentativa
+   * enquanto entryAttempts < maxEntryAttemptsPerEvent e gates ainda passam.
+   * @param {import('../engine/schemas.js').TradeIntent} intent
+   */
+  function releaseUnfilledEnter(intent) {
+    if (!intent || intent.kind !== 'ENTER' || !intent.marketId || !intent.strategyInstanceId) {
+      return false;
+    }
+    const eventKey = eventKeyFor(intent);
+    const hadSlot = enteredEvents.delete(eventKey);
+    const notional = intentNotional(intent);
+    if (notional != null && Number.isFinite(notional)) {
+      const used = eventNotional.get(eventKey) ?? 0;
+      const next = Math.max(0, used - notional);
+      if (next <= 1e-12) eventNotional.delete(eventKey);
+      else eventNotional.set(eventKey, next);
+    }
+    // Exposição da conta: runtime faz accountBook.set(openNotional) no REJECT/CANCEL.
+    // Não queima cota da control window em miss de liquidez.
+    if (entryTimestamps.length > 0) entryTimestamps.pop();
+    return hadSlot;
   }
 
   function recordFailure(reasonCode) {
@@ -345,6 +391,7 @@ export function createRiskEngine(opts = {}) {
       eventNotional: Object.fromEntries(eventNotional),
       orderTimestamps: [...orderTimestamps],
       enteredEvents: [...enteredEvents],
+      entryAttempts: Object.fromEntries(entryAttempts),
       entryTimestamps: [...entryTimestamps],
       entryEnabled,
       accountBook: accountBook.snapshot(),
@@ -365,6 +412,10 @@ export function createRiskEngine(opts = {}) {
     orderTimestamps.push(...(snap.orderTimestamps ?? []));
     enteredEvents.clear();
     for (const key of snap.enteredEvents ?? []) enteredEvents.add(String(key));
+    entryAttempts.clear();
+    for (const [k, v] of Object.entries(snap.entryAttempts ?? {})) {
+      entryAttempts.set(String(k), Math.max(0, Number(v) || 0));
+    }
     entryTimestamps.length = 0;
     entryTimestamps.push(...(snap.entryTimestamps ?? []).map(Number).filter(Number.isFinite));
     entryEnabled = snap.entryEnabled !== false;
@@ -383,6 +434,7 @@ export function createRiskEngine(opts = {}) {
     evaluate,
     runPreflight,
     recordAccepted,
+    releaseUnfilledEnter,
     recordFailure,
     recordPnl,
     tripKill,

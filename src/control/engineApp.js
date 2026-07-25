@@ -64,6 +64,12 @@ export function createEngineApp(opts = {}) {
   let latestPreflight = opts.preflight ?? null;
   /** @type {Array<{marketId:string,side:string,qty:number,avgPrice:number|null,releasedAtMs:number,queuedAtMs:number,toMarketId?:string|null}>} */
   let pendingSettlements = [];
+  /** Throttle do poll Gamma (ingest pode ser 50ms; não martelar a API). */
+  let lastSettlementPollAtMs = 0;
+  const settlementPollMs = Math.max(
+    200,
+    Number(opts.settlementPollMs ?? process.env.ENGINE_SETTLEMENT_POLL_MS ?? 1000) || 1000,
+  );
   let sourceStatus = snapshotSource
     ? { kind: snapshotSource.kind ?? 'custom', running: false, ok: false, reason: 'NOT_STARTED' }
     : { kind: 'manual', running: false, ok: null, reason: null };
@@ -478,8 +484,12 @@ export function createEngineApp(opts = {}) {
     return metrics.snapshot();
   }
 
-  async function processPendingSettlements(snapshot) {
+  async function processPendingSettlements(snapshot, pollOpts = {}) {
     if (!pendingSettlements.length || mode !== 'live') return;
+    const force = pollOpts.force === true;
+    const now = Date.now();
+    if (!force && now - lastSettlementPollAtMs < settlementPollMs) return;
+    lastSettlementPollAtMs = now;
     const remaining = [];
     for (const pending of pendingSettlements) {
       const resolution = await resolveBinarySettlementPrice(pending.marketId, pending.side, {
@@ -496,12 +506,14 @@ export function createEngineApp(opts = {}) {
           toMarketId: snapshot?.marketId ?? pending.toMarketId ?? null,
           winner: resolution.winner,
           async: true,
+          early: resolution.early === true,
           ...settled,
         });
         logger.info('position_settled_async', {
           fromMarketId: pending.marketId,
           toMarketId: snapshot?.marketId ?? pending.toMarketId ?? null,
           pnlDelta: settled.pnlDelta,
+          early: resolution.early === true,
           operatorState,
         });
         if (typeof opts.beforeArm === 'function') {
@@ -571,10 +583,11 @@ export function createEngineApp(opts = {}) {
           fromMarketId,
           toMarketId: snapshot.marketId,
           winner: resolution.winner,
+          early: resolution.early === true,
           ...settled,
         });
         // Continuidade: flat e segue armada no próximo evento 5m.
-        // (ONE_INTENT_PER_EVENT já impede 2 ENTERs no mesmo marketId.)
+        // (slot ONE_INTENT libera em FAK miss; settlement async segue flat no próximo 5m.)
         engine.risk.setEntryEnabled(true);
         if (operatorState !== 'ARMED') {
           operatorState = 'ARMED';

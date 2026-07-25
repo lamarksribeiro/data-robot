@@ -335,6 +335,70 @@ describe('proteção de rotação com posição live', () => {
     const audit = app.executionAudit.listRecent(30);
     assert.ok(audit.some((row) => row.type === 'settlement_queued'));
   });
+
+  it('settlement async resolve cedo quando outcomePrices já estão 0/1', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'p9-engine-early-'));
+    cleanup.push(() => fs.rmSync(dir, { recursive: true, force: true }));
+    let gammaClosed = false;
+    const sink = {
+      userChannel: { connected: true, lastHeartbeatMs: Date.now() },
+      start: async () => ({ ok: true }),
+      assertReady: () => true,
+      reconcileAll: async () => ({ ok: true, unresolved: [], orphans: [] }),
+      submit: async (intent) => ({
+        accepted: true,
+        events: [{
+          eventId: `fill-${intent.intentId}`,
+          intentId: intent.intentId,
+          type: 'FILL',
+          side: intent.side,
+          qty: 2,
+          price: 0.5,
+          tsMs: Date.now(),
+        }],
+      }),
+      cancelOpenOrders: async () => ({ canceled: [], failed: [] }),
+      dispose: () => {},
+    };
+    const fetchFn = async () => ({
+      ok: true,
+      json: async () => [{
+        closed: gammaClosed,
+        markets: [{
+          closed: gammaClosed,
+          outcomes: '["Up","Down"]',
+          // UI já mostra vencedor antes do closed oficial.
+          outcomePrices: gammaClosed ? '["1","0"]' : '["1","0"]',
+        }],
+      }],
+    });
+    const app = createEngineApp({
+      mode: 'live',
+      liveEnabled: true,
+      strategyId: 'fixture-price-cross',
+      strategyInstanceId: 'fixture:live',
+      preset: { threshold: 1, budget: 1, maxPrice: 0.5 },
+      riskOpts: { preflightChecks: passingChecks() },
+      sink,
+      fetchFn,
+      settlementPollMs: 1,
+      serveHttp: false,
+      backupDir: path.join(dir, 'backup'),
+      executionAuditDir: path.join(dir, 'audit'),
+      startArmed: true,
+    });
+    cleanup.push(() => app.stop());
+    await app.start();
+    await app.ingestSynthetic(fixtureSnapshot('market-a'));
+    assert.ok(app.engine.position.qty > 0);
+
+    // 1ª rotação: resolve cedo sem esperar closed.
+    await app.ingestSynthetic(fixtureSnapshot('market-b'));
+    assert.equal(app.status().settlementPending.length, 0);
+    assert.ok(app.status().position.realizedPnl !== 0 || app.engine.position.qty === 0);
+    const audit = app.executionAudit.listRecent(40);
+    assert.ok(audit.some((row) => row.type === 'position_settled' && row.early === true));
+  });
 });
 
 describe('ciclo operacional da instância', () => {

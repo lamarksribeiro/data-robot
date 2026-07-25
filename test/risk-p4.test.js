@@ -400,27 +400,161 @@ describe('checkpoint / restore', () => {
   });
 });
 
-describe('circuit breaker', () => {
-  it('abre após falhas consecutivas', async () => {
+describe('ENTER retry após FAK miss', () => {
+  function enterIntent(over = {}) {
+    return {
+      intentId: over.intentId ?? `i-${Math.random().toString(16).slice(2)}`,
+      kind: 'ENTER',
+      side: 'UP',
+      marketId: over.marketId ?? 'btc-updown-5m-1',
+      strategyInstanceId: 'midas-carry-v1:btc5m:primary',
+      budget: 2,
+      quantity: 3,
+      maxPrice: 0.66,
+      minPrice: null,
+      deadlineMs: Date.now() + 5_000,
+      reason: 'midas_core_entry',
+      orderType: 'FAK',
+    };
+  }
+
+  it('libera slot após releaseUnfilledEnter e permite novo ENTER', () => {
+    const risk = createRiskEngine({ maxEntryAttemptsPerEvent: 3, maxNotionalPerEvent: 50 });
+    const first = enterIntent({ intentId: 'a1' });
+    assert.equal(risk.evaluate(first).allow, true);
+    risk.recordAccepted(first);
+
+    const blocked = enterIntent({ intentId: 'a2' });
+    assert.equal(risk.evaluate(blocked).allow, false);
+    assert.equal(risk.evaluate(blocked).reasonCode, RISK_REASON.ONE_INTENT_PER_EVENT);
+
+    assert.equal(risk.releaseUnfilledEnter(first), true);
+
+    const retry = enterIntent({ intentId: 'a3' });
+    assert.equal(risk.evaluate(retry).allow, true);
+    risk.recordAccepted(retry);
+    assert.equal(risk.snapshot().entryAttempts[`${retry.strategyInstanceId}:${retry.marketId}`], 2);
+  });
+
+  it('esgota retries com ENTRY_ATTEMPTS_EXHAUSTED', () => {
+    const risk = createRiskEngine({ maxEntryAttemptsPerEvent: 2, maxNotionalPerEvent: 50 });
+    const m = 'btc-updown-5m-retry';
+    for (let i = 0; i < 2; i += 1) {
+      const intent = enterIntent({ intentId: `e${i}`, marketId: m });
+      assert.equal(risk.evaluate(intent).allow, true);
+      risk.recordAccepted(intent);
+      risk.releaseUnfilledEnter(intent);
+    }
+    const denied = enterIntent({ intentId: 'e-final', marketId: m });
+    const decision = risk.evaluate(denied);
+    assert.equal(decision.allow, false);
+    assert.equal(decision.reasonCode, RISK_REASON.ENTRY_ATTEMPTS_EXHAUSTED);
+  });
+
+  it('engine retenta ENTER após REJECT FAK sem fill', async () => {
+    let seq = 0;
+    const strategy = {
+      manifest: { id: 'retry-fak', version: '1.0.0', stateVersion: 1 },
+      validatePreset: () => ({ ok: true }),
+      initialize: () => ({ state: { armed: true }, diagnostics: {} }),
+      onSnapshot(ctx, state) {
+        if (ctx.position.qty > 0) return { state, intents: [] };
+        seq += 1;
+        return {
+          state,
+          intents: [
+            {
+              intentId: `retry-fak:m:ENTER:${seq}`,
+              kind: 'ENTER',
+              side: 'UP',
+              marketId: ctx.snapshot.marketId,
+              strategyInstanceId: ctx.strategyInstanceId,
+              budget: 1.5,
+              quantity: 3,
+              maxPrice: 0.5,
+              minPrice: null,
+              deadlineMs: ctx.clockMs + 5_000,
+              reason: 'test_retry',
+              orderType: 'FAK',
+            },
+          ],
+        };
+      },
+      onExecutionEvent(_ctx, state) {
+        return { state, intents: [] };
+      },
+    };
+
+    let submits = 0;
+    const sink = {
+      async submit(intent) {
+        submits += 1;
+        if (submits === 1) {
+          return {
+            accepted: false,
+            events: [
+              {
+                eventId: `rej-${intent.intentId}`,
+                intentId: intent.intentId,
+                type: 'REJECT',
+                qty: 0,
+                price: null,
+                reason: 'no orders found to match with FAK order',
+                tsMs: Date.now(),
+              },
+            ],
+          };
+        }
+        return {
+          accepted: true,
+          events: [
+            {
+              eventId: `ack-${intent.intentId}`,
+              intentId: intent.intentId,
+              type: 'ACK',
+              qty: 0,
+              price: intent.maxPrice,
+              side: intent.side,
+              kind: 'ENTER',
+              tsMs: Date.now(),
+            },
+            {
+              eventId: `fill-${intent.intentId}`,
+              intentId: intent.intentId,
+              type: 'FILL',
+              qty: intent.quantity,
+              price: intent.maxPrice,
+              side: intent.side,
+              kind: 'ENTER',
+              tsMs: Date.now() + 1,
+            },
+          ],
+        };
+      },
+    };
+
     const risk = createRiskEngine({
-      failureThreshold: 2,
-      maxNotionalPerOrder: 0.01,
+      maxEntryAttemptsPerEvent: 5,
+      maxNotionalPerOrder: 50,
+      maxNotionalPerEvent: 50,
     });
-    const engine = bootstrapEngine({
-      strategyId: 'fixture-price-cross',
+    const { createEngine } = await import('../src/engine/runtime.js');
+    const engine = createEngine({
       mode: 'shadow',
-      preset: { threshold: 1, budget: 5, maxPrice: 0.5 },
+      strategy,
+      preset: {},
+      sink,
       risk,
+      strategyInstanceId: 'retry-inst',
     });
     engine.start();
-    await engine.ingestSnapshot(snap());
-    await engine.ingestSnapshot(snap({ btc: 101 }));
-    assert.equal(risk.circuit.state, 'OPEN');
-
-    // mesmo com threshold alto de notional agora, circuit bloqueia
-    risk.limits.maxNotionalPerOrder = 100;
-    await engine.ingestSnapshot(snap({ btc: 102 }));
+    await engine.ingestSnapshot(snap({ btc: 100 }));
+    assert.equal(submits, 1);
     assert.equal(engine.position.qty, 0);
-    assert.ok(risk.audit.metrics()[RISK_REASON.CIRCUIT_OPEN] >= 1);
+    assert.equal(engine.state, 'ARMED');
+
+    await engine.ingestSnapshot(snap({ btc: 101 }));
+    assert.equal(submits, 2);
+    assert.equal(engine.position.qty, 3);
   });
 });
