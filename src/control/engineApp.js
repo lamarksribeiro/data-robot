@@ -466,6 +466,32 @@ export function createEngineApp(opts = {}) {
   }
 
   async function ingest(snapshot, useMarketGate) {
+    // Ordem FAK/ENTER de mercado anterior sem posição: cancelar (não pode restar como GTC).
+    if (mode === 'live' && snapshot?.marketId && typeof sink.cancelOpenOrders === 'function') {
+      const open = sink.oms?.openOrders?.() ?? [];
+      const stale = open.filter(
+        (order) =>
+          order.marketId &&
+          order.marketId !== snapshot.marketId &&
+          (order.kind === 'ENTER' || order.kind === 'EXIT' || order.kind === 'REVERSE'),
+      );
+      if (stale.length > 0 && engine.position.qty <= 0) {
+        const cancellation = await sink.cancelOpenOrders(
+          'market-rotated-stale-entry',
+          (order) =>
+            order.marketId &&
+            order.marketId !== snapshot.marketId &&
+            (order.kind === 'ENTER' || order.kind === 'EXIT' || order.kind === 'REVERSE'),
+        );
+        logger.warn?.('stale_entry_canceled_on_rotation', {
+          marketId: snapshot.marketId,
+          canceled: cancellation?.canceled ?? [],
+          failed: cancellation?.failed ?? [],
+        });
+        // Se ainda ENTRY_PENDING flat sem pending, rearma via eventos CANCEL do sink.
+      }
+    }
+
     if (
       mode === 'live' &&
       opts.haltOnMarketRotationWithPosition !== false &&

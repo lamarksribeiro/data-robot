@@ -284,6 +284,16 @@ export function createEngine(opts) {
       if (event.intentId) pendingIntents.delete(event.intentId);
     }
 
+    // ENTER/EXIT/REVERSE sem fill: voltar a ARMED (não ficar preso em *_PENDING).
+    if (
+      (event.type === 'CANCEL' || event.type === 'REJECT') &&
+      position.qty <= 0 &&
+      pendingIntents.size === 0 &&
+      (state === 'ENTRY_PENDING' || state === 'EXIT_PENDING' || state === 'REVERSE_PENDING')
+    ) {
+      transition('ARMED', event.type === 'REJECT' ? 'entry_rejected' : 'entry_unfilled');
+    }
+
     if (
       pendingBefore &&
       (event.type === 'FILL' || event.type === 'CANCEL' || event.type === 'REJECT') &&

@@ -261,6 +261,130 @@ describe('OMS sink + engine', () => {
   });
 });
 
+describe('FAK terminalização (anti-ordem-presa)', () => {
+  it('ENTER FAK com ACK-only terminaliza via reconcile unmatched', async () => {
+    const { Side, OrderType } = await import('@polymarket/clob-client-v2');
+    const { createLiveTransport, createMockClobClient } = await import('../src/executor/liveTransport.js');
+    const client = createMockClobClient({ behavior: 'fak-kill' });
+    const sink = createOmsSink({
+      mode: 'shadow',
+      transport: createLiveTransport({ client, Side, OrderType }),
+      finalizeImmediateOrders: true,
+      immediateOrderTimeoutMs: 800,
+      immediateOrderPollMs: 40,
+    });
+    const result = await sink.submit({
+      intentId: 'fak-1',
+      kind: 'ENTER',
+      side: 'UP',
+      marketId: 'm-1',
+      strategyInstanceId: 'inst-1',
+      budget: 1.8,
+      quantity: 3,
+      maxPrice: 0.6,
+      reason: 'test',
+      tokenId: 'tok-up',
+      orderType: 'FAK',
+    });
+    assert.equal(result.accepted, true);
+    const order = sink.oms.getOrder('fak-1');
+    assert.ok(isTerminal(order.state), `esperava terminal, got ${order.state}`);
+    assert.equal(order.state, 'CANCELED');
+    assert.equal(order.qtyFilled, 0);
+    assert.equal(sink.oms.openOrders().length, 0);
+    assert.ok(result.events.some((e) => e.type === 'CANCEL'));
+    sink.dispose();
+  });
+
+  it('ENTER FAK stuck em LIVE é morta no timeout', async () => {
+    const { Side, OrderType } = await import('@polymarket/clob-client-v2');
+    const { createLiveTransport, createMockClobClient } = await import('../src/executor/liveTransport.js');
+    const client = createMockClobClient({ behavior: 'live' });
+    const sink = createOmsSink({
+      mode: 'shadow',
+      transport: createLiveTransport({ client, Side, OrderType }),
+      finalizeImmediateOrders: true,
+      immediateOrderTimeoutMs: 250,
+      immediateOrderPollMs: 40,
+    });
+    const result = await sink.submit({
+      intentId: 'fak-timeout-1',
+      kind: 'ENTER',
+      side: 'UP',
+      marketId: 'm-1',
+      strategyInstanceId: 'inst-1',
+      quantity: 3,
+      maxPrice: 0.6,
+      reason: 'test',
+      tokenId: 'tok-up',
+      orderType: 'FAK',
+    });
+    assert.equal(result.accepted, true);
+    const order = sink.oms.getOrder('fak-timeout-1');
+    assert.equal(order.state, 'CANCELED');
+    assert.equal(sink.oms.openOrders().length, 0);
+    assert.ok(
+      result.events.some((e) => e.type === 'CANCEL' && /fak_timeout|clob_cancel/i.test(String(e.reason))),
+    );
+    sink.dispose();
+  });
+
+  it('CANCEL sem fill tira a engine de ENTRY_PENDING para ARMED', async () => {
+    let submitted = false;
+    const engine = bootstrapEngine({
+      strategyId: 'fixture-price-cross',
+      mode: 'shadow',
+      sink: {
+        async submit(intent) {
+          submitted = true;
+          return {
+            accepted: true,
+            events: [
+              {
+                eventId: `ack-${intent.intentId}`,
+                intentId: intent.intentId,
+                type: 'ACK',
+                side: intent.side,
+                qty: 0,
+                price: intent.maxPrice ?? 0.55,
+                reason: 'test-ack',
+                tsMs: 1,
+              },
+              {
+                eventId: `cancel-${intent.intentId}`,
+                intentId: intent.intentId,
+                type: 'CANCEL',
+                side: intent.side,
+                qty: 0,
+                price: intent.maxPrice ?? 0.55,
+                reason: 'fak_timeout_killed',
+                tsMs: 2,
+              },
+            ],
+          };
+        },
+      },
+    });
+    engine.start();
+    await engine.ingestSnapshot({
+      marketId: 'm-cross',
+      nowMs: 1_000,
+      secsLeft: 20,
+      btc: 101,
+      priceToBeat: 100,
+      book: {
+        up: { bestBid: 0.54, bestAsk: 0.55, bids: [], asks: [] },
+        down: { bestBid: 0.44, bestAsk: 0.45, bids: [], asks: [] },
+      },
+      feeds: { healthy: true },
+      eligibility: { eligible: true, reasons: [], entryEligible: true, entryReasons: [] },
+    });
+    assert.equal(submitted, true);
+    assert.equal(engine.position.qty, 0);
+    assert.equal(engine.state, 'ARMED');
+  });
+});
+
 describe('user channel', () => {
   it('connect / heartbeat / disconnect', () => {
     const ch = createUserChannel({ kind: 'sim' });

@@ -386,6 +386,8 @@ export function createLiveTransport(opts) {
         const delta = Math.max(0, matched - already);
         const status = String(remote?.status ?? '').toUpperCase();
         const events = [];
+        const orderType = String(order.orderType ?? '').toUpperCase();
+        const immediate = orderType === 'FAK' || orderType === 'FOK';
 
         if (delta > 0) {
           let fillPrice = Number(remote?.price ?? order.price);
@@ -427,20 +429,7 @@ export function createLiveTransport(opts) {
           });
         }
 
-        if (status === 'LIVE' || status === 'OPEN' || status === 'DELAYED') {
-          if (events.length === 0) {
-            events.push({
-              eventId: `rest-ack-${order.intentId}-${status}`,
-              intentId: order.intentId,
-              exchangeOrderId: order.exchangeOrderId,
-              type: 'ACK',
-              qty: 0,
-              price: Number(remote?.price ?? order.price),
-              reason: `rest_${status.toLowerCase()}`,
-              tsMs,
-            });
-          }
-        } else if (
+        if (
           ['CANCELED', 'CANCELLED', 'UNMATCHED'].includes(status) &&
           matched < original
         ) {
@@ -454,12 +443,52 @@ export function createLiveTransport(opts) {
             reason: `rest_${status.toLowerCase()}`,
             tsMs: tsMs + events.length,
           });
+        } else if (status === 'LIVE' || status === 'OPEN' || status === 'DELAYED') {
+          // FAK/FOK não devem "descansar" como GTC: não re-ACK eterno.
+          // O waitForFinal/killImmediateOrder terminaliza; aqui só ACK se ainda dentro da graça.
+          if (events.length === 0 && !immediate) {
+            events.push({
+              eventId: `rest-ack-${order.intentId}-${status}`,
+              intentId: order.intentId,
+              exchangeOrderId: order.exchangeOrderId,
+              type: 'ACK',
+              qty: 0,
+              price: Number(remote?.price ?? order.price),
+              reason: `rest_${status.toLowerCase()}`,
+              tsMs,
+            });
+          }
         }
 
         return { ok: true, events, remote };
       } catch (err) {
+        const message = errorMessage(err) || 'RECONCILE_ERROR';
+        const orderType = String(order.orderType ?? '').toUpperCase();
+        const immediate = orderType === 'FAK' || orderType === 'FOK';
+        const missing =
+          /not found|404|unknown order|no order|does not exist/i.test(message) ||
+          err?.response?.status === 404 ||
+          err?.status === 404;
+        if (immediate && missing) {
+          circuit.recordSuccess();
+          return {
+            ok: true,
+            events: [
+              {
+                eventId: `rest-fak-missing-${order.intentId}`,
+                intentId: order.intentId,
+                exchangeOrderId: order.exchangeOrderId,
+                type: 'CANCEL',
+                qty: 0,
+                price: order.price ?? null,
+                reason: 'fak_remote_missing',
+                tsMs,
+              },
+            ],
+          };
+        }
         circuit.recordFailure();
-        return { ok: false, events: [], reason: errorMessage(err) || 'RECONCILE_ERROR' };
+        return { ok: false, events: [], reason: message };
       }
     },
 
@@ -587,12 +616,14 @@ export function createLiveTransport(opts) {
 /**
  * Mock CLOB para testes P7 (sem rede).
  * @param {object} [opts]
- * @param {'matched'|'live'|'reject'} [opts.behavior]
+ * @param {'matched'|'live'|'reject'|'fak-kill'} [opts.behavior]
  */
 export function createMockClobClient(opts = {}) {
   const behavior = opts.behavior ?? 'matched';
   let seq = 0;
   const orders = new Map();
+  /** @type {Map<string, number>} */
+  const getOrderHits = new Map();
 
   return {
     kind: 'mock-clob',
@@ -634,6 +665,16 @@ export function createMockClobClient(opts = {}) {
     async getOrder(orderID) {
       const order = orders.get(orderID);
       if (!order) throw new Error('mock order not found');
+      const hits = (getOrderHits.get(orderID) ?? 0) + 1;
+      getOrderHits.set(orderID, hits);
+      // fak-kill: ACK inicial como live; no 2º poll o CLOB reporta unmatched (kill).
+      if (behavior === 'fak-kill' && hits >= 2) {
+        return {
+          ...order,
+          status: 'unmatched',
+          size_matched: '0',
+        };
+      }
       return { ...order };
     },
     async getTrades() {

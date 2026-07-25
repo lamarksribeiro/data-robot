@@ -62,9 +62,12 @@ export function createOmsSink(opts = {}) {
     }
   }
 
-  function applyExternalEvent(event) {
+  function applyExternalEvent(event, applyOpts = {}) {
+    const notify = applyOpts.notify !== false;
     const applied = oms.applyExchangeEvent(event);
-    for (const normalized of applied.executionEvents ?? []) notifyExecution(normalized);
+    if (notify) {
+      for (const normalized of applied.executionEvents ?? []) notifyExecution(normalized);
+    }
     return applied;
   }
 
@@ -190,9 +193,35 @@ export function createOmsSink(opts = {}) {
         };
       }
       const result = await executor.executeIntent(intent);
+      const events = [...(result.events ?? [])];
+
+      // FAK/FOK: POST só gera ACK. Sem poll/terminalização a ordem pode ficar LIVE
+      // eternamente se o user WS não emitir kill — trava ENTRY_PENDING.
+      const orderAfter = oms.getOrder(intent.intentId);
+      const orderType = String(intent.orderType ?? orderAfter?.orderType ?? '').toUpperCase();
+      const needsFinal =
+        result.accepted !== false &&
+        orderAfter &&
+        !isTerminal(orderAfter.state) &&
+        (orderType === 'FAK' || orderType === 'FOK') &&
+        typeof transport.reconcile === 'function' &&
+        (mode === 'live' || opts.finalizeImmediateOrders === true);
+      if (needsFinal) {
+        const waited = await api.waitForFinal(intent.intentId, {
+          timeoutMs: Number(opts.immediateOrderTimeoutMs ?? 3_000),
+          pollMs: Number(opts.immediateOrderPollMs ?? 100),
+          killOnTimeout: true,
+          // Caller (engine.dispatchIntent) ingere os events retornados — evita FILL duplo.
+          notify: false,
+        });
+        if (Array.isArray(waited.executionEvents) && waited.executionEvents.length) {
+          events.push(...waited.executionEvents);
+        }
+      }
+
       return {
         accepted: result.accepted,
-        events: result.events,
+        events,
         deduped: result.deduped,
       };
     },
@@ -259,13 +288,17 @@ export function createOmsSink(opts = {}) {
       );
     },
 
-    async reconcileOrder(intentId) {
+    async reconcileOrder(intentId, reconcileOpts = {}) {
       const raw = oms.getOrderRaw(intentId);
-      if (!raw) return { ok: false, events: [], reason: 'ORDER_NOT_FOUND' };
+      if (!raw) return { ok: false, events: [], executionEvents: [], reason: 'ORDER_NOT_FOUND' };
       const result = await transport.reconcile?.(raw);
-      if (!result) return { ok: false, events: [], reason: 'RECONCILE_UNAVAILABLE' };
-      for (const event of result.events ?? []) applyExternalEvent(event);
-      return result;
+      if (!result) return { ok: false, events: [], executionEvents: [], reason: 'RECONCILE_UNAVAILABLE' };
+      const executionEvents = [];
+      for (const event of result.events ?? []) {
+        const applied = applyExternalEvent(event, { notify: reconcileOpts.notify !== false });
+        executionEvents.push(...(applied.executionEvents ?? []));
+      }
+      return { ...result, executionEvents };
     },
 
     async reconcileAll() {
@@ -285,10 +318,26 @@ export function createOmsSink(opts = {}) {
       } catch (err) {
         unresolved.push({ intentId: null, reason: `REMOTE_OPEN_ORDERS_FAILED:${err.message}` });
       }
+      const fakMaxLiveMs = Number(opts.fakMaxLiveMs ?? 5_000);
       for (const order of oms.openOrders()) {
+        const orderType = String(order.orderType ?? '').toUpperCase();
+        const immediate = orderType === 'FAK' || orderType === 'FOK';
+        const ageMs = clock() - Number(order.createdAtMs ?? clock());
+        if (immediate && ageMs >= fakMaxLiveMs) {
+          const killed = await api.killImmediateOrder(order.intentId, 'fak_stale_live_killed');
+          if (!killed.ok) {
+            unresolved.push({ intentId: order.intentId, reason: killed.reason ?? 'FAK_STALE' });
+            continue;
+          }
+        }
         const result = await api.reconcileOrder(order.intentId);
         const current = oms.getOrder(order.intentId);
-        if (!result.ok || (current && !isTerminal(current.state) && current.state !== 'LIVE')) {
+        // FAK/FOK em LIVE não conta como resolvido — precisa terminalizar.
+        const stillOpen =
+          current &&
+          !isTerminal(current.state) &&
+          !(current.state === 'LIVE' && !immediate);
+        if (!result.ok || stillOpen) {
           unresolved.push({ intentId: order.intentId, reason: result.reason ?? current?.state });
         }
       }
@@ -299,30 +348,107 @@ export function createOmsSink(opts = {}) {
       };
     },
 
+    /**
+     * Cancela FAK/FOK no exchange e força CANCEL local se ainda não terminal.
+     * @param {string} intentId
+     * @param {string} reason
+     * @param {{ notify?: boolean }} [killOpts]
+     */
+    async killImmediateOrder(intentId, reason = 'fak_killed', killOpts = {}) {
+      const notify = killOpts.notify !== false;
+      const raw = oms.getOrderRaw(intentId);
+      if (!raw) return { ok: false, reason: 'ORDER_NOT_FOUND', events: [], executionEvents: [] };
+      if (isTerminal(raw.state)) {
+        return { ok: true, order: oms.getOrder(intentId), events: [], executionEvents: [] };
+      }
+      const executionEvents = [];
+      try {
+        const cancelResult = await transport.cancel(raw);
+        for (const event of cancelResult.events ?? []) {
+          const applied = applyExternalEvent(event, { notify });
+          executionEvents.push(...(applied.executionEvents ?? []));
+        }
+      } catch (err) {
+        lastChannelError = { reason: 'FAK_KILL_CANCEL_FAILED', detail: err.message };
+      }
+      const current = oms.getOrder(intentId);
+      if (current && !isTerminal(current.state)) {
+        const applied = applyExternalEvent(
+          {
+            eventId: `fak-kill-${intentId}-${clock()}`,
+            intentId,
+            exchangeOrderId: raw.exchangeOrderId,
+            type: 'CANCEL',
+            qty: 0,
+            price: null,
+            reason,
+            tsMs: clock(),
+          },
+          { notify },
+        );
+        executionEvents.push(...(applied.executionEvents ?? []));
+      }
+      const finalOrder = oms.getOrder(intentId);
+      return {
+        ok: Boolean(finalOrder && isTerminal(finalOrder.state)),
+        order: finalOrder,
+        events: executionEvents,
+        executionEvents,
+        reason: finalOrder && isTerminal(finalOrder.state) ? null : reason,
+      };
+    },
+
     async waitForFinal(intentId, waitOpts = {}) {
       const timeoutMs = Number(waitOpts.timeoutMs ?? 15_000);
       const pollMs = Number(waitOpts.pollMs ?? 250);
+      const killOnTimeout = waitOpts.killOnTimeout === true;
+      const notify = waitOpts.notify !== false;
       const deadline = clock() + timeoutMs;
+      const executionEvents = [];
       while (clock() < deadline) {
-        await api.reconcileOrder(intentId);
+        const step = await api.reconcileOrder(intentId, { notify });
+        if (Array.isArray(step.executionEvents) && step.executionEvents.length) {
+          executionEvents.push(...step.executionEvents);
+        }
         const order = oms.getOrder(intentId);
-        if (order && isTerminal(order.state)) return { ok: true, order };
+        if (order && isTerminal(order.state)) return { ok: true, order, executionEvents };
         await new Promise((resolve) => setTimeout(resolve, pollMs));
       }
       const raw = oms.getOrderRaw(intentId);
       if (raw && !isTerminal(raw.state)) {
-        applyExternalEvent({
-          eventId: `reconcile-timeout-${intentId}-${clock()}`,
-          intentId,
-          exchangeOrderId: raw.exchangeOrderId,
-          type: 'UNKNOWN',
-          qty: 0,
-          price: null,
-          reason: 'RECONCILE_TIMEOUT',
-          tsMs: clock(),
-        });
+        const orderType = String(raw.orderType ?? '').toUpperCase();
+        const immediate = orderType === 'FAK' || orderType === 'FOK';
+        if (killOnTimeout && immediate) {
+          const killed = await api.killImmediateOrder(intentId, 'fak_timeout_killed', { notify });
+          executionEvents.push(...(killed.executionEvents ?? []));
+          return {
+            ok: killed.ok,
+            order: killed.order,
+            executionEvents,
+            reason: killed.ok ? null : 'FAK_TIMEOUT_KILL_FAILED',
+          };
+        }
+        const applied = applyExternalEvent(
+          {
+            eventId: `reconcile-timeout-${intentId}-${clock()}`,
+            intentId,
+            exchangeOrderId: raw.exchangeOrderId,
+            type: 'UNKNOWN',
+            qty: 0,
+            price: null,
+            reason: 'RECONCILE_TIMEOUT',
+            tsMs: clock(),
+          },
+          { notify },
+        );
+        executionEvents.push(...(applied.executionEvents ?? []));
       }
-      return { ok: false, order: oms.getOrder(intentId), reason: 'RECONCILE_TIMEOUT' };
+      return {
+        ok: false,
+        order: oms.getOrder(intentId),
+        executionEvents,
+        reason: 'RECONCILE_TIMEOUT',
+      };
     },
 
     dispose() {
