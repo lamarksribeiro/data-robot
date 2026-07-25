@@ -671,6 +671,8 @@ a { color: inherit; text-decoration: none; }
 }
 .badge--accent { color: var(--accent); background: var(--accent-soft); border-color: rgba(16, 185, 129, 0.25); }
 .badge--warn { color: var(--warn); background: var(--warn-soft); border-color: rgba(245, 158, 11, 0.25); }
+.badge.is-pos { color: var(--ok); border-color: rgba(16, 185, 129, 0.35); }
+.badge.is-neg { color: #f87171; border-color: rgba(239, 68, 68, 0.35); }
 .dot { width: 9px; height: 9px; display: inline-block; flex: 0 0 auto; background: var(--idle); border-radius: 50%; }
 .dot--ok { background: var(--ok); box-shadow: 0 0 8px rgba(16, 185, 129, 0.5); }
 .dot--warn { background: var(--warn); box-shadow: 0 0 8px rgba(245, 158, 11, 0.45); }

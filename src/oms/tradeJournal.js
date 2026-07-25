@@ -34,6 +34,31 @@ function computeExitPnl(trade) {
 }
 
 /**
+ * Curva de equity: PnL acumulado no tempo a partir de trades fechados.
+ * Espelha `buildEquityCurveFromEvents` do data-backtest.
+ * @param {Array<{ status?: string, pnl?: number|null, closedAtMs?: number|null, openedAtMs?: number|null }>} trades
+ * @returns {Array<{ ts: number, pnl: number }>}
+ */
+export function buildEquityCurveFromTrades(trades = []) {
+  const closed = (trades || [])
+    .filter((trade) => trade?.status === 'closed')
+    .map((trade) => {
+      const pnl = Number(trade.pnl);
+      const ts = Number(trade.closedAtMs ?? trade.openedAtMs);
+      if (!Number.isFinite(pnl) || !Number.isFinite(ts)) return null;
+      return { ts, pnl };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.ts - right.ts);
+
+  let cumulative = 0;
+  return closed.map((point) => {
+    cumulative += point.pnl;
+    return { ts: point.ts, pnl: cumulative };
+  });
+}
+
+/**
  * Soma PnL fechado em ganhos vs perdas (para UI).
  * @param {Array<{ status?: string, pnl?: number|null }>} trades
  */

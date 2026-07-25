@@ -12,9 +12,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/styles.css?v=1.16.18">
+  <link rel="stylesheet" href="/styles.css?v=1.16.19">
 
-  <script src="/js/dashboard.js?v=1.16.18" defer></script>
+  <script src="/js/dashboard.js?v=1.16.19" defer></script>
   <script src="/js/mascot.js?v=1.16.9" defer></script>
 </head>
 <body>
@@ -578,13 +578,13 @@
             <div class="panel__header">
               <div>
                 <p class="panel__kicker">Resultado</p>
-                <h2>PnL acumulado</h2>
-                <p class="panel__hint">Linha zero = breakeven desde o início deste robô.</p>
+                <h2>Curva de PnL</h2>
+                <p class="panel__hint">PnL acumulado por trade fechado no tempo — equity do robô.</p>
               </div>
               <span class="badge" id="chart-pnl-pos-badge">—</span>
             </div>
-            <canvas id="chart-pnl-pos" class="chart-canvas chart-canvas--lg" width="640" height="200" aria-label="PnL posição"></canvas>
-            <p class="chart-empty" id="chart-pnl-pos-empty">Coletando PnL…</p>
+            <canvas id="chart-pnl-pos" class="chart-canvas chart-canvas--lg" width="640" height="200" aria-label="Curva de PnL no tempo"></canvas>
+            <p class="chart-empty" id="chart-pnl-pos-empty">Sem trades fechados ainda</p>
           </article>
           <article class="panel chart-panel">
             <div class="panel__header">

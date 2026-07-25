@@ -93,7 +93,6 @@ const series = {
   minEntryZ: [],
   ask: [],
   bid: [],
-  pnl: [],
   fav: [],
 };
 
@@ -111,7 +110,6 @@ function pushSeries(sample) {
   series.minEntryZ.push(sample.minEntryZ);
   series.ask.push(sample.ask);
   series.bid.push(sample.bid);
-  series.pnl.push(sample.pnl);
   series.fav.push(sample.fav);
   while (series.ts.length > SERIES_MAX) {
     for (const key of Object.keys(series)) series[key].shift();
@@ -374,6 +372,175 @@ function drawMultiChart(canvas, lines, opts = {}) {
   }
 }
 
+/**
+ * Curva temporal (equity): pontos [{ ts, value }] com eixo X em tempo real.
+ */
+function drawTimedChart(canvas, points, opts = {}) {
+  if (!canvas) return;
+  const emptyEl = opts.emptyId ? $(opts.emptyId) : null;
+  const normalized = (points || [])
+    .map((point) => {
+      const ts = Number(point?.ts ?? point?.time ?? point?.x);
+      const value = Number(point?.value ?? point?.pnl ?? point?.y);
+      if (!Number.isFinite(ts) || !Number.isFinite(value)) return null;
+      return { ts, value };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.ts - right.ts);
+
+  let seriesPoints = normalized;
+  if (seriesPoints.length === 1) {
+    seriesPoints = [
+      { ts: seriesPoints[0].ts - 60_000, value: 0 },
+      seriesPoints[0],
+    ];
+  }
+
+  if (seriesPoints.length < 2) {
+    if (emptyEl) emptyEl.classList.remove('hidden');
+    prepareCanvas(canvas);
+    return;
+  }
+  if (emptyEl) emptyEl.classList.add('hidden');
+
+  const prepared = prepareCanvas(canvas);
+  if (!prepared) return;
+  const { ctx, cssW, cssH, pad } = prepared;
+  const w = cssW - pad.l - pad.r;
+  const h = cssH - pad.t - pad.b;
+
+  let min = Math.min(...seriesPoints.map((p) => p.value));
+  let max = Math.max(...seriesPoints.map((p) => p.value));
+  if (opts.zeroLine) {
+    min = Math.min(min, 0);
+    max = Math.max(max, 0);
+  }
+  if (min === max) {
+    min -= 1;
+    max += 1;
+  }
+  const padY = (max - min) * 0.08 || 1;
+  min -= padY;
+  max += padY;
+  const range = max - min || 1;
+
+  const t0 = seriesPoints[0].ts;
+  const t1 = seriesPoints[seriesPoints.length - 1].ts;
+  const span = Math.max(1, t1 - t0);
+  const xAt = (ts) => pad.l + ((ts - t0) / span) * w;
+  const yAt = (v) => pad.t + h - ((v - min) / range) * h;
+
+  ctx.strokeStyle = 'rgba(16,185,129,0.1)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + (h * i) / 4;
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y);
+    ctx.lineTo(pad.l + w, y);
+    ctx.stroke();
+  }
+
+  if (opts.zeroLine && min < 0 && max > 0) {
+    const zy = yAt(0);
+    ctx.strokeStyle = 'rgba(148,163,184,0.45)';
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, zy);
+    ctx.lineTo(pad.l + w, zy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('0', pad.l + 4, zy - 4);
+  }
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '10px JetBrains Mono, monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(formatChartValue(max, opts), pad.l - 6, pad.t + 8);
+  ctx.fillText(formatChartValue(min, opts), pad.l - 6, pad.t + h);
+
+  const color = opts.color || '#34d399';
+  const path = seriesPoints.map((p) => ({ x: xAt(p.ts), y: yAt(p.value), v: p.value }));
+
+  if (opts.fill !== false) {
+    const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + h);
+    if (color.startsWith('#') && color.length === 7) {
+      grad.addColorStop(0, `${color}35`);
+      grad.addColorStop(1, `${color}00`);
+    } else {
+      grad.addColorStop(0, 'rgba(52, 211, 153, 0.22)');
+      grad.addColorStop(1, 'rgba(52, 211, 153, 0.00)');
+    }
+    ctx.beginPath();
+    ctx.moveTo(path[0].x, pad.t + h);
+    for (const p of path) ctx.lineTo(p.x, p.y);
+    ctx.lineTo(path[path.length - 1].x, pad.t + h);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(path[0].x, path[0].y);
+  for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = opts.width ?? 2.3;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  const last = path[path.length - 1];
+  ctx.beginPath();
+  ctx.arc(last.x, last.y, 4, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = '#050811';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  const tickTs = [t0, t0 + span / 2, t1];
+  ctx.fillStyle = '#64748b';
+  ctx.font = '10px JetBrains Mono, monospace';
+  ctx.textAlign = 'center';
+  for (const [i, ts] of tickTs.entries()) {
+    const label = fmtChartTime(ts, span);
+    const x = xAt(ts);
+    if (i === 0) ctx.textAlign = 'left';
+    else if (i === tickTs.length - 1) ctx.textAlign = 'right';
+    else ctx.textAlign = 'center';
+    ctx.fillText(label, x, pad.t + h + 16);
+  }
+}
+
+function fmtChartTime(ms, spanMs = 0) {
+  const d = new Date(ms);
+  if (!Number.isFinite(d.getTime())) return '—';
+  if (spanMs >= 36 * 60 * 60 * 1000) {
+    return d.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+  if (spanMs < 30 * 60 * 1000) {
+    return d.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  }
+  return d.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
 function lastFinite(arr) {
   for (let i = arr.length - 1; i >= 0; i--) {
     if (Number.isFinite(arr[i])) return arr[i];
@@ -403,7 +570,6 @@ function renderCharts() {
   const minZ = lastFinite(series.minEntryZ);
   const ask = lastFinite(series.ask);
   const bid = lastFinite(series.bid);
-  const pnl = lastFinite(series.pnl);
   const crosses = countCrosses(series.btc, series.ptb);
 
   const crossLabel =
@@ -428,7 +594,6 @@ function renderCharts() {
       ? `ask ${number(ask, 3)}${bid != null ? ` · bid ${number(bid, 3)}` : ''}`
       : '—',
   );
-  text('chart-pnl-pos-badge', pnl != null ? money(pnl) : '—');
 
   const crossLines = [
     { values: series.btc, color: '#10b981', width: 2.4, fill: true },
@@ -469,18 +634,26 @@ function renderCharts() {
     { emptyId: 'chart-book-empty', digits: 3 },
   );
 
-  drawMultiChart(
-    $('chart-pnl-pos'),
-    [
-      {
-        values: series.pnl,
-        color: Number(pnl) < 0 ? '#ef4444' : '#10b981',
-        width: 2.3,
-        fill: true,
-      },
-    ],
-    { zeroLine: true, unit: '$', emptyId: 'chart-pnl-pos-empty' },
-  );
+  renderEquityChart();
+}
+
+function renderEquityChart() {
+  const last =
+    tradesEquity.length > 0
+      ? Number(tradesEquity[tradesEquity.length - 1]?.pnl)
+      : Number.isFinite(Number(tradesSummary?.net))
+        ? Number(tradesSummary.net)
+        : null;
+  text('chart-pnl-pos-badge', last != null && Number.isFinite(last) ? money(last) : '—');
+  setPnlTone($('chart-pnl-pos-badge'), last);
+  const color = Number(last) < 0 ? '#ef4444' : '#34d399';
+  drawTimedChart($('chart-pnl-pos'), tradesEquity, {
+    zeroLine: true,
+    unit: '$',
+    emptyId: 'chart-pnl-pos-empty',
+    color,
+    fill: true,
+  });
 }
 
 const MODE_COPY = {
@@ -668,6 +841,26 @@ function summarizeTradePnl(trades = []) {
     decided,
     winRate: decided > 0 ? wins / decided : null,
   };
+}
+
+/** Curva de equity a partir de trades fechados (espelha backend / data-backtest). */
+function buildEquityCurveFromTrades(trades = []) {
+  const closed = (trades || [])
+    .filter((trade) => trade?.status === 'closed')
+    .map((trade) => {
+      const pnl = Number(trade.pnl);
+      const ts = Number(trade.closedAtMs ?? trade.openedAtMs);
+      if (!Number.isFinite(pnl) || !Number.isFinite(ts)) return null;
+      return { ts, pnl };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.ts - right.ts);
+
+  let cumulative = 0;
+  return closed.map((point) => {
+    cumulative += point.pnl;
+    return { ts: point.ts, pnl: cumulative };
+  });
 }
 
 function formatWinRate(rate) {
@@ -1272,6 +1465,7 @@ function renderTrades(payload = {}) {
 
 let tradesCache = [];
 let tradesSummary = null;
+let tradesEquity = [];
 let tradesPage = 1;
 const TRADES_PAGE_SIZE = 25;
 let tradesFetchSeq = 0;
@@ -1288,6 +1482,7 @@ async function refreshTrades({ silent = false, page } = {}) {
       ? {
           trades: payload,
           summary: summarizeTradePnl(payload),
+          equity: buildEquityCurveFromTrades(payload),
           total: payload.length,
           page: 1,
           totalPages: 1,
@@ -1296,9 +1491,13 @@ async function refreshTrades({ silent = false, page } = {}) {
       : payload;
     tradesCache = Array.isArray(normalized.trades) ? normalized.trades : [];
     tradesSummary = normalized.summary ?? summarizeTradePnl(tradesCache);
+    tradesEquity = Array.isArray(normalized.equity)
+      ? normalized.equity
+      : buildEquityCurveFromTrades(tradesCache);
     tradesPage = Number(normalized.page ?? nextPage) || 1;
     renderTrades(normalized);
     renderPnlBreakdown(tradesSummary, lastStatus?.position?.realizedPnl);
+    renderEquityChart();
   } catch (error) {
     if (error.status === 401) return showLogin();
     if (!silent) showAlert(`Journal indisponível: ${error.message}`);
@@ -2509,7 +2708,6 @@ function render(status, health, instances) {
     minEntryZ: parseMinEntryZ(entry),
     ask: Number.isFinite(Number(market.ask)) ? Number(market.ask) : null,
     bid: Number.isFinite(Number(market.bid)) ? Number(market.bid) : null,
-    pnl: Number.isFinite(Number(pos.realizedPnl)) ? Number(pos.realizedPnl) : null,
     fav: market.favoriteSide || null,
   });
   renderCharts();

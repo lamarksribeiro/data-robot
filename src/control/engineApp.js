@@ -6,7 +6,11 @@
 import { bootstrapEngine } from '../composition/bootstrap.js';
 import { defaultPresetFor } from '../composition/presets.js';
 import { createOmsSink } from '../oms/omsSink.js';
-import { buildTradeJournal, summarizeTradePnl } from '../oms/tradeJournal.js';
+import {
+  buildEquityCurveFromTrades,
+  buildTradeJournal,
+  summarizeTradePnl,
+} from '../oms/tradeJournal.js';
 import { createMetrics } from '../observability/metrics.js';
 import { createLogger } from '../observability/logger.js';
 import { createAlertHub } from '../observability/alerts.js';
@@ -947,6 +951,7 @@ export function createEngineApp(opts = {}) {
         (t) => t.status === 'closed' || t.status === 'settlement_pending',
       );
       const summary = summarizeTradePnl(all);
+      const equity = buildEquityCurveFromTrades(all);
       const total = visible.length;
       const totalPages = Math.max(1, Math.ceil(total / pageSize));
       const safePage = Math.min(page, totalPages);
@@ -954,6 +959,7 @@ export function createEngineApp(opts = {}) {
       return {
         trades: visible.slice(start, start + pageSize),
         summary,
+        equity,
         total,
         page: safePage,
         pageSize,

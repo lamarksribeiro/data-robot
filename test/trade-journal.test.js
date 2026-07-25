@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildTradeJournal, summarizeTradePnl } from '../src/oms/tradeJournal.js';
+import {
+  buildEquityCurveFromTrades,
+  buildTradeJournal,
+  summarizeTradePnl,
+} from '../src/oms/tradeJournal.js';
 
 describe('tradeJournal', () => {
   it('monta trade fechado por settlement', () => {
@@ -151,5 +155,20 @@ describe('tradeJournal', () => {
     assert.equal(summary.closed, 3);
     assert.equal(summary.decided, 3);
     assert.equal(summary.winRate, 2 / 3);
+  });
+
+  it('buildEquityCurveFromTrades acumula PnL no tempo', () => {
+    const equity = buildEquityCurveFromTrades([
+      { status: 'closed', pnl: -0.5, closedAtMs: 3000 },
+      { status: 'closed', pnl: 1.2, closedAtMs: 1000 },
+      { status: 'closed', pnl: 0.4, closedAtMs: 2000 },
+      { status: 'settlement_pending', pnl: null, closedAtMs: 4000 },
+      { status: 'open', pnl: null, openedAtMs: 500 },
+    ]);
+    assert.deepEqual(equity, [
+      { ts: 1000, pnl: 1.2 },
+      { ts: 2000, pnl: 1.6 },
+      { ts: 3000, pnl: 1.1 },
+    ]);
   });
 });
