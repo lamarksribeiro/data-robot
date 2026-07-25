@@ -370,6 +370,26 @@ export function createRiskEngine(opts = {}) {
     return hadSlot;
   }
 
+  /**
+   * Contagem de tentativas de ENTER no marketId (após recordAccepted).
+   * @param {{ strategyInstanceId?: string, marketId?: string }} intentOrKey
+   */
+  function getEntryAttemptInfo(intentOrKey) {
+    if (!intentOrKey?.marketId || !intentOrKey?.strategyInstanceId) {
+      return { attempt: 0, max: limits.maxEntryAttemptsPerEvent, remaining: limits.maxEntryAttemptsPerEvent };
+    }
+    const eventKey = eventKeyFor(intentOrKey);
+    const attempt = entryAttempts.get(eventKey) ?? 0;
+    const max = limits.maxEntryAttemptsPerEvent;
+    return {
+      eventKey,
+      attempt,
+      max,
+      remaining: Math.max(0, max - attempt),
+      slotHeld: enteredEvents.has(eventKey),
+    };
+  }
+
   function recordFailure(reasonCode) {
     circuit.recordFailure();
     audit.record({ allow: false, reasonCode: reasonCode ?? RISK_REASON.CIRCUIT_OPEN });
@@ -435,6 +455,7 @@ export function createRiskEngine(opts = {}) {
     runPreflight,
     recordAccepted,
     releaseUnfilledEnter,
+    getEntryAttemptInfo,
     recordFailure,
     recordPnl,
     tripKill,

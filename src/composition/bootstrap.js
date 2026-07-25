@@ -67,6 +67,7 @@ export function bootstrapEngine(opts) {
     clock,
     liveEnabled: opts.liveEnabled === true,
     accountBook: opts.accountBook,
+    onAudit: opts.onAudit,
   });
 
   return Object.assign(engine, {

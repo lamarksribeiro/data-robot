@@ -47,6 +47,7 @@ export function createEngineApp(opts = {}) {
     liveEnabled: opts.liveEnabled === true,
     riskOpts: opts.riskOpts,
     strategyInstanceId: opts.strategyInstanceId,
+    onAudit: (type, payload) => executionAudit.append(type, payload),
   });
 
   let lastCheckpoint = null;
@@ -675,27 +676,34 @@ export function createEngineApp(opts = {}) {
     if (decisionResult?.acceptedCount) {
       metrics.inc('intents_accepted', decisionResult.acceptedCount);
     }
-    // Auditoria: intent aceito, mudança de estado, ou deny de proteção (EXIT/REVERSE).
-    // Negadas só de ENTER (canário/cap) continuam fora do JSONL para não poluir.
+    // Auditoria: intent aceito, mudança de estado, deny de proteção, ou deny de retry.
     const deniedProtective = (decisionResult?.denied ?? []).filter(
       (d) => d?.kind === 'EXIT' || d?.kind === 'REVERSE',
+    );
+    const deniedEntryPolicy = (decisionResult?.denied ?? []).filter(
+      (d) =>
+        d?.kind === 'ENTER' &&
+        (d?.reasonCode === 'ENTRY_ATTEMPTS_EXHAUSTED' || d?.reasonCode === 'ONE_INTENT_PER_EVENT'),
     );
     const shouldAuditDecision =
       (decisionResult?.acceptedCount ?? 0) > 0 ||
       decisionResult?.stateChanged === true ||
-      deniedProtective.length > 0;
+      deniedProtective.length > 0 ||
+      deniedEntryPolicy.length > 0;
     if (shouldAuditDecision) {
       const acceptedKinds = (decisionResult.accepted ?? [])
         .map((a) => a.kind)
         .filter(Boolean);
-      const deniedKinds = deniedProtective.map((d) => d.kind).filter(Boolean);
+      const deniedKinds = [...deniedProtective, ...deniedEntryPolicy]
+        .map((d) => d.kind)
+        .filter(Boolean);
       executionAudit.append('decision', {
         marketId: snapshot.marketId,
         ok: (decisionResult.acceptedCount ?? 0) > 0 ? true : null,
         action:
           (decisionResult.acceptedCount ?? 0) > 0
             ? acceptedKinds.join('+') || 'accepted'
-            : deniedProtective.length > 0
+            : deniedEntryPolicy.length > 0 || deniedProtective.length > 0
               ? `denied:${deniedKinds.join('+')}`
               : 'state_change',
         intentCount: decisionResult.intentCount ?? 0,

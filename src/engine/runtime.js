@@ -92,6 +92,47 @@ export function createEngine(opts) {
   // Compat: createBasicRisk devolve { evaluate, _engine }
   const riskEngine = risk._engine ?? risk;
 
+  function emitAudit(type, payload = {}) {
+    if (typeof opts.onAudit !== 'function') return;
+    try {
+      opts.onAudit(type, payload);
+    } catch {
+      /* auditoria nunca derruba o path de trading */
+    }
+  }
+
+  function bookSideSnapshot(snapshot, side) {
+    const book = snapshot?.book ?? {};
+    const sideBook = side === 'DOWN' ? book.down ?? book.DOWN : book.up ?? book.UP;
+    const ask = sideBook?.bestAsk ?? null;
+    const bid = sideBook?.bestBid ?? null;
+    const spread =
+      ask != null && bid != null && Number.isFinite(Number(ask)) && Number.isFinite(Number(bid))
+        ? Number(ask) - Number(bid)
+        : null;
+    return {
+      ask: ask != null && Number.isFinite(Number(ask)) ? Number(ask) : null,
+      bid: bid != null && Number.isFinite(Number(bid)) ? Number(bid) : null,
+      spread,
+      upAsk: book.up?.bestAsk ?? null,
+      upBid: book.up?.bestBid ?? null,
+      downAsk: book.down?.bestAsk ?? null,
+      downBid: book.down?.bestBid ?? null,
+    };
+  }
+
+  function failingGates(entry) {
+    const gates = entry?.gates;
+    if (!gates || typeof gates !== 'object') return [];
+    return Object.entries(gates)
+      .filter(([, g]) => g && g.pass === false)
+      .map(([name, g]) => ({ name, detail: g.detail ?? null, value: g.value ?? null }));
+  }
+
+  /** Último ENTER sem fill — para auditar por que o retry não disparou. */
+  let lastUnfilledEnter = null;
+  let lastRetryGateAuditKey = null;
+
   let state = 'BOOT';
   let strategyState = {};
   let strategyStateVersion = strategy.manifest.stateVersion ?? 1;
@@ -229,11 +270,70 @@ export function createEngine(opts) {
       ) {
         riskEngine.recordFailure(decision.reasonCode);
       }
+      if (
+        intent.kind === 'ENTER' &&
+        (decision.reasonCode === 'ONE_INTENT_PER_EVENT' ||
+          decision.reasonCode === 'ENTRY_ATTEMPTS_EXHAUSTED')
+      ) {
+        const attemptInfo =
+          typeof riskEngine.getEntryAttemptInfo === 'function'
+            ? riskEngine.getEntryAttemptInfo(intent)
+            : null;
+        emitAudit('entry_denied', {
+          marketId: intent.marketId,
+          intentId: intent.intentId,
+          side: intent.side,
+          reasonCode: decision.reasonCode,
+          detail: decision.detail ?? null,
+          attempt: attemptInfo?.attempt ?? null,
+          maxAttempts: attemptInfo?.max ?? null,
+          remainingAttempts: attemptInfo?.remaining ?? null,
+          orderType: intent.orderType ?? null,
+          maxPrice: intent.maxPrice ?? null,
+          quantity: intent.quantity ?? null,
+        });
+      }
       return { allowed: false, decision };
     }
 
     if (typeof riskEngine.recordAccepted === 'function') {
       riskEngine.recordAccepted(intent);
+    }
+
+    const attemptInfo =
+      typeof riskEngine.getEntryAttemptInfo === 'function'
+        ? riskEngine.getEntryAttemptInfo(intent)
+        : { attempt: null, max: null, remaining: null };
+    const book = bookSideSnapshot(lastSnapshot, intent.side);
+    const submitStartedAtMs = clock();
+    if (intent.kind === 'ENTER' || intent.kind === 'EXIT' || intent.kind === 'REVERSE') {
+      emitAudit('order_submit', {
+        marketId: intent.marketId,
+        intentId: intent.intentId,
+        kind: intent.kind,
+        side: intent.side,
+        orderType: intent.orderType ?? null,
+        maxPrice: intent.maxPrice ?? null,
+        minPrice: intent.minPrice ?? null,
+        quantity: intent.quantity ?? null,
+        budget: intent.budget ?? null,
+        reason: intent.reason ?? null,
+        attempt: attemptInfo.attempt,
+        maxAttempts: attemptInfo.max,
+        remainingAttemptsAfter: attemptInfo.remaining,
+        isRetry: intent.kind === 'ENTER' && Number(attemptInfo.attempt) > 1,
+        secsLeft: lastSnapshot?.secsLeft ?? null,
+        book,
+        entry: lastDiagnostics?.entry
+          ? {
+              ok: lastDiagnostics.entry.ok === true,
+              ask: lastDiagnostics.entry.ask ?? null,
+              bid: lastDiagnostics.entry.bid ?? null,
+              failingGates: failingGates(lastDiagnostics.entry),
+            }
+          : null,
+        liquidity: lastDiagnostics?.liquidity ?? null,
+      });
     }
 
     pendingIntents.set(intent.intentId, intent);
@@ -271,12 +371,16 @@ export function createEngine(opts) {
     }
 
     for (const event of result.events ?? []) {
-      await ingestExecutionEvent(event);
+      await ingestExecutionEvent(event, {
+        submitStartedAtMs,
+        attemptInfo,
+        bookAtSubmit: book,
+      });
     }
-    return { allowed: true, decision, result };
+    return { allowed: true, decision, result, attemptInfo };
   }
 
-  async function ingestExecutionEvent(event) {
+  async function ingestExecutionEvent(event, meta = {}) {
     const pendingBefore = event.intentId ? pendingIntents.get(event.intentId) : null;
     journal.push({ type: 'execution', event, tsMs: clock() });
     applyFill(event);
@@ -292,7 +396,67 @@ export function createEngine(opts) {
       position.qty <= 0 &&
       typeof riskEngine.releaseUnfilledEnter === 'function'
     ) {
-      riskEngine.releaseUnfilledEnter(pendingBefore);
+      const released = riskEngine.releaseUnfilledEnter(pendingBefore);
+      const attemptInfo =
+        meta.attemptInfo ??
+        (typeof riskEngine.getEntryAttemptInfo === 'function'
+          ? riskEngine.getEntryAttemptInfo(pendingBefore)
+          : null);
+      emitAudit('entry_slot_released', {
+        marketId: pendingBefore.marketId,
+        intentId: pendingBefore.intentId,
+        side: pendingBefore.side,
+        eventType: event.type,
+        reason: event.reason ?? null,
+        released,
+        attempt: attemptInfo?.attempt ?? null,
+        maxAttempts: attemptInfo?.max ?? null,
+        remainingAttempts: attemptInfo?.remaining ?? null,
+        canRetry: (attemptInfo?.remaining ?? 0) > 0,
+      });
+      lastUnfilledEnter = {
+        marketId: pendingBefore.marketId,
+        intentId: pendingBefore.intentId,
+        attempt: attemptInfo?.attempt ?? null,
+        maxAttempts: attemptInfo?.max ?? null,
+        remainingAttempts: attemptInfo?.remaining ?? null,
+        reason: event.reason ?? null,
+        tsMs: clock(),
+      };
+      lastRetryGateAuditKey = null;
+    }
+
+    if (
+      (event.type === 'FILL' ||
+        event.type === 'PARTIAL' ||
+        event.type === 'CANCEL' ||
+        event.type === 'REJECT') &&
+      pendingBefore
+    ) {
+      const attemptInfo = meta.attemptInfo ?? null;
+      emitAudit('order_terminal', {
+        marketId: pendingBefore.marketId ?? lastSnapshot?.marketId ?? null,
+        intentId: pendingBefore.intentId ?? event.intentId,
+        kind: pendingBefore.kind ?? null,
+        side: pendingBefore.side ?? event.side ?? null,
+        orderType: pendingBefore.orderType ?? null,
+        eventType: event.type,
+        reason: event.reason ?? null,
+        qty: event.qty ?? null,
+        price: event.price ?? pendingBefore.maxPrice ?? null,
+        attempt: attemptInfo?.attempt ?? null,
+        maxAttempts: attemptInfo?.max ?? null,
+        remainingAttempts: attemptInfo?.remaining ?? null,
+        isRetry: pendingBefore.kind === 'ENTER' && Number(attemptInfo?.attempt) > 1,
+        latencyMs:
+          meta.submitStartedAtMs != null ? Math.max(0, clock() - meta.submitStartedAtMs) : null,
+        bookAtSubmit: meta.bookAtSubmit ?? null,
+        filled: event.type === 'FILL' || event.type === 'PARTIAL',
+      });
+      if (event.type === 'FILL' || event.type === 'PARTIAL') {
+        lastUnfilledEnter = null;
+        lastRetryGateAuditKey = null;
+      }
     }
 
     // ENTER/EXIT/REVERSE sem fill: voltar a ARMED (não ficar preso em *_PENDING).
@@ -332,7 +496,13 @@ export function createEngine(opts) {
     const raw = strategy.onExecutionEvent(ctx, strategyState, event);
     const normalized = normalizeStrategyResult(raw, { strategyInstanceId });
     strategyState = normalized.state;
-    lastDiagnostics = normalized.diagnostics;
+    // Preserva diagnostics do snapshot (gates/ask/liq); só anexa o último evento.
+    lastDiagnostics = {
+      ...(lastDiagnostics && typeof lastDiagnostics === 'object' ? lastDiagnostics : {}),
+      ...(normalized.diagnostics && typeof normalized.diagnostics === 'object'
+        ? normalized.diagnostics
+        : {}),
+    };
     for (const intent of normalized.intents) {
       await dispatchIntent(intent);
     }
@@ -632,6 +802,57 @@ export function createEngine(opts) {
       const normalized = normalizeStrategyResult(raw, { strategyInstanceId });
       strategyState = normalized.state;
       lastDiagnostics = normalized.diagnostics;
+      const snapshotDiagnostics =
+        normalized.diagnostics && typeof normalized.diagnostics === 'object'
+          ? { ...normalized.diagnostics }
+          : {};
+
+      // Após FAK miss: se gates bloqueiam o retry, audita uma vez por assinatura de falha.
+      if (
+        lastUnfilledEnter &&
+        lastUnfilledEnter.marketId === snapshot.marketId &&
+        position.qty <= 0 &&
+        snapshotDiagnostics.entry &&
+        snapshotDiagnostics.entry.ok === false
+      ) {
+        const fails = failingGates(snapshotDiagnostics.entry)
+          .map((g) => g.name)
+          .sort()
+          .join(',');
+        const key = `${snapshot.marketId}:${fails || 'unknown'}`;
+        if (key !== lastRetryGateAuditKey) {
+          lastRetryGateAuditKey = key;
+          emitAudit('entry_retry_gated', {
+            marketId: snapshot.marketId,
+            previousIntentId: lastUnfilledEnter.intentId,
+            previousAttempt: lastUnfilledEnter.attempt,
+            maxAttempts: lastUnfilledEnter.maxAttempts,
+            remainingAttempts: lastUnfilledEnter.remainingAttempts,
+            previousRejectReason: lastUnfilledEnter.reason,
+            secsLeft: snapshot.secsLeft ?? null,
+            failingGates: failingGates(snapshotDiagnostics.entry),
+            entry: {
+              ok: false,
+              ask: snapshotDiagnostics.entry.ask ?? null,
+              bid: snapshotDiagnostics.entry.bid ?? null,
+              fav: snapshotDiagnostics.entry.fav ?? null,
+              dist: snapshotDiagnostics.entry.dist ?? null,
+            },
+            book: bookSideSnapshot(snapshot, snapshotDiagnostics.entry.fav ?? null),
+          });
+        }
+      } else if (
+        lastUnfilledEnter &&
+        lastUnfilledEnter.marketId === snapshot.marketId &&
+        snapshotDiagnostics.entry?.ok === true
+      ) {
+        // Gates voltaram — próximo ENTER (se vier) será o retry; limpa o gate-audit key.
+        lastRetryGateAuditKey = null;
+      }
+      if (lastUnfilledEnter && lastUnfilledEnter.marketId !== snapshot.marketId) {
+        lastUnfilledEnter = null;
+        lastRetryGateAuditKey = null;
+      }
 
       const intents = normalized.intents.map((intent) => {
         if (intent.intentId) return intent;
@@ -678,12 +899,23 @@ export function createEngine(opts) {
         accepted: accepted.map((r) => ({
           ...r.intent,
           reasonCode: r.decision?.reasonCode ?? null,
+          attempt: r.attemptInfo?.attempt ?? null,
+          maxAttempts: r.attemptInfo?.max ?? null,
+          isRetry: r.intent?.kind === 'ENTER' && Number(r.attemptInfo?.attempt) > 1,
         })),
         denied: denied.map((r) => ({
           kind: r.intent.kind,
           reasonCode: r.decision?.reasonCode ?? null,
+          intentId: r.intent.intentId ?? null,
+          side: r.intent.side ?? null,
         })),
-        diagnostics: lastDiagnostics,
+        // Prefer diagnostics do snapshot (gates/ask); lastDiagnostics pode ter lastEventType.
+        diagnostics: {
+          ...snapshotDiagnostics,
+          ...(lastDiagnostics?.lastEventType
+            ? { lastEventType: lastDiagnostics.lastEventType }
+            : {}),
+        },
         position: { ...position },
       };
     },

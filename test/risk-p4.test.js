@@ -453,6 +453,7 @@ describe('ENTER retry após FAK miss', () => {
 
   it('engine retenta ENTER após REJECT FAK sem fill', async () => {
     let seq = 0;
+    const audit = [];
     const strategy = {
       manifest: { id: 'retry-fak', version: '1.0.0', stateVersion: 1 },
       validatePreset: () => ({ ok: true }),
@@ -478,10 +479,22 @@ describe('ENTER retry após FAK miss', () => {
               orderType: 'FAK',
             },
           ],
+          diagnostics: {
+            entry: {
+              ok: true,
+              fav: 'UP',
+              ask: 0.48,
+              bid: 0.47,
+              gates: {
+                askBand: { pass: true, detail: '0.48' },
+              },
+            },
+            liquidity: { liq: 10, quantity: 3, ok: true },
+          },
         };
       },
       onExecutionEvent(_ctx, state) {
-        return { state, intents: [] };
+        return { state, intents: [], diagnostics: { lastEventType: 'REJECT' } };
       },
     };
 
@@ -546,15 +559,111 @@ describe('ENTER retry após FAK miss', () => {
       sink,
       risk,
       strategyInstanceId: 'retry-inst',
+      onAudit: (type, payload) => audit.push({ type, ...payload }),
     });
     engine.start();
     await engine.ingestSnapshot(snap({ btc: 100 }));
     assert.equal(submits, 1);
     assert.equal(engine.position.qty, 0);
     assert.equal(engine.state, 'ARMED');
+    assert.ok(audit.some((a) => a.type === 'order_submit' && a.attempt === 1));
+    assert.ok(audit.some((a) => a.type === 'order_terminal' && a.eventType === 'REJECT'));
+    assert.ok(audit.some((a) => a.type === 'entry_slot_released' && a.canRetry === true));
 
     await engine.ingestSnapshot(snap({ btc: 101 }));
     assert.equal(submits, 2);
     assert.equal(engine.position.qty, 3);
+    assert.ok(audit.some((a) => a.type === 'order_submit' && a.isRetry === true && a.attempt === 2));
+  });
+
+  it('audita entry_retry_gated quando gates bloqueiam o retry', async () => {
+    const audit = [];
+    let phase = 'fire';
+    const strategy = {
+      manifest: { id: 'retry-gate', version: '1.0.0', stateVersion: 1 },
+      validatePreset: () => ({ ok: true }),
+      initialize: () => ({ state: {}, diagnostics: {} }),
+      onSnapshot(ctx, state) {
+        if (phase === 'fire') {
+          return {
+            state,
+            intents: [
+              {
+                intentId: 'retry-gate:m:ENTER:1',
+                kind: 'ENTER',
+                side: 'UP',
+                marketId: ctx.snapshot.marketId,
+                strategyInstanceId: ctx.strategyInstanceId,
+                budget: 1.5,
+                quantity: 3,
+                maxPrice: 0.5,
+                orderType: 'FAK',
+                reason: 'test',
+              },
+            ],
+            diagnostics: {
+              entry: {
+                ok: true,
+                fav: 'UP',
+                ask: 0.48,
+                gates: { askBand: { pass: true, detail: 'ok' } },
+              },
+            },
+          };
+        }
+        return {
+          state,
+          intents: [],
+          diagnostics: {
+            entry: {
+              ok: false,
+              fav: 'UP',
+              ask: null,
+              gates: {
+                askBand: { pass: false, detail: 'ask indisponível · [0.55, 0.94]' },
+              },
+            },
+          },
+        };
+      },
+      onExecutionEvent(_ctx, state) {
+        return { state, intents: [], diagnostics: { lastEventType: 'REJECT' } };
+      },
+    };
+    const sink = {
+      async submit(intent) {
+        return {
+          accepted: false,
+          events: [
+            {
+              eventId: `rej-${intent.intentId}`,
+              intentId: intent.intentId,
+              type: 'REJECT',
+              qty: 0,
+              reason: 'no orders found to match with FAK order',
+              tsMs: Date.now(),
+            },
+          ],
+        };
+      },
+    };
+    const { createEngine } = await import('../src/engine/runtime.js');
+    const engine = createEngine({
+      mode: 'shadow',
+      strategy,
+      preset: {},
+      sink,
+      risk: createRiskEngine({ maxEntryAttemptsPerEvent: 5 }),
+      strategyInstanceId: 'gate-inst',
+      onAudit: (type, payload) => audit.push({ type, ...payload }),
+    });
+    engine.start();
+    await engine.ingestSnapshot(snap());
+    phase = 'blocked';
+    await engine.ingestSnapshot(snap({ btc: 101 }));
+    const gated = audit.find((a) => a.type === 'entry_retry_gated');
+    assert.ok(gated);
+    assert.equal(gated.failingGates[0].name, 'askBand');
+    assert.match(String(gated.previousRejectReason), /no orders found/i);
   });
 });
