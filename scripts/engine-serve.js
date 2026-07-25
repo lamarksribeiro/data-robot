@@ -258,7 +258,7 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
           revalidatePreflight: async () => fetchWalletSnapshot(),
         };
         console.log(
-          `[engine:serve] wallet snapshot USDC=$${Number(runtime.preflight.checks.balance.balanceUsd).toFixed(2)} (display-only)`,
+          `[engine:serve] wallet portfolio=$${Number(runtime.preflight.checks.balance.balanceUsd).toFixed(2)} (cash=$${Number(runtime.preflight.checks.balance.cashUsd ?? runtime.preflight.checks.balance.balanceUsd).toFixed(2)} · pos=$${Number(runtime.preflight.checks.balance.positionsValueUsd ?? 0).toFixed(2)}; display-only)`,
         );
       } catch (error) {
         console.warn(`[engine:serve] wallet snapshot indisponível: ${error.message}`);

@@ -25,6 +25,47 @@ function pushLeg(trade, leg) {
   trade.legs.push(leg);
 }
 
+function computeExitPnl(trade) {
+  const entry = Number(trade.entryPrice);
+  const exit = Number(trade.exitPrice);
+  const qty = Number(trade.qty);
+  if (![entry, exit, qty].every(Number.isFinite) || qty <= 0) return null;
+  return (exit - entry) * qty;
+}
+
+/**
+ * Soma PnL fechado em ganhos vs perdas (para UI).
+ * @param {Array<{ status?: string, pnl?: number|null }>} trades
+ */
+export function summarizeTradePnl(trades = []) {
+  let net = 0;
+  let won = 0;
+  let lost = 0;
+  let wins = 0;
+  let losses = 0;
+  let pending = 0;
+  let closed = 0;
+  for (const trade of trades) {
+    if (trade?.status === 'settlement_pending') {
+      pending += 1;
+      continue;
+    }
+    if (trade?.status !== 'closed') continue;
+    const pnl = Number(trade.pnl);
+    if (!Number.isFinite(pnl)) continue;
+    closed += 1;
+    net += pnl;
+    if (pnl > 0) {
+      won += pnl;
+      wins += 1;
+    } else if (pnl < 0) {
+      lost += Math.abs(pnl);
+      losses += 1;
+    }
+  }
+  return { net, won, lost, wins, losses, pending, closed };
+}
+
 /**
  * @param {object} opts
  * @param {object[]} [opts.auditRows] — mais recentes primeiro (como listRecent)
@@ -96,6 +137,9 @@ export function buildTradeJournal(opts = {}) {
               .at(-1) ?? null;
           trade.exitKind = 'EXIT';
           trade.exitPrice = exitOrder?.price ?? trade.exitPrice;
+          trade.qty =
+            (exitOrder?.qtyFilled > 0 ? exitOrder.qtyFilled : null) || trade.qty;
+          if (trade.pnl == null) trade.pnl = computeExitPnl(trade);
           pushLeg(trade, {
             kind: 'EXIT',
             price: trade.exitPrice,
@@ -113,6 +157,9 @@ export function buildTradeJournal(opts = {}) {
               .at(-1) ?? null;
           trade.exitKind = 'REVERSE';
           trade.exitPrice = reverseOrder?.price ?? trade.exitPrice;
+          trade.qty =
+            (reverseOrder?.qtyFilled > 0 ? reverseOrder.qtyFilled : null) || trade.qty;
+          if (trade.pnl == null) trade.pnl = computeExitPnl(trade);
           pushLeg(trade, {
             kind: 'REVERSE',
             price: trade.exitPrice,
@@ -134,6 +181,7 @@ export function buildTradeJournal(opts = {}) {
       trade.exitKind = 'SETTLEMENT';
       trade.exitPrice = row.settlementPrice ?? trade.exitPrice;
       trade.pnl = row.pnlDelta ?? trade.pnl;
+      if (trade.pnl == null) trade.pnl = computeExitPnl(trade);
       trade.winner = row.winner ?? trade.winner;
       trade.closedAtMs = ts ?? trade.closedAtMs;
       trade.status = 'closed';
@@ -175,6 +223,9 @@ export function buildTradeJournal(opts = {}) {
     .map((t) => {
       if (t.openedAtMs && t.closedAtMs) {
         t.durationMs = Math.max(0, t.closedAtMs - t.openedAtMs);
+      }
+      if (t.status === 'closed' && t.pnl == null) {
+        t.pnl = computeExitPnl(t);
       }
       return t;
     })

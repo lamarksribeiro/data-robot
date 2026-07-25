@@ -12,9 +12,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/styles.css?v=1.16.15">
+  <link rel="stylesheet" href="/styles.css?v=1.16.16">
 
-  <script src="/js/dashboard.js?v=1.16.15" defer></script>
+  <script src="/js/dashboard.js?v=1.16.16" defer></script>
   <script src="/js/mascot.js?v=1.16.9" defer></script>
 </head>
 <body>
@@ -207,12 +207,12 @@
 
         <section class="kpi-strip" aria-label="Indicadores-chave">
           <article class="kpi-card kpi-card--pnl">
-            <span class="kpi-card__label">PnL realizado</span>
+            <span class="kpi-card__label">PnL líquido</span>
             <strong class="kpi-card__value" id="pnl-realized">—</strong>
-            <em class="kpi-card__meta" id="exposure-notional">exposição —</em>
+            <em class="kpi-card__meta" id="pnl-breakdown">ganhos — · perdas —</em>
           </article>
           <article class="kpi-card kpi-card--wallet">
-            <span class="kpi-card__label">Carteira USDC</span>
+            <span class="kpi-card__label">Carteira</span>
             <strong class="kpi-card__value" id="wallet-balance">—</strong>
             <em class="kpi-card__meta" id="wallet-note">—</em>
           </article>
@@ -311,14 +311,16 @@
               <span class="badge badge--warn" id="overview-wallet-mode">—</span>
             </div>
             <dl class="facts facts--dense">
-              <div><dt>Saldo USDC</dt><dd id="overview-wallet-balance">—</dd></div>
+              <div><dt>Portfolio</dt><dd id="overview-wallet-balance">—</dd></div>
+              <div><dt>Cash (CLOB)</dt><dd id="overview-wallet-cash">—</dd></div>
+              <div><dt>Posições</dt><dd id="overview-wallet-positions">—</dd></div>
               <div><dt>Allowance</dt><dd id="overview-wallet-allowance">—</dd></div>
               <div><dt>Preflight</dt><dd id="overview-wallet-preflight">—</dd></div>
               <div><dt>Hard cap</dt><dd id="overview-canary-cap">—</dd></div>
               <div><dt>Entradas / janela</dt><dd id="overview-canary-entries">—</dd></div>
               <div><dt>Reverse live</dt><dd id="overview-live-reverse">—</dd></div>
             </dl>
-            <p class="panel__note" id="overview-wallet-explain">Em shadow o saldo CLOB não aparece. Em live, vem do preflight.</p>
+            <p class="panel__note" id="overview-wallet-explain">Portfolio = cash livre + valor das posições (como na Polymarket).</p>
             <button class="btn btn--ghost btn--sm panel__link-btn" type="button" data-goto="position">Ver posição &amp; PnL →</button>
           </article>
 
@@ -494,7 +496,7 @@
           <div>
             <p class="eyebrow">Conta da estratégia</p>
             <h1 id="hdr-position">Posição &amp; PnL</h1>
-            <p class="page-header__sub">Lucro realizado, exposição e limites do canário</p>
+            <p class="page-header__sub">PnL líquido = ganhos − perdas · carteira alinhada à Polymarket</p>
           </div>
           <div class="page-header__badges">
             <span id="position-badge" class="badge">flat</span>
@@ -503,9 +505,19 @@
 
         <section class="pnl-hero" aria-label="Resumo de resultado">
           <article class="pnl-hero__card pnl-hero__card--main">
-            <span>PnL realizado (sessão)</span>
+            <span>PnL líquido (sessão)</span>
             <strong id="position-pnl">$0</strong>
-            <em id="position-pnl-hint">acumulado após fills liquidados</em>
+            <em id="position-pnl-hint">ganhos − perdas dos trades fechados</em>
+          </article>
+          <article class="pnl-hero__card pnl-hero__card--won">
+            <span>Ganhos</span>
+            <strong id="position-pnl-won">—</strong>
+            <em id="position-pnl-won-meta">trades no verde</em>
+          </article>
+          <article class="pnl-hero__card pnl-hero__card--lost">
+            <span>Perdas</span>
+            <strong id="position-pnl-lost">—</strong>
+            <em id="position-pnl-lost-meta">trades no vermelho</em>
           </article>
           <article class="pnl-hero__card">
             <span>Exposição aberta</span>
@@ -518,9 +530,9 @@
             <em>conta da estratégia</em>
           </article>
           <article class="pnl-hero__card pnl-hero__card--wallet">
-            <span>Saldo USDC (carteira)</span>
+            <span>Carteira (portfolio)</span>
             <strong id="wallet-balance-detail">—</strong>
-            <em id="wallet-preflight-short">preflight</em>
+            <em id="wallet-preflight-short">cash + posições</em>
           </article>
         </section>
 
@@ -591,7 +603,9 @@
               <span class="badge badge--warn">P9</span>
             </div>
             <dl class="facts facts--dense">
-              <div><dt>Saldo USDC</dt><dd id="wallet-balance-pos">—</dd></div>
+              <div><dt>Portfolio</dt><dd id="wallet-balance-pos">—</dd></div>
+              <div><dt>Cash (CLOB)</dt><dd id="wallet-cash-pos">—</dd></div>
+              <div><dt>Posições</dt><dd id="wallet-positions-pos">—</dd></div>
               <div><dt>Allowance</dt><dd id="wallet-allowance">—</dd></div>
               <div><dt>Preflight</dt><dd id="wallet-preflight">—</dd></div>
               <div><dt>Hard cap / ordem</dt><dd id="canary-cap-detail">—</dd></div>
@@ -601,7 +615,7 @@
               <div><dt>Preset canário</dt><dd id="canary-preset">—</dd></div>
             </dl>
             <p class="panel__note" id="wallet-explain">
-              Em shadow não há saldo CLOB real. Em live, o saldo vem do preflight (ativação / start).
+              Portfolio = cash CLOB + mark-to-market das posições (Data API), alinhado à carteira Polymarket.
             </p>
           </article>
         </div>
@@ -667,7 +681,7 @@
             <div>
               <p class="panel__kicker">Journal</p>
               <h2>Trades fechados</h2>
-              <p class="panel__hint">PnL por entrada — settlement, exit ou reverse. Clique no mercado para filtrar a Auditoria.</p>
+              <p class="panel__hint">Detalhe por entrada (settlement / exit / reverse). O resumo ganhos vs perdas fica em Posição &amp; PnL.</p>
             </div>
             <span class="badge" id="trades-count">0 trades</span>
           </div>

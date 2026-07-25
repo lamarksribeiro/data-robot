@@ -625,6 +625,85 @@ function setPnlTone(el, value) {
   el.classList.toggle('is-neg', Number.isFinite(n) && n < 0);
 }
 
+/** Soma PnL fechado em ganhos vs perdas (espelha summarizeTradePnl do backend). */
+function summarizeTradePnl(trades = []) {
+  let net = 0;
+  let won = 0;
+  let lost = 0;
+  let wins = 0;
+  let losses = 0;
+  let pending = 0;
+  let closed = 0;
+  for (const trade of trades) {
+    if (trade?.status === 'settlement_pending') {
+      pending += 1;
+      continue;
+    }
+    if (trade?.status !== 'closed') continue;
+    const pnl = Number(trade.pnl);
+    if (!Number.isFinite(pnl)) continue;
+    closed += 1;
+    net += pnl;
+    if (pnl > 0) {
+      won += pnl;
+      wins += 1;
+    } else if (pnl < 0) {
+      lost += Math.abs(pnl);
+      losses += 1;
+    }
+  }
+  return { net, won, lost, wins, losses, pending, closed };
+}
+
+function renderPnlBreakdown(trades = [], fallbackNet = null) {
+  const summary = summarizeTradePnl(trades);
+  const net =
+    summary.closed > 0
+      ? summary.net
+      : Number.isFinite(Number(fallbackNet))
+        ? Number(fallbackNet)
+        : summary.net;
+
+  text('pnl-realized', money(net));
+  setPnlTone($('pnl-realized'), net);
+  text(
+    'pnl-breakdown',
+    summary.closed > 0
+      ? `${money(summary.won)} ganho · −$${Math.abs(summary.lost).toFixed(2)} perdido`
+      : summary.pending > 0
+        ? `${summary.pending} aguardando settlement`
+        : 'ainda sem trades fechados',
+  );
+
+  text('position-pnl', money(net));
+  setPnlTone($('position-pnl'), net);
+  text('position-pnl-won', money(summary.won));
+  text(
+    'position-pnl-won-meta',
+    summary.wins > 0
+      ? `${summary.wins} trade${summary.wins === 1 ? '' : 's'} no verde`
+      : 'nenhum ganho ainda',
+  );
+  text('position-pnl-lost', summary.lost > 0 ? `−$${summary.lost.toFixed(2)}` : money(0));
+  text(
+    'position-pnl-lost-meta',
+    summary.losses > 0
+      ? `${summary.losses} trade${summary.losses === 1 ? '' : 's'} no vermelho`
+      : 'nenhuma perda ainda',
+  );
+
+  const pnlHint = $('position-pnl-hint');
+  if (pnlHint) {
+    if (summary.closed > 0) {
+      pnlHint.textContent = `= ${money(summary.won)} ganhos − $${summary.lost.toFixed(2)} perdas`;
+    } else if (summary.pending > 0) {
+      pnlHint.textContent = `${summary.pending} trade(s) aguardando Gamma`;
+    } else {
+      pnlHint.textContent = 'ganhos − perdas dos trades fechados';
+    }
+  }
+}
+
 function showAlert(message, kind = 'error') {
   alertBox.textContent = message;
   alertBox.dataset.kind = kind;
@@ -1124,6 +1203,7 @@ async function refreshTrades({ silent = false } = {}) {
     tradesCache = Array.isArray(rows) ? rows : [];
     renderTrades(tradesCache);
     renderPositionTradesMini(tradesCache);
+    renderPnlBreakdown(tradesCache, lastStatus?.position?.realizedPnl);
   } catch (error) {
     if (error.status === 401) return showLogin();
     if (!silent) showAlert(`Journal indisponível: ${error.message}`);
@@ -1977,7 +2057,10 @@ function renderMode(status, health) {
 function renderWallet(status) {
   const mode = String(status.mode || '').toLowerCase();
   const bal = status.preflight?.checks?.balance;
-  const balanceUsd = bal?.balanceUsd;
+  const portfolioUsd =
+    bal?.portfolioUsd ?? bal?.balanceUsd;
+  const cashUsd = bal?.cashUsd ?? (bal?.positionsValueUsd == null ? bal?.balanceUsd : null);
+  const positionsValueUsd = bal?.positionsValueUsd;
   const allowanceUsd =
     bal?.allowanceUnlimited === true
       ? 'ilimitado'
@@ -1991,6 +2074,16 @@ function renderWallet(status) {
       : mode === 'shadow' || mode === 'dry-run'
         ? 'n/a shadow'
         : 'ainda não ativou';
+  const walletNote =
+    Number.isFinite(Number(positionsValueUsd)) && Number(positionsValueUsd) > 0
+      ? `cash ${money(cashUsd)} · pos ${money(positionsValueUsd)}`
+      : Number.isFinite(Number(cashUsd))
+        ? `cash ${money(cashUsd)}`
+        : mode === 'shadow' || mode === 'dry-run'
+          ? 'shadow · portfolio'
+          : 'via preflight';
+  const explain =
+    'Portfolio = cash livre no CLOB + valor mark-to-market das posições (Data API), como na Polymarket.';
 
   text('overview-wallet-mode', mode === 'live' ? 'live' : mode || '—');
   text('overview-canary-cap', status.canary ? money(status.canary.hardCapUsd) : '—');
@@ -2002,63 +2095,45 @@ function renderWallet(status) {
   );
   text('overview-live-reverse', status.canary ? (status.canary.liveReverse ? 'ativado' : 'bloqueado') : '—');
 
-  if (mode === 'shadow' || mode === 'dry-run') {
-    const hasBalance = Number.isFinite(Number(balanceUsd));
-    if (hasBalance) {
-      text('wallet-balance', money(balanceUsd));
-      text('wallet-note', 'shadow · leitura CLOB');
-      text('wallet-balance-detail', money(balanceUsd));
-      text('wallet-balance-pos', money(balanceUsd));
-      text(
-        'wallet-allowance',
-        allowanceUsd === 'ilimitado' ? 'ilimitado' : money(allowanceUsd),
-      );
-      text('wallet-preflight', preflightLabel);
-      text('wallet-preflight-short', 'leitura CLOB');
-      text('overview-wallet-balance', money(balanceUsd));
-      text(
-        'overview-wallet-allowance',
-        allowanceUsd === 'ilimitado' ? 'ilimitado' : money(allowanceUsd),
-      );
-      text('overview-wallet-preflight', preflightLabel);
-      text(
-        'wallet-explain',
-        'Shadow: saldo lido do CLOB só para exibição (não envia ordens). Atualiza ~1 min. Em live, o preflight completo roda ao ativar entradas.',
-      );
-      text(
-        'overview-wallet-explain',
-        'Saldo real via CLOB (display-only em shadow). Cap canário limita risco quando for live.',
-      );
-      text(
-        'wallet-balance-banner',
-        money(balanceUsd),
-      );
-    } else {
-      text('wallet-balance', 'n/a');
-      text('wallet-note', 'shadow · sem snapshot');
-      text('wallet-balance-detail', 'n/a');
-      text('wallet-balance-pos', 'n/a');
-      text('wallet-allowance', '—');
-      text('wallet-preflight', status.preflight ? (status.preflight.ok ? 'OK' : 'FALHA') : 'sem leitura');
-      text('wallet-preflight-short', 'sem snapshot');
-      text('overview-wallet-balance', 'n/a');
-      text('overview-wallet-allowance', '—');
-      text('overview-wallet-preflight', preflightLabel);
-      text(
-        'wallet-explain',
-        'Sem snapshot de carteira. Confira POLYMARKET_* no .env e reinicie com npm run local. Live usa preflight ao ativar entradas.',
-      );
-      text(
-        'overview-wallet-explain',
-        'Carteira indisponível neste tick. Em shadow o saldo vem de leitura CLOB se as chaves estiverem no .env.',
-      );
-    }
+  const hasPortfolio = Number.isFinite(Number(portfolioUsd));
+  if ((mode === 'shadow' || mode === 'dry-run') && !hasPortfolio) {
+    text('wallet-balance', 'n/a');
+    text('wallet-note', 'shadow · sem snapshot');
+    text('wallet-balance-detail', 'n/a');
+    text('wallet-balance-pos', 'n/a');
+    text('wallet-cash-pos', '—');
+    text('wallet-positions-pos', '—');
+    text('wallet-allowance', '—');
+    text('wallet-preflight', status.preflight ? (status.preflight.ok ? 'OK' : 'FALHA') : 'sem leitura');
+    text('wallet-preflight-short', 'sem snapshot');
+    text('overview-wallet-balance', 'n/a');
+    text('overview-wallet-cash', '—');
+    text('overview-wallet-positions', '—');
+    text('overview-wallet-allowance', '—');
+    text('overview-wallet-preflight', preflightLabel);
+    text(
+      'wallet-explain',
+      'Sem snapshot de carteira. Confira POLYMARKET_* no .env e reinicie com npm run local.',
+    );
+    text(
+      'overview-wallet-explain',
+      'Carteira indisponível neste tick. Em shadow o portfolio vem de CLOB + Data API se as chaves estiverem no .env.',
+    );
     return;
   }
-  text('wallet-balance', money(balanceUsd));
-  text('wallet-note', bal?.ok === false ? 'preflight falhou' : 'via preflight');
-  text('wallet-balance-detail', money(balanceUsd));
-  text('wallet-balance-pos', money(balanceUsd));
+
+  text('wallet-balance', money(portfolioUsd));
+  text(
+    'wallet-note',
+    bal?.ok === false ? 'preflight falhou' : walletNote,
+  );
+  text('wallet-balance-detail', money(portfolioUsd));
+  text('wallet-balance-pos', money(portfolioUsd));
+  text('wallet-cash-pos', money(cashUsd));
+  text(
+    'wallet-positions-pos',
+    positionsValueUsd != null ? money(positionsValueUsd) : '—',
+  );
   text(
     'wallet-allowance',
     allowanceUsd === 'ilimitado' ? 'ilimitado' : money(allowanceUsd),
@@ -2066,22 +2141,30 @@ function renderWallet(status) {
   text('wallet-preflight', preflightLabel);
   text(
     'wallet-preflight-short',
-    status.preflight?.ok ? 'preflight OK' : status.preflight ? 'preflight falhou' : 'sem preflight',
+    Number.isFinite(Number(positionsValueUsd))
+      ? `cash ${money(cashUsd)} + pos ${money(positionsValueUsd)}`
+      : mode === 'shadow' || mode === 'dry-run'
+        ? 'leitura CLOB'
+        : status.preflight?.ok
+          ? 'preflight OK'
+          : status.preflight
+            ? 'preflight falhou'
+            : 'sem preflight',
   );
-  text('overview-wallet-balance', money(balanceUsd));
+  text('overview-wallet-balance', money(portfolioUsd));
+  text('overview-wallet-cash', money(cashUsd));
+  text(
+    'overview-wallet-positions',
+    positionsValueUsd != null ? money(positionsValueUsd) : '—',
+  );
   text(
     'overview-wallet-allowance',
     allowanceUsd === 'ilimitado' ? 'ilimitado' : money(allowanceUsd),
   );
   text('overview-wallet-preflight', preflightLabel);
-  text(
-    'wallet-explain',
-    'Saldo/allowance vêm do preflight live. Ao ativar entradas, a Engine revalida. Não é mark-to-market contínuo da carteira.',
-  );
-  text(
-    'overview-wallet-explain',
-    'Saldo via preflight live (não tick-a-tick). Cap canário limita risco por ordem.',
-  );
+  text('wallet-explain', explain);
+  text('overview-wallet-explain', explain);
+  text('wallet-balance-banner', money(portfolioUsd));
 }
 
 function renderDiagnosticsExtras(status) {
@@ -2158,22 +2241,14 @@ function render(status, health, instances) {
     market.secsLeft != null ? `${number(market.secsLeft, 1)}s restantes` : '—',
   );
   text('approval', status.catalog?.approval);
-  text(
-    'canary-cap',
+  text('canary-cap',
     status.canary
       ? pres.budgetLabel
         ? `orçamento ${pres.budgetLabel}`
         : `teto ${money(status.canary.hardCapUsd)}`
       : 'canário —',
   );
-  text('pnl-realized', money(pos.realizedPnl));
-  setPnlTone($('pnl-realized'), pos.realizedPnl);
-  text(
-    'exposure-notional',
-    status.accountExposure?.openNotional != null
-      ? `exposição ${money(status.accountExposure.openNotional)}`
-      : 'exposição —',
-  );
+  renderPnlBreakdown(tradesCache, pos.realizedPnl);
 
   const hasPos = Number(pos.qty) > 0;
   text('overview-position', hasPos ? `${pos.side || '—'} · ${number(pos.qty)}` : 'FLAT');
@@ -2311,8 +2386,6 @@ function render(status, health, instances) {
   text('position-qty', number(pos.qty));
   text('position-avg', number(pos.avgPrice));
   text('position-market', pos.marketId || '—');
-  text('position-pnl', money(pos.realizedPnl));
-  setPnlTone($('position-pnl'), pos.realizedPnl);
   text('position-exposure', money(status.accountExposure?.openNotional));
   text('position-open-qty', number(status.accountExposure?.openQty));
   text('position-instances', status.accountExposure?.instances ?? '—');
@@ -2320,14 +2393,7 @@ function render(status, health, instances) {
   if ($('position-badge')) {
     $('position-badge').className = `badge ${hasPos ? 'badge--warn' : 'badge--accent'}`;
   }
-  // PnL realizado não inclui posição ao vivo; exposição é risco até o settlement.
   {
-    const pnlHint = $('position-pnl-hint');
-    if (pnlHint) {
-      pnlHint.textContent = hasPos
-        ? 'não inclui a posição aberta abaixo (ainda em risco)'
-        : 'acumulado após fills liquidados';
-    }
     const expHint = $('position-exposure-hint');
     if (expHint) {
       expHint.textContent = hasPos

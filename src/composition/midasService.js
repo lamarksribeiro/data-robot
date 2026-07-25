@@ -3,6 +3,7 @@
 import { AssetType, OrderType, Side } from '@polymarket/clob-client-v2';
 import config from '../config.js';
 import { buildClobClient } from '../clob/buildClient.js';
+import { fetchPositionsValueUsd } from '../clob/portfolioValue.js';
 import { resolveSignatureType } from '../clob/signatureType.js';
 import { createSigner } from '../clob/wallet.js';
 import { createLiveTransport } from '../executor/liveTransport.js';
@@ -24,7 +25,8 @@ function parseCollateral(value) {
 }
 
 /**
- * Leitura read-only de saldo/allowance USDC no CLOB (para dashboard em shadow/local).
+ * Leitura read-only de saldo/allowance USDC no CLOB + valor de posições (Data API).
+ * UI deve preferir portfolioUsd (cash + posições), alinhado à carteira Polymarket.
  * Não habilita trading; não substitui preflight live completo.
  */
 export async function fetchWalletSnapshot(opts = {}) {
@@ -40,7 +42,7 @@ export async function fetchWalletSnapshot(opts = {}) {
     opts.client ?? buildClobClient({ wallet, signatureType, funderAddress, throwOnError: true });
 
   const bal = await client.getBalanceAllowance({ asset_type: AssetType.COLLATERAL });
-  const balanceUsd = parseCollateral(bal?.balance);
+  const cashUsd = parseCollateral(bal?.balance);
   const rawAllowance = Math.max(
     0,
     ...Object.values(bal?.allowances ?? {}).map((v) => parseCollateral(v)),
@@ -49,18 +51,35 @@ export async function fetchWalletSnapshot(opts = {}) {
   // CLOB às vezes devolve allowance “max uint” — trata como efetivamente ilimitado p/ UI.
   const allowanceUsd = rawAllowance > 1e9 ? null : rawAllowance;
 
+  const positionsValueUsd = await fetchPositionsValueUsd({
+    funderAddress,
+    fetchFn: opts.fetchFn,
+    dataApiBase: opts.dataApiBase ?? config.dataApiBase,
+    timeoutMs: opts.timeoutMs,
+  });
+  const portfolioUsd =
+    positionsValueUsd != null && Number.isFinite(cashUsd)
+      ? cashUsd + positionsValueUsd
+      : Number.isFinite(cashUsd)
+        ? cashUsd
+        : null;
+
   return {
     ok: true,
     displayOnly: true,
     checkedAt: new Date((opts.clock ?? Date.now)()).toISOString(),
     checks: {
       balance: {
-        ok: Number.isFinite(balanceUsd),
-        balanceUsd,
+        ok: Number.isFinite(cashUsd),
+        // balanceUsd = portfolio (exibição / equity); cashUsd = spendable CLOB.
+        balanceUsd: portfolioUsd ?? cashUsd,
+        cashUsd,
+        positionsValueUsd,
+        portfolioUsd,
         allowanceUsd,
         allowanceUnlimited: rawAllowance > 1e9,
         minBalanceUsd: 0,
-        source: 'clob-read',
+        source: positionsValueUsd != null ? 'clob+data-api' : 'clob-read',
       },
     },
   };

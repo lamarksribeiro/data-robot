@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildTradeJournal } from '../src/oms/tradeJournal.js';
+import { buildTradeJournal, summarizeTradePnl } from '../src/oms/tradeJournal.js';
 
 describe('tradeJournal', () => {
   it('monta trade fechado por settlement', () => {
@@ -104,6 +104,7 @@ describe('tradeJournal', () => {
     assert.equal(trades[0].exitKind, 'EXIT');
     assert.equal(trades[0].exitPrice, 0.48);
     assert.equal(trades[0].status, 'closed');
+    assert.equal(trades[0].pnl, (0.48 - 0.55) * 2);
   });
 
   it('não cria trade open fantasma após ENTER sem fill (FAK miss)', () => {
@@ -131,5 +132,22 @@ describe('tradeJournal', () => {
       limit: 10,
     });
     assert.equal(trades.length, 0);
+  });
+
+  it('summarizeTradePnl separa ganhos e perdas', () => {
+    const summary = summarizeTradePnl([
+      { status: 'closed', pnl: 1.5 },
+      { status: 'closed', pnl: -0.4 },
+      { status: 'closed', pnl: 0.2 },
+      { status: 'settlement_pending', pnl: null },
+      { status: 'open', pnl: null },
+    ]);
+    assert.equal(summary.won, 1.7);
+    assert.equal(summary.lost, 0.4);
+    assert.equal(summary.net, 1.3);
+    assert.equal(summary.wins, 2);
+    assert.equal(summary.losses, 1);
+    assert.equal(summary.pending, 1);
+    assert.equal(summary.closed, 3);
   });
 });

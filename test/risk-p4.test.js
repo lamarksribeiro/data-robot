@@ -57,9 +57,18 @@ describe('preflight fail-closed', () => {
       funderAddress: `0x${'2'.repeat(40)}`,
       signatureType: 1,
       minBalanceUsd: 1,
-      fetchFn: async () => ({ ok: true, json: async () => ({ blocked: false, country: 'BR' }) }),
+      fetchFn: async (url) => {
+        if (String(url).includes('/value')) {
+          return { ok: true, json: async () => [{ value: 0.75 }] };
+        }
+        return { ok: true, json: async () => ({ blocked: false, country: 'BR' }) };
+      },
     });
     assert.equal(result.ok, true);
+    assert.equal(result.checks.balance.cashUsd, 2);
+    assert.equal(result.checks.balance.positionsValueUsd, 0.75);
+    assert.equal(result.checks.balance.portfolioUsd, 2.75);
+    assert.equal(result.checks.balance.balanceUsd, 2.75);
   });
 
   it('geoblock injetado falha no start', () => {
