@@ -412,7 +412,10 @@ export function createLiveTransport(opts) {
         );
         circuit.recordSuccess();
         const original = Number(remote?.original_size ?? order.qty) || Number(order.qty) || 0;
-        const matched = Number(remote?.size_matched ?? 0) || 0;
+        // Nunca confiar em size_matched > original_size (já vimos 2.61 em ordem de 2).
+        const matchedRaw = Number(remote?.size_matched ?? 0) || 0;
+        const matched =
+          original > 0 ? Math.min(matchedRaw, original) : matchedRaw;
         const already = Number(order.qtyFilled ?? 0) || 0;
         const delta = Math.max(0, matched - already);
         const status = String(remote?.status ?? '').toUpperCase();

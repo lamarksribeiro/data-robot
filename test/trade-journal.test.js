@@ -105,4 +105,31 @@ describe('tradeJournal', () => {
     assert.equal(trades[0].exitPrice, 0.48);
     assert.equal(trades[0].status, 'closed');
   });
+
+  it('não cria trade open fantasma após ENTER sem fill (FAK miss)', () => {
+    const trades = buildTradeJournal({
+      auditRows: [
+        {
+          type: 'decision',
+          tsMs: 1000,
+          marketId: 'm-miss',
+          accepted: [{ kind: 'ENTER', side: 'UP', reason: 'midas_core_entry' }],
+          position: { qty: 0, avgPrice: null, side: null },
+        },
+      ],
+      orders: [
+        {
+          marketId: 'm-miss',
+          kind: 'ENTER',
+          state: 'REJECTED',
+          tokenSide: 'UP',
+          price: 0.72,
+          qty: 2,
+          qtyFilled: 0,
+        },
+      ],
+      limit: 10,
+    });
+    assert.equal(trades.length, 0);
+  });
 });

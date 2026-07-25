@@ -2,10 +2,12 @@
  * Monta journal de trades a partir do execution-audit + OMS.
  */
 
-function matchedOrder(orders, marketId, kind) {
-  const hits = orders.filter(
-    (o) => o.marketId === marketId && o.kind === kind && o.state === 'MATCHED',
-  );
+function filledEnterOrder(orders, marketId) {
+  const hits = orders.filter((o) => {
+    if (o.marketId !== marketId || o.kind !== 'ENTER') return false;
+    if (Number(o.qtyFilled) > 0) return true;
+    return o.state === 'MATCHED';
+  });
   return hits.at(-1) ?? null;
 }
 
@@ -63,13 +65,20 @@ export function buildTradeJournal(opts = {}) {
     if (row.type === 'decision') {
       const marketId = row.marketId;
       if (!marketId) continue;
-      const trade = ensureTrade(marketId);
       for (const acc of row.accepted ?? []) {
         if (acc.kind === 'ENTER') {
-          const order = matchedOrder(orders, marketId, 'ENTER');
+          const order = filledEnterOrder(orders, marketId);
+          const posQty = Number(row.position?.qty) || 0;
+          // ENTER aceito pelo risk mas FAK miss: não abrir trade fantasma "open".
+          if (!order && posQty <= 0) continue;
+          const trade = ensureTrade(marketId);
           trade.side = acc.side ?? order?.tokenSide ?? trade.side;
           trade.entryPrice = order?.price ?? row.position?.avgPrice ?? trade.entryPrice;
-          trade.qty = order?.qtyFilled || order?.qty || row.position?.qty || trade.qty;
+          trade.qty =
+            (order?.qtyFilled > 0 ? order.qtyFilled : null) ||
+            order?.qty ||
+            row.position?.qty ||
+            trade.qty;
           if (!trade.openedAtMs) trade.openedAtMs = ts;
           pushLeg(trade, {
             kind: 'ENTER',
@@ -80,26 +89,34 @@ export function buildTradeJournal(opts = {}) {
           });
           if (trade.status !== 'settlement_pending') trade.status = 'open';
         } else if (acc.kind === 'EXIT') {
-          const order = matchedOrder(orders, marketId, 'EXIT');
+          const trade = ensureTrade(marketId);
+          const exitOrder =
+            orders
+              .filter((o) => o.marketId === marketId && o.kind === 'EXIT' && o.state === 'MATCHED')
+              .at(-1) ?? null;
           trade.exitKind = 'EXIT';
-          trade.exitPrice = order?.price ?? trade.exitPrice;
+          trade.exitPrice = exitOrder?.price ?? trade.exitPrice;
           pushLeg(trade, {
             kind: 'EXIT',
             price: trade.exitPrice,
-            qty: order?.qtyFilled || trade.qty,
+            qty: exitOrder?.qtyFilled || trade.qty,
             tsMs: ts,
             reason: acc.reason ?? acc.reasonCode ?? null,
           });
           trade.closedAtMs = ts ?? trade.closedAtMs;
           trade.status = 'closed';
         } else if (acc.kind === 'REVERSE') {
-          const order = matchedOrder(orders, marketId, 'REVERSE');
+          const trade = ensureTrade(marketId);
+          const reverseOrder =
+            orders
+              .filter((o) => o.marketId === marketId && o.kind === 'REVERSE' && o.state === 'MATCHED')
+              .at(-1) ?? null;
           trade.exitKind = 'REVERSE';
-          trade.exitPrice = order?.price ?? trade.exitPrice;
+          trade.exitPrice = reverseOrder?.price ?? trade.exitPrice;
           pushLeg(trade, {
             kind: 'REVERSE',
             price: trade.exitPrice,
-            qty: order?.qtyFilled || trade.qty,
+            qty: reverseOrder?.qtyFilled || trade.qty,
             tsMs: ts,
             reason: acc.reason ?? acc.reasonCode ?? null,
           });
@@ -149,7 +166,12 @@ export function buildTradeJournal(opts = {}) {
   }
 
   return [...tradesByMarket.values()]
-    .filter((t) => t.legs.length > 0 || t.status === 'settlement_pending' || t.qty > 0)
+    .filter((t) => {
+      if (t.status === 'settlement_pending') return true;
+      if (t.status === 'closed') return t.legs.length > 0 || t.qty > 0 || t.pnl != null;
+      // open só com fill real
+      return Number(t.qty) > 0 && t.entryPrice != null;
+    })
     .map((t) => {
       if (t.openedAtMs && t.closedAtMs) {
         t.durationMs = Math.max(0, t.closedAtMs - t.openedAtMs);

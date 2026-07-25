@@ -405,6 +405,32 @@ describe('FAK terminalização (anti-ordem-presa)', () => {
     assert.ok(Number(canceled.executionEvents[0].qty) > 0);
   });
 
+  it('FILL com qty > restante não infla ledger nem event', () => {
+    const oms = createOms();
+    oms.registerIntent(intent({ intentId: 'cap-1', quantity: 2, maxPrice: 0.6 }));
+    oms.applyExchangeEvent({
+      eventId: 'ack-cap',
+      intentId: 'cap-1',
+      type: 'ACK',
+      qty: 0,
+      price: 0.6,
+      tsMs: 1,
+    });
+    const over = oms.applyExchangeEvent({
+      eventId: 'fill-over',
+      intentId: 'cap-1',
+      type: 'FILL',
+      qty: 2.610168,
+      price: 0.59,
+      tsMs: 2,
+    });
+    assert.equal(over.order.state, 'MATCHED');
+    assert.equal(over.order.qtyFilled, 2);
+    assert.equal(over.executionEvents[0].qty, 2);
+    const pos = oms.position('inst-1');
+    assert.equal(pos.qty, 2);
+  });
+
   it('CANCEL sem fill tira a engine de ENTRY_PENDING para ARMED', async () => {
     let submitted = false;
     const engine = bootstrapEngine({

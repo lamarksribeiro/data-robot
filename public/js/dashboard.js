@@ -2320,6 +2320,21 @@ function render(status, health, instances) {
   if ($('position-badge')) {
     $('position-badge').className = `badge ${hasPos ? 'badge--warn' : 'badge--accent'}`;
   }
+  // PnL realizado não inclui posição ao vivo; exposição é risco até o settlement.
+  {
+    const pnlHint = $('position-pnl-hint');
+    if (pnlHint) {
+      pnlHint.textContent = hasPos
+        ? 'não inclui a posição aberta abaixo (ainda em risco)'
+        : 'acumulado após fills liquidados';
+    }
+    const expHint = $('position-exposure-hint');
+    if (expHint) {
+      expHint.textContent = hasPos
+        ? `posição ${pos.side || '?'} ao vivo até o expiry`
+        : 'sem notional em risco';
+    }
+  }
 
   renderWallet(status);
   text('canary-cap-detail', status.canary ? money(status.canary.hardCapUsd) : '—');

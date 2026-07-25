@@ -169,34 +169,47 @@ export function createOms(opts = {}) {
     } else if (type === 'PARTIAL' || type === 'FILL') {
       const fillQty = Number(event.qty) || 0;
       const price = event.price != null ? Number(event.price) : order.price;
+      // Cap no restante pedido: CLOB às vezes reporta size_matched > qty (PnL inflado).
+      let appliedQty = 0;
       if (fillQty > 0) {
-        order.qtyFilled = Math.min(order.qty || fillQty, order.qtyFilled + fillQty);
+        if (order.qty > 0) {
+          appliedQty = Math.min(fillQty, Math.max(0, order.qty - order.qtyFilled));
+        } else {
+          appliedQty = fillQty;
+        }
+      }
+      if (appliedQty > 0) {
+        order.qtyFilled += appliedQty;
         positions.applyFill({
           strategyInstanceId: order.strategyInstanceId,
           marketId: order.marketId,
           side: order.tokenSide,
-          qty: fillQty,
+          qty: appliedQty,
           price,
           kind: order.kind,
         });
       }
-      const done = order.qty > 0 && order.qtyFilled >= order.qty;
-      const nextState = done || type === 'FILL' ? 'MATCHED' : 'PARTIAL';
       // FILL total sem qty na ordem (shadow qty inferido)
-      if (type === 'FILL' && order.qty <= 0 && fillQty > 0) {
-        order.qty = fillQty;
-        order.qtyFilled = fillQty;
+      if (type === 'FILL' && order.qty <= 0 && appliedQty > 0) {
+        order.qty = appliedQty;
+        order.qtyFilled = appliedQty;
         transition(order, 'MATCHED', { source: type });
-      } else {
-        transition(order, nextState === 'MATCHED' ? 'MATCHED' : 'PARTIAL', { source: type });
+        executionEvents.push(toExecEvent(order, 'FILL', { ...event, qty: appliedQty, price }));
+      } else if (appliedQty > 0) {
+        const done = order.qty > 0 && order.qtyFilled >= order.qty;
+        const nextState = done || type === 'FILL' ? 'MATCHED' : 'PARTIAL';
+        transition(order, nextState, { source: type });
+        executionEvents.push(
+          toExecEvent(order, nextState === 'MATCHED' ? 'FILL' : 'PARTIAL', {
+            ...event,
+            qty: appliedQty,
+            price,
+          }),
+        );
+      } else if (type === 'FILL' && order.qty > 0 && order.qtyFilled >= order.qty) {
+        transition(order, 'MATCHED', { source: type });
+        executionEvents.push(toExecEvent(order, 'FILL', { ...event, qty: 0, price }));
       }
-      executionEvents.push(
-        toExecEvent(order, type === 'FILL' || nextState === 'MATCHED' ? 'FILL' : 'PARTIAL', {
-          ...event,
-          qty: fillQty,
-          price,
-        }),
-      );
     } else if (type === 'CANCEL') {
       // FAK/FOK (e GTC parcial): fill mantido + resto cancelado → MATCHED, não CANCELED.
       // CANCELED com qtyFilled>0 parecia "ordem cancelada" na UI/audit apesar do fill válido.
