@@ -1080,7 +1080,16 @@ export function createEngine(opts) {
   }
   if (typeof sink.onCritical === 'function') {
     sink.onCritical((detail) => {
-      if (state !== 'HALTED') return safeShutdown(detail?.reason ?? 'sink-critical');
+      if (state !== 'HALTED') {
+        const reason = detail?.reason ?? 'sink-critical';
+        journal.push({
+          type: 'critical_halt',
+          reason,
+          detail: detail?.detail ?? null,
+          tsMs: clock(),
+        });
+        return safeShutdown(reason);
+      }
       return null;
     });
   }

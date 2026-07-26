@@ -41,7 +41,11 @@ export function createOmsSink(opts = {}) {
   let lastChannelError = null;
   let lastRemoteOrphans = [];
   let userDisconnectHaltTimer = null;
+  let clobHeartbeatHaltTimer = null;
+  let clobHeartbeatFailing = false;
   const userDisconnectHaltMs = Number(opts.userDisconnectHaltMs ?? 60_000);
+  const clobHeartbeatHaltMs = Number(opts.clobHeartbeatHaltMs ?? 60_000);
+  const logger = opts.logger ?? null;
 
   function notifyExecution(event) {
     for (const listener of executionListeners) {
@@ -59,6 +63,61 @@ export function createOmsSink(opts = {}) {
     if (userDisconnectHaltTimer) {
       clearTimeout(userDisconnectHaltTimer);
       userDisconnectHaltTimer = null;
+    }
+  }
+
+  function clearClobHeartbeatHaltTimer() {
+    if (clobHeartbeatHaltTimer) {
+      clearTimeout(clobHeartbeatHaltTimer);
+      clobHeartbeatHaltTimer = null;
+    }
+  }
+
+  function onClobHeartbeatFailure(err) {
+    lastChannelError = {
+      reason: 'CLOB_HEARTBEAT_FAILED',
+      detail: err?.message ?? String(err),
+    };
+    if (mode !== 'live') return;
+
+    // Blip transitório: cancela resting 1x e agenda HALT só se persistir.
+    if (!clobHeartbeatFailing) {
+      clobHeartbeatFailing = true;
+      void transport.cancelAll?.().catch(() => {});
+      logger?.warn?.('clob_heartbeat_degraded', {
+        detail: lastChannelError.detail,
+        haltInMs: clobHeartbeatHaltMs,
+      });
+    }
+
+    if (clobHeartbeatHaltMs <= 0) {
+      logger?.error?.('clob_heartbeat_halt', { detail: lastChannelError.detail, immediate: true });
+      notifyCritical(lastChannelError);
+      return;
+    }
+    if (clobHeartbeatHaltTimer) return;
+
+    clobHeartbeatHaltTimer = setTimeout(() => {
+      clobHeartbeatHaltTimer = null;
+      if (!clobHeartbeatFailing) return;
+      logger?.error?.('clob_heartbeat_halt', {
+        detail: lastChannelError?.detail,
+        haltAfterMs: clobHeartbeatHaltMs,
+      });
+      notifyCritical(lastChannelError ?? { reason: 'CLOB_HEARTBEAT_FAILED' });
+    }, clobHeartbeatHaltMs);
+    clobHeartbeatHaltTimer.unref?.();
+  }
+
+  function onClobHeartbeatSuccess() {
+    const wasFailing = clobHeartbeatFailing;
+    clearClobHeartbeatHaltTimer();
+    clobHeartbeatFailing = false;
+    if (lastChannelError?.reason === 'CLOB_HEARTBEAT_FAILED') {
+      lastChannelError = null;
+    }
+    if (wasFailing) {
+      logger?.info?.('clob_heartbeat_recovered', {});
     }
   }
 
@@ -112,11 +171,11 @@ export function createOmsSink(opts = {}) {
       wsHeartbeatStop = userChannel.startHeartbeat(opts.userWsHeartbeatMs ?? 10_000);
     }
     if (mode === 'live') {
-      clobHeartbeatStop = await transport.startHeartbeat?.((err) => {
-        lastChannelError = { reason: 'CLOB_HEARTBEAT_FAILED', detail: err.message };
-        void transport.cancelAll?.().catch(() => {});
-        notifyCritical(lastChannelError);
-      }, opts.clobHeartbeatMs ?? 5000);
+      clobHeartbeatStop = await transport.startHeartbeat?.(
+        onClobHeartbeatFailure,
+        opts.clobHeartbeatMs ?? 5000,
+        onClobHeartbeatSuccess,
+      );
       if (typeof transport.startHeartbeat !== 'function') {
         throw new Error('live exige heartbeat CLOB real');
       }
@@ -462,6 +521,8 @@ export function createOmsSink(opts = {}) {
 
     dispose() {
       clearUserDisconnectHaltTimer();
+      clearClobHeartbeatHaltTimer();
+      clobHeartbeatFailing = false;
       wsHeartbeatStop?.();
       clobHeartbeatStop?.();
       transport.stopHeartbeat?.();
@@ -474,6 +535,8 @@ export function createOmsSink(opts = {}) {
     /** Para reusar o sink entre engines (ex.: rotação de mercado no micro-live). */
     detachEngineListeners() {
       clearUserDisconnectHaltTimer();
+      clearClobHeartbeatHaltTimer();
+      clobHeartbeatFailing = false;
       executionListeners.clear();
       criticalListeners.clear();
       lastChannelError = null;

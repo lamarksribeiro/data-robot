@@ -112,4 +112,78 @@ describe('omsSink user channel resilience', () => {
 
     sink.dispose();
   });
+
+  it('CLOB heartbeat blip não dispara critical imediato e recupera', async () => {
+    const userChannel = createMockUserChannel();
+    const critical = [];
+    let failBeat = false;
+    const canceled = [];
+    const sink = createOmsSink({
+      mode: 'live',
+      withUserChannel: false,
+      userChannel,
+      clobHeartbeatHaltMs: 60_000,
+      clobHeartbeatMs: 20,
+      transport: {
+        cancelAll: async () => {
+          canceled.push('all');
+          return { accepted: true };
+        },
+        async startHeartbeat(onFailure, _intervalMs, onSuccess) {
+          const timer = setInterval(() => {
+            if (failBeat) onFailure(new Error('CLOB unavailable'));
+            else onSuccess?.({ heartbeat_id: 'ok' });
+          }, 15);
+          timer.unref?.();
+          onSuccess?.({ heartbeat_id: 'boot' });
+          return () => clearInterval(timer);
+        },
+      },
+    });
+    sink.onCritical((detail) => critical.push(detail));
+    await sink.start();
+
+    failBeat = true;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(canceled.length, 1);
+    assert.equal(critical.length, 0);
+    assert.equal(sink.lastChannelError?.reason, 'CLOB_HEARTBEAT_FAILED');
+
+    failBeat = false;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(critical.length, 0);
+    assert.equal(sink.lastChannelError, null);
+
+    sink.dispose();
+  });
+
+  it('CLOB heartbeat prolongado dispara critical após grace', async () => {
+    const userChannel = createMockUserChannel();
+    const critical = [];
+    const sink = createOmsSink({
+      mode: 'live',
+      withUserChannel: false,
+      userChannel,
+      clobHeartbeatHaltMs: 40,
+      clobHeartbeatMs: 20,
+      transport: {
+        cancelAll: async () => ({ accepted: true }),
+        async startHeartbeat(onFailure, _intervalMs, onSuccess) {
+          onSuccess?.({ heartbeat_id: 'boot' });
+          const timer = setInterval(() => onFailure(new Error('CLOB unavailable')), 15);
+          timer.unref?.();
+          return () => clearInterval(timer);
+        },
+      },
+    });
+    sink.onCritical((detail) => critical.push(detail));
+    await sink.start();
+
+    assert.equal(critical.length, 0);
+    await new Promise((resolve) => setTimeout(resolve, 90));
+    assert.equal(critical.length, 1);
+    assert.equal(critical[0].reason, 'CLOB_HEARTBEAT_FAILED');
+
+    sink.dispose();
+  });
 });

@@ -2253,7 +2253,9 @@ function renderGuide(status, health) {
     } else {
       tone = 'err';
       title = 'HALTED';
-      body = 'Parado por emergência. Reinício da Engine necessário.';
+      body = haltReason
+        ? `Parado por emergência (${haltReason}). Reinício da Engine necessário.`
+        : 'Parado por emergência. Reinício da Engine necessário.';
       next = 'Reinicie a Engine e depois ative as entradas';
     }
     showControlsLink = true;

@@ -9,6 +9,7 @@ import { createSigner } from '../clob/wallet.js';
 import { createLiveTransport } from '../executor/liveTransport.js';
 import { createUserChannel } from '../executor/userChannel.js';
 import { createOmsSink } from '../oms/omsSink.js';
+import { createLogger } from '../observability/logger.js';
 import { preflightChecksFromResult, runLivePreflight } from '../risk/livePreflight.js';
 import { CANARY_LIMITS, canaryMidasPreset } from '../tfc/preset-midas.js';
 
@@ -147,7 +148,17 @@ export async function prepareMidasCanaryRuntime(opts = {}) {
       transport,
       userChannel,
       clock: opts.clock,
+      logger: opts.logger ?? createLogger({ service: 'data-robot-engine' }),
       userWsStaleMs: positive(opts.userWsStaleMs, 30_000),
+      clobHeartbeatHaltMs: Number.isFinite(Number(opts.clobHeartbeatHaltMs))
+        ? Number(opts.clobHeartbeatHaltMs)
+        : Number(process.env.ENGINE_CLOB_HEARTBEAT_HALT_MS || 60_000),
+      userDisconnectHaltMs: Number.isFinite(Number(opts.userDisconnectHaltMs))
+        ? Number(opts.userDisconnectHaltMs)
+        : Number(process.env.ENGINE_USER_DISCONNECT_HALT_MS || 60_000),
+      clobHeartbeatMs: Number.isFinite(Number(opts.clobHeartbeatMs))
+        ? Number(opts.clobHeartbeatMs)
+        : Number(process.env.ENGINE_CLOB_HEARTBEAT_MS || 5_000),
     });
 
   return {

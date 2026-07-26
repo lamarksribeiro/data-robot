@@ -23,8 +23,37 @@ function pruneTimestampedCheckpoints(dir, label, keep) {
     })
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
 
-  for (const file of files.slice(keep)) {
-    fs.unlinkSync(file.filePath);
+  for (const file of files.slice(Math.max(0, keep))) {
+    try {
+      fs.unlinkSync(file.filePath);
+    } catch {
+      /* ignore prune race */
+    }
+  }
+}
+
+/**
+ * Mantém só os dumps manuais mais recentes (journal-*.json).
+ * @param {string} dir
+ * @param {number} keep
+ */
+function pruneJournalDumps(dir, keep) {
+  if (!fs.existsSync(dir)) return;
+  const files = fs
+    .readdirSync(dir)
+    .filter((f) => f.startsWith('journal-') && f.endsWith('.json'))
+    .map((name) => {
+      const filePath = path.join(dir, name);
+      return { name, filePath, mtimeMs: fs.statSync(filePath).mtimeMs };
+    })
+    .sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+  for (const file of files.slice(Math.max(0, keep))) {
+    try {
+      fs.unlinkSync(file.filePath);
+    } catch {
+      /* ignore prune race */
+    }
   }
 }
 
@@ -42,14 +71,28 @@ function writeAtomic(filePath, payload) {
  * @param {object} [opts]
  * @param {string} [opts.dir]
  * @param {number} [opts.maxCheckpointFiles]
+ * @param {number} [opts.maxJournalFiles]
  */
 export function createJournalBackup(opts = {}) {
   const dir = opts.dir ?? path.join('runs', 'journal-backups');
-  const maxCheckpointFiles = Number(opts.maxCheckpointFiles ?? 5);
+  const maxCheckpointFiles = Math.max(
+    1,
+    Number(opts.maxCheckpointFiles ?? process.env.ENGINE_CHECKPOINT_KEEP ?? 3) || 3,
+  );
+  const maxJournalFiles = Math.max(
+    0,
+    Number(opts.maxJournalFiles ?? process.env.ENGINE_JOURNAL_KEEP ?? 3) || 3,
+  );
+
+  if (fs.existsSync(dir)) {
+    pruneTimestampedCheckpoints(dir, 'engine', maxCheckpointFiles);
+    pruneJournalDumps(dir, maxJournalFiles);
+  }
 
   return {
     dir,
     maxCheckpointFiles,
+    maxJournalFiles,
 
     /**
      * @param {object[]} entries
@@ -59,6 +102,7 @@ export function createJournalBackup(opts = {}) {
       fs.mkdirSync(dir, { recursive: true });
       const file = path.join(dir, `journal-${label}-${Date.now()}.json`);
       fs.writeFileSync(file, `${JSON.stringify({ savedAt: new Date().toISOString(), entries }, null, 2)}\n`);
+      pruneJournalDumps(dir, maxJournalFiles);
       return file;
     },
 
@@ -82,6 +126,7 @@ export function createJournalBackup(opts = {}) {
       writeAtomic(rotatedPath, payload);
 
       pruneTimestampedCheckpoints(dir, label, maxCheckpointFiles);
+      pruneJournalDumps(dir, maxJournalFiles);
       return latestPath;
     },
 

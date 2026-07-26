@@ -112,6 +112,17 @@ describe('observability', () => {
     assert.equal(files.filter((f) => f.startsWith('journal-checkpoint-')).length, 0);
     fs.rmSync(dir, { recursive: true, force: true });
   });
+
+  it('prune dumps journal-* além de maxJournalFiles', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jr-dump-'));
+    const bak = createJournalBackup({ dir, maxCheckpointFiles: 2, maxJournalFiles: 2 });
+    for (let i = 0; i < 5; i += 1) {
+      bak.save([{ i }], `t${i}`);
+    }
+    const dumps = fs.readdirSync(dir).filter((f) => f.startsWith('journal-') && f.endsWith('.json'));
+    assert.equal(dumps.length, 2);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
 });
 
 describe('health probes', () => {

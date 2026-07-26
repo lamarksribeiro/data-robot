@@ -61,11 +61,34 @@ function rowMatches(row, filters) {
   return true;
 }
 
+/**
+ * @param {string} dir
+ * @param {number} maxDays
+ */
+function pruneOldAuditFiles(dir, maxDays) {
+  const keep = Math.max(1, Number(maxDays) || 3);
+  if (!fs.existsSync(dir)) return;
+  const files = fs
+    .readdirSync(dir)
+    .filter((name) => /^engine-\d{4}-\d{2}-\d{2}\.jsonl$/.test(name))
+    .sort()
+    .reverse();
+  for (const name of files.slice(keep)) {
+    try {
+      fs.unlinkSync(path.join(dir, name));
+    } catch {
+      /* ignore prune race */
+    }
+  }
+}
+
 export function createExecutionAudit(opts = {}) {
   const dir = path.resolve(opts.dir ?? path.join('runs', 'execution-audit'));
   const clock = opts.clock ?? (() => Date.now());
+  const maxDays = Math.max(1, Number(opts.maxDays ?? process.env.ENGINE_AUDIT_KEEP_DAYS ?? 3) || 3);
   let currentDay = null;
   let currentFile = null;
+  let lastPruneDay = null;
 
   function fileForNow() {
     const day = new Date(clock()).toISOString().slice(0, 10);
@@ -73,6 +96,10 @@ export function createExecutionAudit(opts = {}) {
       fs.mkdirSync(dir, { recursive: true });
       currentDay = day;
       currentFile = path.join(dir, `engine-${day}.jsonl`);
+    }
+    if (lastPruneDay !== day) {
+      pruneOldAuditFiles(dir, maxDays);
+      lastPruneDay = day;
     }
     return currentFile;
   }
@@ -116,5 +143,8 @@ export function createExecutionAudit(opts = {}) {
     return rows;
   }
 
-  return { dir, append, listRecent };
+  // Limpa retenção ao criar (ex.: restart da engine).
+  if (fs.existsSync(dir)) pruneOldAuditFiles(dir, maxDays);
+
+  return { dir, maxDays, append, listRecent, prune: () => pruneOldAuditFiles(dir, maxDays) };
 }

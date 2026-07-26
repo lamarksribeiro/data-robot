@@ -40,11 +40,25 @@ export function createEngineApp(opts = {}) {
   const alerts = opts.alerts ?? createAlertHub();
   const backup = opts.journalBackup ?? createJournalBackup({
     dir: opts.backupDir,
-    maxCheckpointFiles: opts.maxCheckpointFiles ?? Number(process.env.ENGINE_CHECKPOINT_KEEP || 5),
+    maxCheckpointFiles: opts.maxCheckpointFiles ?? Number(process.env.ENGINE_CHECKPOINT_KEEP || 3),
+    maxJournalFiles: opts.maxJournalFiles ?? Number(process.env.ENGINE_JOURNAL_KEEP || 3),
   });
   const executionAudit =
-    opts.executionAudit ?? createExecutionAudit({ dir: opts.executionAuditDir, clock: opts.clock });
-  const sink = opts.sink ?? createOmsSink({ mode, clock: opts.clock });
+    opts.executionAudit ??
+    createExecutionAudit({
+      dir: opts.executionAuditDir,
+      clock: opts.clock,
+      maxDays: opts.auditMaxDays ?? Number(process.env.ENGINE_AUDIT_KEEP_DAYS || 3),
+    });
+  const sink =
+    opts.sink ??
+    createOmsSink({
+      mode,
+      clock: opts.clock,
+      logger,
+      clobHeartbeatHaltMs: opts.clobHeartbeatHaltMs ?? Number(process.env.ENGINE_CLOB_HEARTBEAT_HALT_MS || 60_000),
+      userDisconnectHaltMs: opts.userDisconnectHaltMs ?? Number(process.env.ENGINE_USER_DISCONNECT_HALT_MS || 60_000),
+    });
   const snapshotSource = opts.snapshotSource ?? null;
   const startArmed = opts.startArmed ?? mode !== 'live';
 
@@ -480,6 +494,7 @@ export function createEngineApp(opts = {}) {
     });
     return {
       ...report,
+      haltReason: st.haltReason ?? null,
       snapshotSource: { ...sourceStatus },
       feedGate,
       tradingFeedsOk: lastFeedsOk,
@@ -885,18 +900,28 @@ export function createEngineApp(opts = {}) {
     });
   }
 
-  function checkpoint() {
+  let lastLoggedCheckpointState = null;
+
+  function checkpoint(meta = {}) {
+    const reason = typeof meta === 'string' ? meta : (meta?.reason ?? 'auto');
     lastCheckpoint = {
       ...engine.checkpoint(),
       pendingSettlements: pendingSettlements.map((pending) => ({ ...pending })),
     };
     backup.saveCheckpoint?.(lastCheckpoint, 'engine');
-    executionAudit.append('checkpoint', {
-      state: engine.state,
-      marketId: lastCheckpoint.lastSnapshot?.marketId ?? null,
-      pendingIntentCount: lastCheckpoint.pendingIntents?.length ?? 0,
-    });
-    logger.info('checkpoint_saved', { state: engine.state });
+    const stateChanged = lastLoggedCheckpointState !== engine.state;
+    // Auto a cada 30s: persiste em disco, mas não enche audit/docker logs.
+    if (reason !== 'auto' || stateChanged) {
+      executionAudit.append('checkpoint', {
+        state: engine.state,
+        reason,
+        marketId: lastCheckpoint.lastSnapshot?.marketId ?? null,
+        pendingIntentCount: lastCheckpoint.pendingIntents?.length ?? 0,
+        haltReason: lastCheckpoint.haltReason ?? null,
+      });
+      logger.info('checkpoint_saved', { state: engine.state, reason });
+      lastLoggedCheckpointState = engine.state;
+    }
     return lastCheckpoint;
   }
 
@@ -979,7 +1004,7 @@ export function createEngineApp(opts = {}) {
     onReconcile: reconcile,
     onCheckpoint: (reason) =>
       serializeOperatorAction('checkpoint', async () => {
-        const saved = checkpoint();
+        const saved = checkpoint({ reason: reason ?? 'operator' });
         auditOperator('checkpoint', { ok: true, reason, savedAtMs: saved.savedAtMs ?? null });
         return {
           savedAtMs: saved.savedAtMs ?? null,

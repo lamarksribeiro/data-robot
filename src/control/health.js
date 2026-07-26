@@ -46,6 +46,7 @@ export function buildHealthReport(parts) {
     entryEnabled: engineStatus.entryEnabled !== false,
     mode,
     killActive,
+    haltReason: engineStatus.haltReason ?? null,
     tsMs: Date.now(),
   };
 }

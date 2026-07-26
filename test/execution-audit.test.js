@@ -77,3 +77,28 @@ describe('executionAudit.listRecent filters', () => {
     assert.equal(rows.length, 2);
   });
 });
+
+describe('executionAudit retention', () => {
+  it('prune remove dias antigos além de maxDays', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'exec-audit-keep-'));
+    for (const day of ['2026-07-20', '2026-07-21', '2026-07-22', '2026-07-23', '2026-07-24']) {
+      fs.writeFileSync(path.join(dir, `engine-${day}.jsonl`), '{"type":"x"}\n');
+    }
+    const audit = createExecutionAudit({
+      dir,
+      maxDays: 3,
+      clock: () => Date.parse('2026-07-24T12:00:00Z'),
+    });
+    audit.append('decision', { ok: true });
+    const left = fs
+      .readdirSync(dir)
+      .filter((n) => n.startsWith('engine-') && n.endsWith('.jsonl'))
+      .sort();
+    assert.deepEqual(left, [
+      'engine-2026-07-22.jsonl',
+      'engine-2026-07-23.jsonl',
+      'engine-2026-07-24.jsonl',
+    ]);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});

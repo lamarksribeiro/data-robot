@@ -552,7 +552,7 @@ export function createLiveTransport(opts) {
       }
     },
 
-    async startHeartbeat(onFailure, intervalMs = 5000) {
+    async startHeartbeat(onFailure, intervalMs = 5000, onSuccess = null) {
       if (typeof client.postHeartbeat !== 'function') {
         throw new Error('CLOB heartbeat indisponível no client');
       }
@@ -626,6 +626,7 @@ export function createLiveTransport(opts) {
         try {
           const response = await postWithRecovery(heartbeatId);
           heartbeatId = response?.heartbeat_id ?? heartbeatId;
+          if (typeof onSuccess === 'function') onSuccess(response);
         } catch (err) {
           if (typeof onFailure === 'function') onFailure(err);
           if (failClosed) throw err;
