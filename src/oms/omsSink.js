@@ -242,8 +242,17 @@ export function createOmsSink(opts = {}) {
           executeIntent: (leg) => executor.executeIntent(leg),
           waitForFinal:
             mode === 'live' ? (intentId, waitOpts) => api.waitForFinal(intentId, waitOpts) : undefined,
+          cancelOrder:
+            mode === 'live'
+              ? (intentId, reason) =>
+                  api.killImmediateOrder(intentId, reason ?? 'reverse_exit_residual_canceled', {
+                    notify: false,
+                  })
+              : undefined,
+          refreshExitQuote: opts.refreshExitQuote,
           clock,
           legTimeoutMs: opts.reverseLegTimeoutMs,
+          exitRetries: opts.reverseExitRetries,
         });
         return {
           accepted: result.accepted,
@@ -408,7 +417,7 @@ export function createOmsSink(opts = {}) {
     },
 
     /**
-     * Cancela FAK/FOK no exchange e força CANCEL local se ainda não terminal.
+     * Cancela ordem no exchange (FAK/FOK ou GTC EXIT) e força CANCEL local se ainda não terminal.
      * @param {string} intentId
      * @param {string} reason
      * @param {{ notify?: boolean }} [killOpts]
@@ -485,15 +494,20 @@ export function createOmsSink(opts = {}) {
       const raw = oms.getOrderRaw(intentId);
       if (raw && !isTerminal(raw.state)) {
         const orderType = String(raw.orderType ?? '').toUpperCase();
+        const kind = String(raw.kind ?? '').toUpperCase();
         const immediate = orderType === 'FAK' || orderType === 'FOK';
-        if (killOnTimeout && immediate) {
-          const killed = await api.killImmediateOrder(intentId, 'fak_timeout_killed', { notify });
+        // EXIT GTC protetora: sem cancel no timeout a ordem fica LIVE no CLOB e a
+        // saga marca REVERSE_EXIT_INCOMPLETE com residual resting.
+        const killGtcExit = kind === 'EXIT' && orderType === 'GTC';
+        if (killOnTimeout && (immediate || killGtcExit)) {
+          const killReason = immediate ? 'fak_timeout_killed' : 'exit_timeout_killed';
+          const killed = await api.killImmediateOrder(intentId, killReason, { notify });
           executionEvents.push(...(killed.executionEvents ?? []));
           return {
             ok: killed.ok,
             order: killed.order,
             executionEvents,
-            reason: killed.ok ? null : 'FAK_TIMEOUT_KILL_FAILED',
+            reason: killed.ok ? null : immediate ? 'FAK_TIMEOUT_KILL_FAILED' : 'EXIT_TIMEOUT_KILL_FAILED',
           };
         }
         const applied = applyExternalEvent(

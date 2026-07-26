@@ -111,11 +111,11 @@ export const MIDAS_AGGRESSIVE_V1 = {
  * late-flip-exit e a perna EXIT da saga REVERSE) e precisa de fill garantido, não
  * fill-or-kill. FAK na saída falha sem retry quando o book do lado a sair está fino
  * perto do expiry (comum aos 4-8s), deixando a posição presa no lado perdedor
- * (`REVERSE_EXIT_INCOMPLETE` em reverseSaga.js). O preço de saída já é calculado
- * como marketable (buildExitOrderFields em midasV1.js: minPrice ≈ bid), então GTC
- * cruza o book imediatamente na prática — só não é morta se não achar contraparte,
- * ficando como ordem residual em vez de reject silencioso. Entrada continua FAK
- * (controla slippage; não há urgência de proteção em não entrar).
+ * (`REVERSE_EXIT_INCOMPLETE` em reverseSaga.js). O preço de saída é agressivo
+ * (buildExitOrderFields: minPrice = max(floor, bid - slip)) para cruzar o book;
+ * se ainda restar GTC, a saga cancela no timeout, reprica (até 2 retries) e limpa
+ * residual — não deixa ordem viva no CLOB. Entrada continua FAK (controla
+ * slippage; não há urgência de proteção em não entrar).
  */
 export const MICRO_AGGRESSIVE = Object.freeze({
   entryBudget: 2,

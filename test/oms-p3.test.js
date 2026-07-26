@@ -446,6 +446,74 @@ describe('FAK terminalização (anti-ordem-presa)', () => {
     assert.equal(pos.qty, 2);
   });
 
+  it('EXIT GTC stuck em LIVE é morta no waitForFinal timeout', async () => {
+    const { Side, OrderType } = await import('@polymarket/clob-client-v2');
+    const { createLiveTransport, createMockClobClient } = await import('../src/executor/liveTransport.js');
+    const client = createMockClobClient({ behavior: 'live' });
+    const sink = createOmsSink({
+      mode: 'shadow',
+      transport: createLiveTransport({ client, Side, OrderType }),
+    });
+    // Seed posição para EXIT válido
+    await sink.submit({
+      intentId: 'gtc-seed-enter',
+      kind: 'ENTER',
+      side: 'UP',
+      marketId: 'm-gtc-exit',
+      strategyInstanceId: 'inst-gtc',
+      quantity: 3,
+      maxPrice: 0.6,
+      reason: 'seed',
+      tokenId: 'tok-up',
+      orderType: 'FAK',
+    });
+    // Força MATCHED no seed se ainda LIVE (mock live)
+    const seed = sink.oms.getOrderRaw('gtc-seed-enter');
+    if (seed && !isTerminal(seed.state)) {
+      sink.oms.applyExchangeEvent({
+        eventId: 'seed-fill-gtc',
+        intentId: 'gtc-seed-enter',
+        type: 'FILL',
+        qty: 3,
+        price: 0.6,
+        tsMs: Date.now(),
+      });
+    }
+
+    const post = await sink.submit({
+      intentId: 'gtc-exit-1',
+      kind: 'EXIT',
+      side: 'UP',
+      marketId: 'm-gtc-exit',
+      strategyInstanceId: 'inst-gtc',
+      quantity: 3,
+      minPrice: 0.55,
+      reason: 'test-exit',
+      tokenId: 'tok-up',
+      orderType: 'GTC',
+    });
+    assert.equal(post.accepted, true);
+    let order = sink.oms.getOrder('gtc-exit-1');
+    assert.ok(order && !isTerminal(order.state), `esperava LIVE resting, got ${order?.state}`);
+
+    const waited = await sink.waitForFinal('gtc-exit-1', {
+      timeoutMs: 200,
+      pollMs: 40,
+      killOnTimeout: true,
+      notify: false,
+    });
+    order = sink.oms.getOrder('gtc-exit-1');
+    assert.ok(isTerminal(order.state), `esperava terminal após kill GTC, got ${order.state}`);
+    assert.equal(order.state, 'CANCELED');
+    assert.ok(
+      waited.executionEvents?.some(
+        (e) => e.type === 'CANCEL' && /exit_timeout|clob_cancel/i.test(String(e.reason)),
+      ),
+      `esperava CANCEL exit_timeout; events=${JSON.stringify(waited.executionEvents)}`,
+    );
+    sink.dispose();
+  });
+
   it('CANCEL sem fill tira a engine de ENTRY_PENDING para ARMED', async () => {
     let submitted = false;
     const engine = bootstrapEngine({

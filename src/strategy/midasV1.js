@@ -52,17 +52,20 @@ function resolveTokenId(snapshot, side) {
   return null;
 }
 
-/** Campos comuns de EXIT (tokenId + orderType + piso de preço). */
+/**
+ * Campos comuns de EXIT (tokenId + orderType + piso de preço).
+ * GTC e FAK/FOK usam o mesmo critério agressivo: minPrice = max(floor, bid - slip).
+ * Preço no toque (max(floor, bid)) vira resting se o book some 1 tick — a saga
+ * depende de cruzar o book; residual GTC é cancelado no timeout/retry.
+ */
 function buildExitOrderFields(params, snapshot, side, bid) {
   const orderType = params.exitOrderType ?? params.entryOrderType ?? 'GTC';
   const floor = Number(params.stopMinBid ?? 0.05);
   const slip = Number(params.entrySlippageMax ?? 0.02);
   let minPrice = floor;
   if (Number.isFinite(bid)) {
-    minPrice =
-      orderType === 'FAK' || orderType === 'FOK'
-        ? Math.max(floor, bid - (Number.isFinite(slip) ? slip : 0))
-        : Math.max(floor, bid);
+    const aggressive = Number.isFinite(slip) ? slip : 0;
+    minPrice = Math.max(floor, bid - aggressive);
   }
   return {
     tokenId: resolveTokenId(snapshot, side),
@@ -450,6 +453,12 @@ export function createMidasV1Strategy(opts = {}) {
           );
           const reverseBudget =
             baseBudget * (Number.isFinite(factor) && factor > 0 ? factor : 1);
+          const exitFields = buildExitOrderFields(
+            params,
+            snapshot,
+            ctx.position.side,
+            late.exitBid,
+          );
           intents.push({
             intentId: makeIntentId({
               strategyInstanceId: ctx.strategyInstanceId,
@@ -464,20 +473,21 @@ export function createMidasV1Strategy(opts = {}) {
             budget: reverseBudget,
             quantity: null,
             maxPrice: late.oppAsk + Number(params.entrySlippageMax ?? 0.02),
-            minPrice: late.exitBid,
+            minPrice: exitFields.minPrice,
             deadlineMs: ctx.clockMs + 3000,
             reason: 'late_flip_reverse',
             presetId: MIDAS_V1_PRESET_ID,
             tokenId: resolveTokenId(snapshot, late.oppSide),
-            exitTokenId: resolveTokenId(snapshot, ctx.position.side),
+            exitTokenId: exitFields.tokenId,
             exitSide: ctx.position.side,
             exitQuantity: ctx.position.qty,
+            secsLeftMs: Number.isFinite(snapshot.secsLeft) ? snapshot.secsLeft * 1000 : null,
             // Pernas da saga têm perfis de risco diferentes: comprar o lado novo
             // (enter) usa a mesma política de entrada normal; vender o lado velho
             // (exit) é protetora e usa a política de saída — reverseSaga.js aplica
             // cada uma à perna correta (nunca reusar um só orderType nas duas).
             orderType: params.entryOrderType ?? 'GTC',
-            exitOrderType: params.exitOrderType ?? params.entryOrderType ?? 'GTC',
+            exitOrderType: exitFields.orderType,
           });
           return { state: next, intents, diagnostics };
         }
@@ -603,4 +613,4 @@ export function createMidasV1Strategy(opts = {}) {
   };
 }
 
-export { mergePreset as mergeMidasV1Preset };
+export { mergePreset as mergeMidasV1Preset, buildExitOrderFields };

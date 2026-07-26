@@ -156,4 +156,74 @@ describe('MIDAS micro-live canary', () => {
     assert.equal(exit.orderType, 'GTC');
     assert.ok(Number(exit.minPrice) >= 0.05);
   });
+
+  it('buildExitOrderFields GTC usa minPrice agressivo (bid - slip)', async () => {
+    const { buildExitOrderFields } = await import('../src/strategy/midasV1.js');
+    const params = canaryMidasPreset();
+    const bid = 0.6;
+    const slip = Number(params.entrySlippageMax ?? 0.02);
+    const fields = buildExitOrderFields(
+      params,
+      { identity: { upTokenId: 'up', downTokenId: 'down' } },
+      'UP',
+      bid,
+    );
+    assert.equal(fields.orderType, 'GTC');
+    assert.ok(fields.minPrice <= bid, `minPrice ${fields.minPrice} deve ser <= bid ${bid}`);
+    assert.equal(fields.minPrice, Math.max(0.05, bid - slip));
+  });
+
+  it('REVERSE intent usa minPrice via buildExitOrderFields (não bid cru)', async () => {
+    const { createMidasV1Strategy } = await import('../src/strategy/midasV1.js');
+    const { buildStrategyContext } = await import('../src/engine/contract.js');
+    const strategy = createMidasV1Strategy();
+    const preset = canaryMidasPreset({
+      lateFlipReverseEnabled: true,
+      dangerExitEnabled: false,
+      dangerContinuousEnabled: false,
+      earlyWarnEnabled: false,
+    });
+    const nowMs = 1_700_000_000_000;
+    const exitBid = 0.4;
+    const snapshot = {
+      marketId: 'btc-rev-price',
+      nowMs,
+      secsLeft: 6,
+      btc: 99.5,
+      priceToBeat: 100,
+      book: {
+        up: {
+          bestBid: exitBid,
+          bestAsk: 0.42,
+          bids: [{ size: 50 }, { size: 50 }],
+          asks: [{ size: 50 }, { size: 50 }],
+        },
+        down: {
+          bestBid: 0.56,
+          bestAsk: 0.58,
+          bids: [{ size: 50 }, { size: 50 }],
+          asks: [{ size: 50 }, { size: 50 }],
+        },
+      },
+      feeds: { healthy: true },
+      acceptingOrders: true,
+      identity: { upTokenId: 'up', downTokenId: 'down' },
+    };
+    const ctx = buildStrategyContext({
+      snapshot,
+      position: { marketId: snapshot.marketId, side: 'UP', qty: 2, avgPrice: 0.62, realizedPnl: 0 },
+      mode: 'shadow',
+      clockMs: nowMs,
+      preset,
+      strategyInstanceId: 'rev-price',
+    });
+    const init = strategy.initialize(ctx, preset);
+    const out = strategy.onSnapshot(ctx, { ...init.state, marketId: snapshot.marketId });
+    const rev = out.intents.find((i) => i.kind === 'REVERSE');
+    assert.ok(rev, `esperava REVERSE; intents=${JSON.stringify(out.intents)} diag=${JSON.stringify(out.diagnostics)}`);
+    const slip = Number(preset.entrySlippageMax ?? 0.02);
+    assert.ok(rev.minPrice < exitBid, `minPrice ${rev.minPrice} deve ser < exitBid ${exitBid}`);
+    assert.equal(rev.minPrice, Math.max(0.05, exitBid - slip));
+    assert.equal(rev.exitOrderType, 'GTC');
+  });
 });

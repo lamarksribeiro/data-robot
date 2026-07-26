@@ -467,14 +467,21 @@ export function createEngine(opts) {
       }
     }
 
-    // ENTER/EXIT/REVERSE sem fill: voltar a ARMED (não ficar preso em *_PENDING).
+    // ENTER/EXIT/REVERSE sem fill: não ficar preso em *_PENDING.
+    // Flat → ARMED; residual após REVERSE/EXIT incompleto → POSITION_OPEN (permite EXIT simples).
     if (
       (event.type === 'CANCEL' || event.type === 'REJECT') &&
-      position.qty <= 0 &&
       pendingIntents.size === 0 &&
       (state === 'ENTRY_PENDING' || state === 'EXIT_PENDING' || state === 'REVERSE_PENDING')
     ) {
-      transition('ARMED', event.type === 'REJECT' ? 'entry_rejected' : 'entry_unfilled');
+      if (position.qty <= 0) {
+        transition('ARMED', event.type === 'REJECT' ? 'entry_rejected' : 'entry_unfilled');
+      } else if (state === 'REVERSE_PENDING' || state === 'EXIT_PENDING') {
+        transition(
+          'POSITION_OPEN',
+          event.type === 'REJECT' ? 'reverse_or_exit_incomplete' : 'exit_unfilled_with_position',
+        );
+      }
     }
 
     if (
@@ -567,7 +574,12 @@ export function createEngine(opts) {
     position = emptyPosition({ marketId: null, realizedPnl });
     pendingIntents.clear();
     haltReason = null;
-    if (state === 'HALTED' || state === 'POSITION_OPEN' || state === 'EXIT_PENDING') {
+    if (
+      state === 'HALTED' ||
+      state === 'POSITION_OPEN' ||
+      state === 'EXIT_PENDING' ||
+      state === 'REVERSE_PENDING'
+    ) {
       transition('ARMED', opts.reason ?? 'settlement');
     }
     if (typeof riskEngine.accountBook?.set === 'function') {
@@ -613,7 +625,12 @@ export function createEngine(opts) {
     position = emptyPosition({ realizedPnl });
     pendingIntents.clear();
     haltReason = null;
-    if (state === 'HALTED' || state === 'POSITION_OPEN' || state === 'EXIT_PENDING') {
+    if (
+      state === 'HALTED' ||
+      state === 'POSITION_OPEN' ||
+      state === 'EXIT_PENDING' ||
+      state === 'REVERSE_PENDING'
+    ) {
       transition('ARMED', 'position-released-for-settlement');
     }
     if (typeof riskEngine.accountBook?.set === 'function') {

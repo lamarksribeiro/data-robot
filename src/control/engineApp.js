@@ -667,7 +667,8 @@ export function createEngineApp(opts = {}) {
         marketIdentities.delete(marketIdentities.keys().next().value);
       }
     }
-    // Ordem FAK/ENTER de mercado anterior sem posição: cancelar (não pode restar como GTC).
+    // Ordens de mercado anterior: cancelar. EXIT/REVERSE residual mesmo com posição
+    // (GTC protetora não pode sobreviver à rotação 5m). ENTER stale só se flat.
     if (mode === 'live' && snapshot?.marketId && typeof sink.cancelOpenOrders === 'function') {
       const open = sink.oms?.openOrders?.() ?? [];
       const stale = open.filter(
@@ -676,18 +677,23 @@ export function createEngineApp(opts = {}) {
           order.marketId !== snapshot.marketId &&
           (order.kind === 'ENTER' || order.kind === 'EXIT' || order.kind === 'REVERSE'),
       );
-      if (stale.length > 0 && engine.position.qty <= 0) {
+      const hasProtectiveStale = stale.some(
+        (order) => order.kind === 'EXIT' || order.kind === 'REVERSE',
+      );
+      if (stale.length > 0 && (engine.position.qty <= 0 || hasProtectiveStale)) {
         const cancellation = await sink.cancelOpenOrders(
           'market-rotated-stale-entry',
-          (order) =>
-            order.marketId &&
-            order.marketId !== snapshot.marketId &&
-            (order.kind === 'ENTER' || order.kind === 'EXIT' || order.kind === 'REVERSE'),
+          (order) => {
+            if (!order.marketId || order.marketId === snapshot.marketId) return false;
+            if (order.kind === 'EXIT' || order.kind === 'REVERSE') return true;
+            return order.kind === 'ENTER' && engine.position.qty <= 0;
+          },
         );
         logger.warn?.('stale_entry_canceled_on_rotation', {
           marketId: snapshot.marketId,
           canceled: cancellation?.canceled ?? [],
           failed: cancellation?.failed ?? [],
+          withPosition: engine.position.qty > 0,
         });
         // Se ainda ENTRY_PENDING flat sem pending, rearma via eventos CANCEL do sink.
       }
