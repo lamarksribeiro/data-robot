@@ -88,10 +88,42 @@ export const MIDAS_V1 = {
   // midas tier
   tierAskThreshold: 0.82,
   tierAskBudgetFactor: 1.5,
+  // guardian: favorito caro (ask≥tierAskThreshold) só entra com z ≥ tierMinZ (0 = off)
+  tierMinZ: 0.0,
+  // odds-shock (OFF no núcleo; ON no Gold / g3-os)
+  oddsShockEnabled: false,
+  oddsShockStartSec: 20,
+  oddsShockEndSec: 3,
+  oddsShockLookbackSec: 2,
+  oddsShockOppAskDelta: 0.15,
+  oddsShockOwnAskDelta: 0.15,
+  oddsShockMinOppAsk: 0.5,
+  oddsShockOnlyIfLosing: false,
+  oddsShockMinBidRatio: 0.55,
+  oddsShockPartialPct: 0.5,
+  oddsShockReverseEnabled: false,
   // equity scale — usa accountEquityUsd real (sem walletSize fake)
   equityScaleEnabled: false,
-  equityScalePct: 0.1,
+  equityScalePct: 0.02,
 };
+
+/**
+ * Odds-shock partial50 (pacote g3-os / MIDAS-GOLD).
+ * Book lidera o spot: vende 50% se Δask≥0.15/2s e ainda há bid ≥ 55% do entry.
+ */
+export const MIDAS_ODDS_SHOCK_PARTIAL50 = Object.freeze({
+  oddsShockEnabled: true,
+  oddsShockStartSec: 20,
+  oddsShockEndSec: 3,
+  oddsShockLookbackSec: 2,
+  oddsShockOppAskDelta: 0.15,
+  oddsShockOwnAskDelta: 0.15,
+  oddsShockMinOppAsk: 0.5,
+  oddsShockOnlyIfLosing: false,
+  oddsShockMinBidRatio: 0.55,
+  oddsShockPartialPct: 0.5,
+  oddsShockReverseEnabled: false,
+});
 
 /** Robust: dist 30. */
 export const MIDAS_ROBUST_V1 = {
@@ -116,6 +148,9 @@ export const MIDAS_AGGRESSIVE_V1 = {
  * se ainda restar GTC, a saga cancela no timeout, reprica (até 2 retries) e limpa
  * residual — não deixa ordem viva no CLOB. Entrada continua FAK (controla
  * slippage; não há urgência de proteção em não entrar).
+ *
+ * Guardian-v3 no micro-canário: minSecondsLeft 9 (book mais grosso) + tierMinZ 2.0
+ * (favorito caro só com colchão físico). Paridade lab btc-micro-guardian-v3.
  */
 export const MICRO_AGGRESSIVE = Object.freeze({
   entryBudget: 2,
@@ -123,6 +158,24 @@ export const MICRO_AGGRESSIVE = Object.freeze({
   minShares: 1,
   entryOrderType: 'FAK',
   exitOrderType: 'GTC',
+  minSecondsLeft: 9,
+  tierMinZ: 2.0,
+});
+
+/**
+ * Sizing produção MIDAS-GOLD ($10/$30) + política de ordem validada no live:
+ * entrada FAK (sem resting adversa) · saída GTC (proteção no book fino 3–8s).
+ * Guardian-v3 (minSec9 + tierMinZ 2) incluso — paridade lab `btc-gold-v1` / `eth-gold-v1`.
+ * Teto de liquidez medido ~$40/evento; $10/$30 é o sweet spot (PF estável, PnL ~linear).
+ */
+export const GOLD_PRODUCTION = Object.freeze({
+  entryBudget: 10,
+  maxEntryBudget: 30,
+  minShares: 1,
+  entryOrderType: 'FAK',
+  exitOrderType: 'GTC',
+  minSecondsLeft: 9,
+  tierMinZ: 2.0,
 });
 
 /** @deprecated Prefer MICRO_AGGRESSIVE */
@@ -132,6 +185,8 @@ export const MICRO_ROBUST = Object.freeze({
   minShares: 1,
   entryOrderType: 'FAK',
   exitOrderType: 'GTC',
+  minSecondsLeft: 9,
+  tierMinZ: 2.0,
 });
 
 export const CANARY_LIMITS = Object.freeze({
@@ -175,7 +230,7 @@ export function resolveMidasEquityRawBudget(params, opts = {}) {
   const scaleOn = params.equityScaleEnabled === true || params.equityScaleEnabled === 1;
   if (!scaleOn) return base;
   const equity = resolveMidasEquityUsd(params, opts);
-  const pct = Number(params.equityScalePct ?? 0.1);
+  const pct = Number(params.equityScalePct ?? 0.02);
   if (!(Number.isFinite(equity) && equity >= 0) || !(Number.isFinite(pct) && pct > 0)) {
     return base;
   }
@@ -240,17 +295,45 @@ export function resolveMidasScoopBudget(params, opts = {}) {
 }
 
 /**
- * Canário MIDAS: Aggressive + sizing micro $2/$4.
+ * Canário MIDAS: Aggressive + micro $2/$4 + guardian-v3 (minSec9, tierMinZ 2).
  * MICRO_AGGRESSIVE fica por último de propósito: params de lab/UI (gates, exits)
- * podem sobrescrever o núcleo, mas nunca o sizing/cap de microentrada.
+ * podem sobrescrever o núcleo, mas nunca o sizing/cap/guardian de microentrada.
+ * Odds-shock fica OFF aqui — ligar via canaryMidasGoldPreset após gates §6.
  */
 export function canaryMidasPreset(override = {}) {
   return { ...MIDAS_AGGRESSIVE_V1, ...override, ...MICRO_AGGRESSIVE };
 }
 
 /**
+ * MIDAS-GOLD micro (g3-os): guardian-v3 + odds-shock partial50 + $2/$4.
+ * Paridade lab `btc-micro-guardian-v3-os` / `eth-micro-gold-v1` (canário P9).
+ */
+export function canaryMidasGoldPreset(override = {}) {
+  return {
+    ...MIDAS_AGGRESSIVE_V1,
+    ...MIDAS_ODDS_SHOCK_PARTIAL50,
+    ...override,
+    ...MICRO_AGGRESSIVE,
+  };
+}
+
+/**
+ * MIDAS-GOLD produção (g3-os): mesmo pacote do canário, sizing $10/$30.
+ * Paridade lab Estúdio v11 `btc-gold-v1` / v12 `eth-gold-v1`.
+ * GOLD_PRODUCTION por último: UI/lab não rebaixam sizing nem order types.
+ */
+export function midasGoldPreset(override = {}) {
+  return {
+    ...MIDAS_AGGRESSIVE_V1,
+    ...MIDAS_ODDS_SHOCK_PARTIAL50,
+    ...override,
+    ...GOLD_PRODUCTION,
+  };
+}
+
+/**
  * Metadados de paridade com o Estúdio do data-backtest (presets midas-carry-v1).
- * `backtestVersion` = coluna "v1..v5" no backtest; `pluginVersion` no robot é sempre 1.0.0.
+ * `backtestVersion` = coluna "v1..v12" no Estúdio; `pluginVersion` no robot é sempre 1.0.0.
  */
 export const MIDAS_PRESET_META = Object.freeze({
   'btc-champion-v1': {
@@ -275,8 +358,33 @@ export const MIDAS_PRESET_META = Object.freeze({
   },
   'btc-micro-aggressive-v1': {
     backtestVersion: 5,
-    labName: 'Micro Aggressive',
+    labName: 'Micro Guardian V3',
     budgetLabel: '$2 / $4',
+  },
+  'btc-micro-guardian-v3': {
+    backtestVersion: 7,
+    labName: 'Micro Guardian V3',
+    budgetLabel: '$2 / $4',
+  },
+  'btc-micro-guardian-v3-os': {
+    backtestVersion: 9,
+    labName: 'Micro Gold (G3+OS)',
+    budgetLabel: '$2 / $4',
+  },
+  'eth-micro-gold-v1': {
+    backtestVersion: 10,
+    labName: 'ETH Micro Gold',
+    budgetLabel: '$2 / $4',
+  },
+  'btc-gold-v1': {
+    backtestVersion: 11,
+    labName: 'BTC Gold',
+    budgetLabel: '$10 / $30',
+  },
+  'eth-gold-v1': {
+    backtestVersion: 12,
+    labName: 'ETH Gold',
+    budgetLabel: '$10 / $30',
   },
 });
 

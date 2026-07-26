@@ -52,6 +52,10 @@ const MIDAS_PRESET_UI = {
   'btc-robust-v1': { backtestVersion: 3, displayTitle: 'MIDAS v3 · Robust', budgetLabel: '$10 / $15' },
   'btc-micro-robust-v1': { backtestVersion: 4, displayTitle: 'MIDAS v4 · Micro Robust', budgetLabel: '$2 / $3' },
   'btc-micro-aggressive-v1': { backtestVersion: 5, displayTitle: 'MIDAS v5 · Micro Aggressive', budgetLabel: '$2 / $4' },
+  'btc-micro-guardian-v3-os': { backtestVersion: 9, displayTitle: 'MIDAS v9 · Micro Gold', budgetLabel: '$2 / $4' },
+  'eth-micro-gold-v1': { backtestVersion: 10, displayTitle: 'MIDAS v10 · ETH Micro Gold', budgetLabel: '$2 / $4' },
+  'btc-gold-v1': { backtestVersion: 11, displayTitle: 'MIDAS v11 · BTC Gold', budgetLabel: '$10 / $30' },
+  'eth-gold-v1': { backtestVersion: 12, displayTitle: 'MIDAS v12 · ETH Gold', budgetLabel: '$10 / $30' },
 };
 
 function resolvePresetPresentation(status, presetHit = null) {
@@ -2823,6 +2827,9 @@ const STRAT_PARAM_LABELS = {
   velocityLookbackSecs: 'Lookback velocidade (s)',
   maxAdverseSpotChange: 'Δspot adverso máx.',
   minEntryZ: 'Z mínimo de entrada',
+  tierMinZ: 'Z mín. no tier (guardian)',
+  tierAskThreshold: 'Ask limiar do tier',
+  tierAskBudgetFactor: 'Fator de budget no tier',
   stopMinBid: 'Bid mín. stop',
   lateFlipExitEnabled: 'Late flip exit',
   lateFlipExitSec: 'Late flip até (s)',
@@ -2834,8 +2841,20 @@ const STRAT_PARAM_LABELS = {
   dangerExitEnabled: 'Danger exit',
   dangerExitK: 'Danger K',
   dangerExitFloorSec: 'Danger floor (s)',
+  oddsShockEnabled: 'Odds-shock ativo',
+  oddsShockStartSec: 'Odds-shock desde (s)',
+  oddsShockEndSec: 'Odds-shock até (s)',
+  oddsShockLookbackSec: 'Odds-shock lookback (s)',
+  oddsShockOppAskDelta: 'Δask oposto (choque)',
+  oddsShockOwnAskDelta: 'Δask próprio (choque)',
+  oddsShockMinOppAsk: 'Ask oposto mín. no choque',
+  oddsShockMinBidRatio: 'Bid mín. × entry (salvamento)',
+  oddsShockPartialPct: 'Pct. exit no choque',
+  oddsShockOnlyIfLosing: 'Odds-shock só se perdendo',
+  oddsShockReverseEnabled: 'Odds-shock reverse',
   scoopEnabled: 'Scoop ativo',
   equityScaleEnabled: 'Equity scale',
+  equityScalePct: 'Equity scale %',
 };
 
 function humanizeParam(key) {
@@ -2861,10 +2880,10 @@ function groupForParam(key) {
   if (/[Dd]ist|Flips|Adverse|favorite|Directional|edgeMinDistance/.test(k)) return 'spot';
   if (/[Ss]coop/.test(k)) return 'scoop';
   if (/[Bb]udget|[Ss]hares|[Ee]quity|[Ss]igma|tier|sizing|BudgetFactor/.test(k)) return 'sizing';
-  if (/[Dd]anger|[Ll]ate|[Rr]everse|[Pp]rofit|[Ss]top|Exit|hedge/.test(k)) return 'risk';
+  if (/[Dd]anger|[Ll]ate|[Rr]everse|[Pp]rofit|[Ss]top|Exit|hedge|oddsShock|OddsShock/.test(k)) return 'risk';
   if (/Enabled$/.test(k)) {
     if (/scoop/i.test(k)) return 'scoop';
-    if (/danger|late|reverse|profit|edge|terminal/i.test(k)) return 'risk';
+    if (/danger|late|reverse|profit|edge|terminal|oddsShock/i.test(k)) return 'risk';
   }
   return 'other';
 }

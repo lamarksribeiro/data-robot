@@ -49,14 +49,17 @@ function snap(ask = 0.62) {
 }
 
 describe('MIDAS micro-live canary', () => {
-  it('canaryMidasPreset = Aggressive + micro $2/$4', () => {
+  it('canaryMidasPreset = Aggressive + micro $2/$4 + guardian-v3', () => {
     const p = canaryMidasPreset();
     assert.equal(p.maxDistAbs, 40);
     assert.equal(p.entryBudget, MICRO_AGGRESSIVE.entryBudget);
     assert.equal(p.maxEntryBudget, MICRO_AGGRESSIVE.maxEntryBudget);
     assert.equal(p.maxAsk, MIDAS_AGGRESSIVE_V1.maxAsk);
     assert.equal(p.tierAskBudgetFactor, 2.0);
+    assert.equal(p.minSecondsLeft, 9);
+    assert.equal(p.tierMinZ, 2.0);
     assert.equal(p.entryOrderType, 'FAK');
+    assert.equal(p.exitOrderType, 'GTC');
     assert.equal(p.lateFlipReverseEnabled, true);
   });
 

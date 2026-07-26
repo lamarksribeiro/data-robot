@@ -195,6 +195,20 @@ export function evaluateEntryGates(snapshot, params, history = []) {
     detail: `${z.toFixed(3)} / ${zLimit}`,
   };
 
+  // tierMinZ (guardian): favorito caro (ask ≥ tierAskThreshold) exige z ≥ tierMinZ.
+  const tierMinZ = Number(params.tierMinZ ?? 0);
+  const tierAskThreshold = Number(params.tierAskThreshold ?? Infinity);
+  const tierAskHit =
+    Number.isFinite(ask) && Number.isFinite(tierAskThreshold) && ask >= tierAskThreshold;
+  const tierZLimit =
+    tierMinZ > 0 ? (tierAskHit ? `≥${tierMinZ} @ask≥${tierAskThreshold}` : 'n/a (ask barato)') : 'off';
+  gates.tierMinZ = {
+    pass: !(tierMinZ > 0) || !tierAskHit || z >= tierMinZ,
+    value: z,
+    limit: tierZLimit,
+    detail: `${z.toFixed(3)} / ${tierZLimit}`,
+  };
+
   const ok = Object.values(gates).every((g) => g.pass);
 
   return { ok, fav, gates, ask, bid, dist, oddsSum, spread, obi, flips, z };
@@ -458,5 +472,175 @@ export function evaluateScoopEntry(snapshot, params, history = []) {
     oddsSum,
     adverse,
     reason: ok ? 'midas_scoop_entry' : 'scoop_gates_fail',
+  };
+}
+
+/**
+ * Ask do lado `side` há `lookbackSecs` (série history com upAsk/downAsk).
+ */
+export function askAgo(history, side, lookbackSecs, nowMs) {
+  if (!history?.length) return null;
+  const key = side === 'DOWN' ? 'downAsk' : 'upAsk';
+  const cutoff = nowMs - Number(lookbackSecs) * 1000;
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const h = history[i];
+    if (h.ts <= cutoff && Number.isFinite(h[key]) && h[key] > 0) return h[key];
+  }
+  return null;
+}
+
+/**
+ * Odds-shock (MIDAS-GOLD): book lidera spot — Δask rápido do oposto/próprio
+ * na janela terminal dispara exit parcial (ou total / reverse).
+ *
+ * Paridade strategy.gls midas-carry-v1 (oddsShock*).
+ *
+ * @returns {{
+ *   active: boolean,
+ *   action: 'PARTIAL_EXIT'|'EXIT'|'REVERSE'|null,
+ *   bid: number|null,
+ *   oppAsk: number|null,
+ *   oppDelta: number|null,
+ *   ownDelta: number|null,
+ *   partialPct: number,
+ *   reason: string|null,
+ * }}
+ */
+export function evaluateOddsShockExit(
+  snapshot,
+  params,
+  positionSide,
+  strategyState = {},
+  history = [],
+  avgEntry = null,
+) {
+  const on = params.oddsShockEnabled === true || params.oddsShockEnabled === 1;
+  const empty = {
+    active: false,
+    action: null,
+    bid: null,
+    oppAsk: null,
+    oppDelta: null,
+    ownDelta: null,
+    partialPct: 0,
+    reason: null,
+  };
+  if (!on || !positionSide) return empty;
+  if (strategyState.oddsShockDone || strategyState.closed || strategyState.reversed) {
+    return { ...empty, reason: 'already_done' };
+  }
+
+  const secsLeft = snapshot.secsLeft;
+  const start = Number(params.oddsShockStartSec ?? 20);
+  const end = Number(params.oddsShockEndSec ?? 3);
+  if (!(Number.isFinite(secsLeft) && secsLeft <= start && secsLeft >= end)) {
+    return { ...empty, reason: 'out_of_window' };
+  }
+
+  const bid = snapshot.book?.[positionSide.toLowerCase()]?.bestBid ?? null;
+  const stopMin = Number(params.stopMinBid ?? 0.05);
+  if (!(bid != null && bid >= stopMin)) {
+    return { ...empty, bid, reason: 'bid_floor_stop' };
+  }
+
+  const minBidRatio = Number(params.oddsShockMinBidRatio ?? 0);
+  if (
+    minBidRatio > 0 &&
+    Number.isFinite(avgEntry) &&
+    avgEntry > 0 &&
+    bid < avgEntry * minBidRatio
+  ) {
+    return { ...empty, bid, reason: 'bid_below_entry_ratio' };
+  }
+
+  const onlyLosing = params.oddsShockOnlyIfLosing === true || params.oddsShockOnlyIfLosing === 1;
+  const signedDist = signedDistance(positionSide, snapshot.btc, snapshot.priceToBeat);
+  if (onlyLosing && signedDist != null && signedDist > 0) {
+    return { ...empty, bid, reason: 'not_losing' };
+  }
+
+  const lookback = Number(params.oddsShockLookbackSec ?? 2);
+  const upAskNow = snapshot.book?.up?.bestAsk;
+  const downAskNow = snapshot.book?.down?.bestAsk;
+  const upAskPast = askAgo(history, 'UP', lookback, snapshot.nowMs);
+  const downAskPast = askAgo(history, 'DOWN', lookback, snapshot.nowMs);
+  if (!(upAskPast > 0 && downAskPast > 0)) {
+    return { ...empty, bid, reason: 'no_ask_history' };
+  }
+  if (!(Number.isFinite(upAskNow) && Number.isFinite(downAskNow))) {
+    return { ...empty, bid, reason: 'no_ask_now' };
+  }
+
+  const upRise = upAskNow - upAskPast;
+  const downRise = downAskNow - downAskPast;
+  const upFall = upAskPast - upAskNow;
+  const downFall = downAskPast - downAskNow;
+
+  const oppSide = oppositeSide(positionSide);
+  const oppAsk = oppSide === 'UP' ? upAskNow : downAskNow;
+  const oppDelta = oppSide === 'UP' ? upRise : downRise;
+  const ownDelta = positionSide === 'UP' ? upFall : downFall;
+  const minOppAsk = Number(params.oddsShockMinOppAsk ?? 0.4);
+  const oppAskDelta = Number(params.oddsShockOppAskDelta ?? 0.15);
+  const ownAskDelta = Number(params.oddsShockOwnAskDelta ?? 0.15);
+  const hit =
+    oppAsk >= minOppAsk && (oppDelta >= oppAskDelta || ownDelta >= ownAskDelta);
+  if (!hit) {
+    return {
+      ...empty,
+      bid,
+      oppAsk,
+      oppDelta,
+      ownDelta,
+      reason: 'no_shock',
+    };
+  }
+
+  const reverseOn =
+    params.oddsShockReverseEnabled === true || params.oddsShockReverseEnabled === 1;
+  const reverseAskOk =
+    oppAsk > 0 &&
+    oppAsk <= Number(params.lateFlipReverseMaxAsk ?? 0.95) &&
+    oppAsk >= Number(params.lateFlipReverseMinAsk ?? 0);
+  if (reverseOn && reverseAskOk) {
+    return {
+      active: true,
+      action: 'REVERSE',
+      bid,
+      oppAsk,
+      oppSide,
+      oppDelta,
+      ownDelta,
+      partialPct: 0,
+      reason: 'odds_shock_reverse',
+      secsLeft,
+    };
+  }
+
+  const partialPct = Number(params.oddsShockPartialPct ?? 0);
+  if (partialPct > 0 && partialPct < 1) {
+    return {
+      active: true,
+      action: 'PARTIAL_EXIT',
+      bid,
+      oppAsk,
+      oppDelta,
+      ownDelta,
+      partialPct,
+      reason: 'odds_shock_partial',
+      secsLeft,
+    };
+  }
+
+  return {
+    active: true,
+    action: 'EXIT',
+    bid,
+    oppAsk,
+    oppDelta,
+    ownDelta,
+    partialPct: 1,
+    reason: 'odds_shock_exit',
+    secsLeft,
   };
 }

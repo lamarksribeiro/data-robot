@@ -15,6 +15,9 @@ import {
   describeMidasPreset,
   resolveMidasCanaryCap,
   canaryMidasPreset,
+  canaryMidasGoldPreset,
+  midasGoldPreset,
+  GOLD_PRODUCTION,
 } from '../src/tfc/preset-midas.js';
 import {
   evaluateDangerExit,
@@ -22,6 +25,7 @@ import {
   evaluateEarlyWarnExit,
   evaluateEntryGates,
   evaluateLateFlipAction,
+  evaluateOddsShockExit,
   evaluateScoopEntry,
   physicalZScore,
   sigmaBudgetFactor,
@@ -73,11 +77,50 @@ function historyAround(nowMs, btc = 100.5) {
 }
 
 describe('MIDAS preset metadata (paridade backtest)', () => {
-  it('describeMidasPreset v5 = Micro Aggressive $2/$4', () => {
+  it('describeMidasPreset v5 = Micro Guardian V3 $2/$4', () => {
     const d = describeMidasPreset('btc-micro-aggressive-v1', canaryMidasPreset());
     assert.equal(d.backtestVersion, 5);
     assert.equal(d.budgetLabel, '$2 / $4');
     assert.match(d.displayTitle, /MIDAS v5/);
+  });
+
+  it('canaryMidasPreset = guardian-v3 (minSec9 + tierMinZ 2)', () => {
+    const p = canaryMidasPreset();
+    assert.equal(p.minSecondsLeft, 9);
+    assert.equal(p.tierMinZ, 2.0);
+    assert.equal(p.maxAsk, 0.94);
+    assert.equal(p.tierAskBudgetFactor, 2.0);
+    assert.equal(p.oddsShockEnabled, false);
+    assert.equal(p.exitOrderType, 'GTC');
+    assert.equal(p.entryOrderType, 'FAK');
+  });
+
+  it('canaryMidasGoldPreset liga odds-shock partial50', () => {
+    const p = canaryMidasGoldPreset();
+    assert.equal(p.minSecondsLeft, 9);
+    assert.equal(p.tierMinZ, 2.0);
+    assert.equal(p.oddsShockEnabled, true);
+    assert.equal(p.oddsShockPartialPct, 0.5);
+    assert.equal(p.oddsShockMinBidRatio, 0.55);
+    assert.equal(p.oddsShockMinOppAsk, 0.5);
+    assert.equal(p.oddsShockReverseEnabled, false);
+    assert.equal(p.entryBudget, 2);
+    assert.equal(p.maxEntryBudget, 4);
+    assert.equal(p.entryOrderType, 'FAK');
+    assert.equal(p.exitOrderType, 'GTC');
+  });
+
+  it('midasGoldPreset usa sizing produção $10/$30 e FAK/GTC', () => {
+    const p = midasGoldPreset({ entryBudget: 2, maxEntryBudget: 4, entryOrderType: 'GTC' });
+    assert.equal(p.entryBudget, GOLD_PRODUCTION.entryBudget);
+    assert.equal(p.maxEntryBudget, GOLD_PRODUCTION.maxEntryBudget);
+    assert.equal(p.entryOrderType, 'FAK');
+    assert.equal(p.exitOrderType, 'GTC');
+    assert.equal(p.minSecondsLeft, 9);
+    assert.equal(p.tierMinZ, 2.0);
+    assert.equal(p.oddsShockEnabled, true);
+    assert.equal(p.oddsShockPartialPct, 0.5);
+    assert.equal(p.tierAskBudgetFactor, 2.0);
   });
 
   it('resolveMidasCanaryCap prioriza maxEntryBudget do preset sobre env menor', () => {
@@ -741,5 +784,133 @@ describe('shadow MIDAS V1 no kernel', () => {
     );
     const status = engine.getStatus();
     assert.ok(status.position.qty > 0 || engine.journal.some((j) => j.type === 'sink'));
+  });
+});
+
+describe('MIDAS-GOLD guardian + odds-shock', () => {
+  it('tierMinZ bloqueia favorito caro com z fraco', () => {
+    const nowMs = 1_700_000_000_000;
+    const snapshot = snap({
+      nowMs,
+      secsLeft: 20,
+      btc: 100.05,
+      priceToBeat: 100,
+      book: baseBook({
+        up: {
+          bestBid: 0.88,
+          bestAsk: 0.9,
+          bids: [{ size: 50 }],
+          asks: [{ size: 50 }],
+        },
+        down: {
+          bestBid: 0.08,
+          bestAsk: 0.1,
+          bids: [{ size: 50 }],
+          asks: [{ size: 50 }],
+        },
+      }),
+    });
+    const flatHist = [
+      { ts: nowMs - 5000, btc: 100.05 },
+      { ts: nowMs - 2500, btc: 100.05 },
+      { ts: nowMs, btc: 100.05 },
+    ];
+    const blocked = evaluateEntryGates(
+      snapshot,
+      { ...canaryMidasPreset() },
+      flatHist,
+    );
+    assert.equal(blocked.gates.tierMinZ.pass, false);
+    assert.equal(blocked.ok, false);
+
+    const allowed = evaluateEntryGates(
+      snapshot,
+      { ...canaryMidasPreset(), tierMinZ: 0 },
+      flatHist,
+    );
+    assert.equal(allowed.gates.tierMinZ.pass, true);
+  });
+
+  it('odds-shock partial50 vende metade quando oppAsk sobe 0.15/2s', () => {
+    const strategy = createMidasV1Strategy();
+    const nowMs = 1_700_000_000_000;
+    const preset = canaryMidasGoldPreset();
+    const snapshot = snap({
+      nowMs,
+      secsLeft: 12,
+      btc: 100.5,
+      priceToBeat: 100,
+      book: baseBook({
+        up: {
+          bestBid: 0.58,
+          bestAsk: 0.6,
+          bids: [{ size: 50 }],
+          asks: [{ size: 50 }],
+        },
+        down: {
+          bestBid: 0.48,
+          bestAsk: 0.55,
+          bids: [{ size: 50 }],
+          asks: [{ size: 50 }],
+        },
+      }),
+    });
+    const hist = [
+      { ts: nowMs - 5000, btc: 100.5, upAsk: 0.62, downAsk: 0.35 },
+      { ts: nowMs - 2000, btc: 100.5, upAsk: 0.62, downAsk: 0.35 },
+      { ts: nowMs, btc: 100.5, upAsk: 0.6, downAsk: 0.55 },
+    ];
+    const ctx = buildStrategyContext({
+      snapshot,
+      position: {
+        marketId: snapshot.marketId,
+        side: 'UP',
+        qty: 4,
+        avgPrice: 0.62,
+        realizedPnl: 0,
+      },
+      mode: 'shadow',
+      clockMs: nowMs,
+      preset,
+      strategyInstanceId: 'midas:os',
+    });
+    const init = strategy.initialize(ctx, preset);
+    const out = strategy.onSnapshot(ctx, {
+      ...init.state,
+      marketId: snapshot.marketId,
+      history: hist,
+    });
+    assert.equal(out.diagnostics.oddsShock?.active, true);
+    assert.equal(out.diagnostics.oddsShock?.action, 'PARTIAL_EXIT');
+    assert.equal(out.intents[0]?.kind, 'EXIT');
+    assert.equal(out.intents[0]?.reason, 'odds_shock_partial');
+    assert.equal(out.intents[0]?.quantity, 2);
+    assert.equal(out.state.oddsShockDone, true);
+  });
+
+  it('evaluateOddsShockExit respeita piso bid ≥ 0.55×entry', () => {
+    const nowMs = 1_700_000_000_000;
+    const snapshot = snap({
+      nowMs,
+      secsLeft: 10,
+      book: baseBook({
+        up: { bestBid: 0.3, bestAsk: 0.32 },
+        down: { bestBid: 0.55, bestAsk: 0.6 },
+      }),
+    });
+    const hist = [
+      { ts: nowMs - 2000, upAsk: 0.62, downAsk: 0.35, btc: 100.5 },
+      { ts: nowMs, upAsk: 0.32, downAsk: 0.6, btc: 100.5 },
+    ];
+    const hit = evaluateOddsShockExit(
+      snapshot,
+      canaryMidasGoldPreset(),
+      'UP',
+      {},
+      hist,
+      0.62,
+    );
+    assert.equal(hit.active, false);
+    assert.equal(hit.reason, 'bid_below_entry_ratio');
   });
 });

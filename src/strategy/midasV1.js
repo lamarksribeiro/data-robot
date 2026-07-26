@@ -4,8 +4,8 @@
  * Sem SDK, process.env, rede ou filesystem.
  *
  * Ordem de decisão (paridade strategy.gls midas-carry-v1):
- * Em posição: danger contínuo → early-warn → danger V7 → late flip reverse/exit
- * Flat: core entry (gates + minEntryZ + sigma/tier budget) → scoop entry
+ * Em posição: danger contínuo → early-warn → odds-shock → danger V7 → late flip reverse/exit
+ * Flat: core entry (gates + minEntryZ + tierMinZ + sigma/tier budget) → scoop entry
  */
 
 import { makeIntentId } from '../engine/schemas.js';
@@ -20,6 +20,7 @@ import {
   evaluateEarlyWarnExit,
   evaluateEntryGates,
   evaluateLateFlipAction,
+  evaluateOddsShockExit,
   evaluateScoopEntry,
   physicalZScore,
   signedDistance,
@@ -74,10 +75,18 @@ function buildExitOrderFields(params, snapshot, side, bid) {
   };
 }
 
+/** Histórico spot + asks (odds-shock lookback 2s). */
 function appendHistory(history, snapshot) {
   const next = [...(history ?? [])];
-  if (Number.isFinite(snapshot.btc) && Number.isFinite(snapshot.nowMs)) {
-    next.push({ ts: snapshot.nowMs, btc: snapshot.btc });
+  if (!Number.isFinite(snapshot.nowMs)) return next;
+  const upAsk = snapshot.book?.up?.bestAsk;
+  const downAsk = snapshot.book?.down?.bestAsk;
+  const point = { ts: snapshot.nowMs };
+  if (Number.isFinite(snapshot.btc)) point.btc = snapshot.btc;
+  if (Number.isFinite(upAsk)) point.upAsk = upAsk;
+  if (Number.isFinite(downAsk)) point.downAsk = downAsk;
+  if (point.btc != null || point.upAsk != null || point.downAsk != null) {
+    next.push(point);
   }
   if (next.length > HISTORY_MAX) next.splice(0, next.length - HISTORY_MAX);
   return next;
@@ -99,10 +108,14 @@ function budgetOpts(ctx, params, extra = {}) {
   };
 }
 
-function pushExitIntent(next, ctx, snapshot, params, side, bid, reason) {
+function pushExitIntent(next, ctx, snapshot, params, side, bid, reason, quantity = null) {
   next.seq = (next.seq ?? 0) + 1;
   next.lastIntentKind = 'EXIT';
   const exitFields = buildExitOrderFields(params, snapshot, side, bid);
+  const qty =
+    quantity != null && Number.isFinite(quantity) && quantity > 0
+      ? quantity
+      : ctx.position.qty;
   return {
     intentId: makeIntentId({
       strategyInstanceId: ctx.strategyInstanceId,
@@ -115,7 +128,7 @@ function pushExitIntent(next, ctx, snapshot, params, side, bid, reason) {
     marketId: snapshot.marketId,
     strategyInstanceId: ctx.strategyInstanceId,
     budget: null,
-    quantity: ctx.position.qty,
+    quantity: qty,
     maxPrice: null,
     minPrice: exitFields.minPrice,
     deadlineMs: ctx.clockMs + 3000,
@@ -212,7 +225,7 @@ export function createMidasV1Strategy(opts = {}) {
       supportedMarkets: ['btc-updown-5m'],
       capabilities: ['price', 'book'],
       description:
-        'MIDAS Carry V1 — Tiered High-Ask Terminal Carry + sigma/scoop/danger-cont/early-warn (plugin).',
+        'MIDAS Carry V1 — Guardian V3 + OddsShock Gold (plugin; paridade midas-carry-v1).',
       presetId: MIDAS_V1_PRESET_ID,
     },
 
@@ -249,6 +262,7 @@ export function createMidasV1Strategy(opts = {}) {
           marketId: null,
           reversed: false,
           closed: false,
+          oddsShockDone: false,
           lastIntentKind: null,
           entryBudgetUsed: null,
           entryMode: null,
@@ -258,10 +272,13 @@ export function createMidasV1Strategy(opts = {}) {
           entryBudget: p.entryBudget,
           tierAskThreshold: p.tierAskThreshold,
           tierAskBudgetFactor: p.tierAskBudgetFactor,
+          tierMinZ: p.tierMinZ,
+          minSecondsLeft: p.minSecondsLeft,
           sigmaSizingEnabled: p.sigmaSizingEnabled,
           scoopEnabled: p.scoopEnabled,
           dangerContinuousEnabled: p.dangerContinuousEnabled,
           earlyWarnEnabled: p.earlyWarnEnabled,
+          oddsShockEnabled: p.oddsShockEnabled,
         },
       };
     },
@@ -273,6 +290,7 @@ export function createMidasV1Strategy(opts = {}) {
         marketId: oldState?.marketId ?? null,
         reversed: Boolean(oldState?.reversed),
         closed: Boolean(oldState?.closed),
+        oddsShockDone: Boolean(oldState?.oddsShockDone),
         lastIntentKind: oldState?.lastIntentKind ?? null,
         entryBudgetUsed:
           oldState?.entryBudgetUsed == null ? null : Number(oldState.entryBudgetUsed),
@@ -293,6 +311,7 @@ export function createMidasV1Strategy(opts = {}) {
           marketId: snapshot.marketId,
           reversed: false,
           closed: false,
+          oddsShockDone: false,
           lastIntentKind: null,
           entryBudgetUsed: null,
           entryMode: null,
@@ -318,6 +337,7 @@ export function createMidasV1Strategy(opts = {}) {
         inPosition: ctx.position.qty > 0,
         reversed: next.reversed,
         closed: next.closed,
+        oddsShockDone: next.oddsShockDone,
         feedsHealthy: feedsHealthy(snapshot),
         z,
         accountEquityUsd: ctx.accountEquityUsd,
@@ -360,9 +380,14 @@ export function createMidasV1Strategy(opts = {}) {
         };
       }
 
+      // Piso tático = lateFlip/danger (4s). Com odds-shock ON, desce até oddsShockEndSec (3s).
       const floor = tacticalFloorSec(params);
+      const osOn = params.oddsShockEnabled === true || params.oddsShockEnabled === 1;
+      const osEnd = Number(params.oddsShockEndSec ?? 3);
+      const effectiveFloor =
+        osOn && Number.isFinite(osEnd) ? Math.min(floor, osEnd) : floor;
       const secsLeft = snapshot.secsLeft;
-      if (secsLeft != null && secsLeft < floor) {
+      if (secsLeft != null && secsLeft < effectiveFloor) {
         return {
           state: next,
           intents,
@@ -422,7 +447,89 @@ export function createMidasV1Strategy(opts = {}) {
           return { state: next, intents, diagnostics };
         }
 
-        // 3) Danger V7 (janela de 1s no piso)
+        // 3) Odds-shock (MIDAS-GOLD): book lidera spot — partial/exit/reverse
+        const oddsShock = evaluateOddsShockExit(
+          snapshot,
+          params,
+          ctx.position.side,
+          next,
+          history,
+          ctx.position.avgPrice,
+        );
+        diagnostics.oddsShock = oddsShock;
+        if (oddsShock.active && !next.reversed) {
+          if (oddsShock.action === 'REVERSE') {
+            next.seq = (next.seq ?? 0) + 1;
+            next.lastIntentKind = 'REVERSE';
+            next.oddsShockDone = true;
+            const factor = Number(params.lateFlipReverseBudgetFactor ?? 1);
+            const baseBudget = Number(
+              next.entryBudgetUsed ??
+                resolveMidasEntryBudget(params, oddsShock.oppAsk, budgetOpts(ctx, params, { z })),
+            );
+            const reverseBudget =
+              baseBudget * (Number.isFinite(factor) && factor > 0 ? factor : 1);
+            const exitFields = buildExitOrderFields(
+              params,
+              snapshot,
+              ctx.position.side,
+              oddsShock.bid,
+            );
+            intents.push({
+              intentId: makeIntentId({
+                strategyInstanceId: ctx.strategyInstanceId,
+                marketId: snapshot.marketId,
+                kind: 'REVERSE',
+                seq: next.seq,
+              }),
+              kind: 'REVERSE',
+              side: oddsShock.oppSide,
+              marketId: snapshot.marketId,
+              strategyInstanceId: ctx.strategyInstanceId,
+              budget: reverseBudget,
+              quantity: null,
+              maxPrice: oddsShock.oppAsk + Number(params.entrySlippageMax ?? 0.02),
+              minPrice: exitFields.minPrice,
+              deadlineMs: ctx.clockMs + 3000,
+              reason: 'odds_shock_reverse',
+              presetId: MIDAS_V1_PRESET_ID,
+              tokenId: resolveTokenId(snapshot, oddsShock.oppSide),
+              exitTokenId: exitFields.tokenId,
+              exitSide: ctx.position.side,
+              exitQuantity: ctx.position.qty,
+              secsLeftMs: Number.isFinite(snapshot.secsLeft) ? snapshot.secsLeft * 1000 : null,
+              orderType: params.entryOrderType ?? 'GTC',
+              exitOrderType: exitFields.orderType,
+            });
+            return { state: next, intents, diagnostics };
+          }
+
+          let exitQty = ctx.position.qty;
+          if (oddsShock.action === 'PARTIAL_EXIT') {
+            const pct = Number(oddsShock.partialPct);
+            exitQty = Number((ctx.position.qty * pct).toFixed(6));
+            const minShares = Number(params.minShares ?? 1);
+            if (!(exitQty >= minShares) || !(exitQty < ctx.position.qty)) {
+              exitQty = ctx.position.qty;
+            }
+          }
+          next.oddsShockDone = true;
+          intents.push(
+            pushExitIntent(
+              next,
+              ctx,
+              snapshot,
+              params,
+              ctx.position.side,
+              oddsShock.bid,
+              oddsShock.reason ?? 'odds_shock_exit',
+              exitQty,
+            ),
+          );
+          return { state: next, intents, diagnostics };
+        }
+
+        // 4) Danger V7 (janela de 1s no piso)
         const danger = evaluateDangerExit(snapshot, params, ctx.position.side, history);
         diagnostics.danger = danger;
         if (danger.active && !next.reversed) {
@@ -440,7 +547,7 @@ export function createMidasV1Strategy(opts = {}) {
           return { state: next, intents, diagnostics };
         }
 
-        // 4) Late flip reverse / exit
+        // 5) Late flip reverse / exit
         const late = evaluateLateFlipAction(snapshot, params, ctx.position.side, next);
         diagnostics.lateFlip = late;
         if (late.action === 'REVERSE') {
@@ -525,6 +632,7 @@ export function createMidasV1Strategy(opts = {}) {
             z: entry.z ?? z,
             sigmaSizing: params.sigmaSizingEnabled === true || params.sigmaSizingEnabled === 1,
             equityScale: params.equityScaleEnabled === true || params.equityScaleEnabled === 1,
+            tierMinZ: params.tierMinZ,
           };
           const entered = tryEnter({
             next,
@@ -595,11 +703,14 @@ export function createMidasV1Strategy(opts = {}) {
       return { state: next, intents, diagnostics };
     },
 
-    onExecutionEvent(_ctx, state, event) {
+    onExecutionEvent(ctx, state, event) {
       const next = { ...state };
       if (event.type === 'FILL' || event.type === 'PARTIAL') {
         if (state.lastIntentKind === 'REVERSE') next.reversed = true;
-        if (state.lastIntentKind === 'EXIT') next.closed = true;
+        if (state.lastIntentKind === 'EXIT') {
+          // Exit parcial (odds-shock 50%) deixa residual — só fecha quando flat.
+          if ((ctx.position?.qty ?? 0) <= 0) next.closed = true;
+        }
       }
       if (event.type === 'REJECT' || event.type === 'CANCEL') {
         next.lastIntentKind = null;

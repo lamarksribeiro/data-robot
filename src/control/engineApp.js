@@ -78,6 +78,7 @@ export function createEngineApp(opts = {}) {
   let ticks = 0;
   let eligibleTicks = 0;
   let lastFeedsOk = false;
+  let lastProtectiveAuditMs = 0;
   let lastProcessFeedsOk = true;
   let recoveryOk = opts.restoreOnStart !== true;
   let autoCheckpointTimer = null;
@@ -822,7 +823,8 @@ export function createEngineApp(opts = {}) {
     if (decisionResult?.acceptedCount) {
       metrics.inc('intents_accepted', decisionResult.acceptedCount);
     }
-    // Auditoria: intent aceito, mudança de estado, deny de proteção, ou deny de retry.
+    // Auditoria: intent aceito, mudança de estado, deny de proteção, deny de retry,
+    // ou breadcrumb de late-flip / odds-shock / danger ativos (throttle ~400ms — A11).
     const deniedProtective = (decisionResult?.denied ?? []).filter(
       (d) => d?.kind === 'EXIT' || d?.kind === 'REVERSE',
     );
@@ -831,11 +833,24 @@ export function createEngineApp(opts = {}) {
         d?.kind === 'ENTER' &&
         (d?.reasonCode === 'ENTRY_ATTEMPTS_EXHAUSTED' || d?.reasonCode === 'ONE_INTENT_PER_EVENT'),
     );
+    const diag = decisionResult?.diagnostics ?? {};
+    const protectiveWatch =
+      diag.lateFlip?.active === true ||
+      diag.lateFlip?.action != null ||
+      diag.oddsShock?.active === true ||
+      diag.danger?.active === true ||
+      diag.dangerContinuous?.active === true ||
+      diag.earlyWarn?.active === true;
+    const nowAuditMs = typeof opts.clock === 'function' ? opts.clock() : Date.now();
+    const shouldAuditProtectiveBreadcrumb =
+      protectiveWatch && nowAuditMs - lastProtectiveAuditMs >= 400;
+    if (shouldAuditProtectiveBreadcrumb) lastProtectiveAuditMs = nowAuditMs;
     const shouldAuditDecision =
       (decisionResult?.acceptedCount ?? 0) > 0 ||
       decisionResult?.stateChanged === true ||
       deniedProtective.length > 0 ||
-      deniedEntryPolicy.length > 0;
+      deniedEntryPolicy.length > 0 ||
+      shouldAuditProtectiveBreadcrumb;
     if (shouldAuditDecision) {
       const acceptedKinds = (decisionResult.accepted ?? [])
         .map((a) => a.kind)

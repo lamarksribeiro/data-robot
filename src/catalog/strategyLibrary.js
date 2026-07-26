@@ -15,6 +15,8 @@ import {
   MICRO_AGGRESSIVE,
   MICRO_ROBUST,
   canaryMidasPreset,
+  canaryMidasGoldPreset,
+  midasGoldPreset,
   describeMidasPreset,
 } from '../tfc/preset-midas.js';
 
@@ -121,10 +123,38 @@ export function builtInLibrary() {
                 editableKeys: EDITABLE_MIDAS,
               }),
               midasPreset('btc-micro-aggressive-v1', {
-                name: 'Micro Aggressive ($2–$4) · canário P9',
+                name: 'Micro Guardian V3 ($2–$4) · canário P9',
                 role: 'canary',
                 source: 'runtime',
                 params: { ...canaryMidasPreset() },
+                editableKeys: EDITABLE_MIDAS,
+              }),
+              midasPreset('btc-gold-v1', {
+                name: 'BTC Gold ($10–$30) · produção · FAK/GTC',
+                role: 'champion',
+                source: 'runtime',
+                params: { ...midasGoldPreset() },
+                editableKeys: EDITABLE_MIDAS,
+              }),
+              midasPreset('eth-gold-v1', {
+                name: 'ETH Gold ($10–$30) · produção · FAK/GTC',
+                role: 'candidate',
+                source: 'runtime',
+                params: { ...midasGoldPreset() },
+                editableKeys: EDITABLE_MIDAS,
+              }),
+              midasPreset('btc-micro-guardian-v3-os', {
+                name: 'Micro Gold G3+OS ($2–$4) · canário',
+                role: 'canary',
+                source: 'runtime',
+                params: { ...canaryMidasGoldPreset() },
+                editableKeys: EDITABLE_MIDAS,
+              }),
+              midasPreset('eth-micro-gold-v1', {
+                name: 'ETH Micro Gold ($2–$4)',
+                role: 'canary',
+                source: 'runtime',
+                params: { ...canaryMidasGoldPreset() },
                 editableKeys: EDITABLE_MIDAS,
               }),
               midasPreset('btc-micro-robust-v1', {

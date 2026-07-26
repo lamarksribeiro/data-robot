@@ -113,6 +113,7 @@ describe('evaluateEntryGates V7', () => {
       'oddsSum',
       'obi',
       'minEntryZ',
+      'tierMinZ',
     ];
     assert.deepEqual(Object.keys(result.gates).sort(), [...expectedKeys].sort());
     for (const key of expectedKeys) {
