@@ -191,10 +191,10 @@ const MIDAS_PRESET_UI = {
   'btc-micro-aggressive-v1': { backtestVersion: 5, displayTitle: 'MIDAS v5 · Micro Aggressive', budgetLabel: '$2 / $4' },
   'btc-micro-guardian-v3-os': { backtestVersion: 9, displayTitle: 'MIDAS v9 · Micro Gold', budgetLabel: '$2 / $4' },
   'eth-micro-gold-v1': { backtestVersion: 10, displayTitle: 'MIDAS v10 · ETH Micro Gold', budgetLabel: '$2 / $4' },
-  'btc-gold-v1': { backtestVersion: 11, displayTitle: 'MIDAS v11 · BTC Portfolio', budgetLabel: '$3 / $6' },
-  'eth-gold-v1': { backtestVersion: 12, displayTitle: 'MIDAS v12 · ETH Portfolio', budgetLabel: '$3 / $6' },
-  'sol-gold-v1': { backtestVersion: 13, displayTitle: 'MIDAS v13 · SOL Portfolio', budgetLabel: '$3 / $6' },
-  'xrp-gold-v1': { backtestVersion: 14, displayTitle: 'MIDAS v14 · XRP Portfolio', budgetLabel: '$3 / $6' },
+  'btc-gold-v1': { backtestVersion: 11, displayTitle: 'MIDAS v11 · BTC Portfolio', budgetLabel: '$2.5 / $4' },
+  'eth-gold-v1': { backtestVersion: 12, displayTitle: 'MIDAS v12 · ETH Portfolio', budgetLabel: '$2.5 / $4' },
+  'sol-gold-v1': { backtestVersion: 13, displayTitle: 'MIDAS v13 · SOL Portfolio', budgetLabel: '$2.5 / $4' },
+  'xrp-gold-v1': { backtestVersion: 14, displayTitle: 'MIDAS v14 · XRP Portfolio', budgetLabel: '$2.5 / $4' },
   'btc-gold-lab-v1': { backtestVersion: 11, displayTitle: 'MIDAS v11 · BTC Gold lab', budgetLabel: '$10 / $30' },
 };
 
