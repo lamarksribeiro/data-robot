@@ -1,6 +1,6 @@
-# MIDAS Portfolio — 4 ativos ($2.5/$4)
+# MIDAS Portfolio — 5 ativos ($2.5/$4)
 
-Sizing live para banca ~$150: **BTC + ETH + SOL + XRP**.
+Sizing live para banca ~$150: **BTC + ETH + SOL + XRP + DOGE**.
 
 | Param | Valor |
 |---|---|
@@ -29,21 +29,21 @@ node scripts/midas/write-portfolio-active-strategy.js --asset btc --all
 
 `midas-live-preset btc-gold-v1 · entry=$2.5 · cap=$4 · accountExposure=$16`
 
-## ETH / SOL / XRP (engines irmãs)
+## ETH / SOL / XRP / DOGE (engines irmãs)
 
 Cada ativo precisa de um processo engine com:
 
-| Env | ETH | SOL | XRP |
-|---|---|---|---|
-| `ENGINE_SNAPSHOT_SOURCE` | `eth5m` | `sol5m` | `xrp5m` |
-| `ENGINE_START_ARMED` | 0 | 0 | 0 |
-| `ENGINE_STRATEGY_INSTANCE_ID` | `midas-carry-v1_eth5m_primary` | `…_sol5m_…` | `…_xrp5m_…` |
-| `ENGINE_PORT` | 3202 | 3203 | 3204 |
-| active-strategy | `portfolio/eth.json` → copiar p/ active | idem | idem |
+| Env | ETH | SOL | XRP | DOGE |
+|---|---|---|---|---|
+| `ENGINE_SNAPSHOT_SOURCE` | `eth5m` | `sol5m` | `xrp5m` | `doge5m` |
+| `ENGINE_START_ARMED` | 0 | 0 | 0 | 0 |
+| `ENGINE_STRATEGY_INSTANCE_ID` | `midas-carry-v1_eth5m_primary` | `…_sol5m_…` | `…_xrp5m_…` | `midas-carry-v1_doge5m_primary` |
+| `ENGINE_PORT` | 3202 | 3203 | 3204 | 3205 |
+| active-strategy | `portfolio/eth.json` → copiar p/ active | idem | idem | idem (`portfolio/doge.json`) |
 
 Mesmos secrets Polymarket + `ENGINE_OPS_TOKEN`. **Mesmo volume** `runs/` para o account book compartilhado.
 
-Templates gerados em `runs/strategy-config/portfolio/{eth,sol,xrp}.json`.
+Templates gerados em `runs/strategy-config/portfolio/{eth,sol,xrp,doge}.json`.
 
 ## Coolify (Giovanna) — apps provisionadas 2026-07-27
 
@@ -53,8 +53,9 @@ Templates gerados em `runs/strategy-config/portfolio/{eth,sol,xrp}.json`.
 | ETH | `data-robot-engine-eth` | `ir7qwkhr091qey8vtjcmx46n` | 3202 | `eth5m` |
 | SOL | `data-robot-engine-sol` | `anaej3bcg2wtssydhsuergpz` | 3203 | `sol5m` |
 | XRP | `data-robot-engine-xrp` | `jcjwzh9f3flg529u642cplir` | 3204 | `xrp5m` |
+| DOGE | `data-robot-engine-doge` | `— (criar no Coolify)` | 3205 | `doge5m` |
 
-BTC usa `ENGINE_MAX_ACCOUNT_EXPOSURE=16` + file book. ETH/SOL/XRP usam teto **$4** por instância (`ENGINE_SHARE_ACCOUNT_BOOK=0`) até haver volume compartilhado.
+BTC usa `ENGINE_MAX_ACCOUNT_EXPOSURE=16` + file book. ETH/SOL/XRP/DOGE usam teto **$4** por instância (`ENGINE_SHARE_ACCOUNT_BOOK=0`) até haver volume compartilhado.
 
 ## Monitor (48h)
 

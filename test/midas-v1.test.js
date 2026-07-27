@@ -165,6 +165,8 @@ describe('MIDAS preset metadata (paridade backtest)', () => {
     assert.equal(sol.entryBudget, 2.5);
     const xrp = resolveMidasLivePreset('xrp-gold-v1');
     assert.equal(xrp.entryBudget, 2.5);
+    const doge = resolveMidasLivePreset('doge-gold-v1');
+    assert.equal(doge.entryBudget, 2.5);
     const micro = resolveMidasLivePreset('btc-micro-aggressive-v1');
     assert.equal(micro.entryBudget, 2);
     assert.equal(micro.maxEntryBudget, 4);

@@ -2669,7 +2669,7 @@ body.modal-open { overflow: hidden; }
 .kpi-card--rate .kpi-card__value { color: #38bdf8; }
 .fleet-board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 14px;
   margin-bottom: 16px;
 }

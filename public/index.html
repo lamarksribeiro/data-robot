@@ -65,6 +65,10 @@
     <symbol id="i-asset-xrp" viewBox="0 0 32 32">
       <circle cx="16" cy="16" r="15" fill="#23292f"/><path fill="#fff" d="M22.6 8.5h2.5l-5.3 5.4c-1.9 2-5.1 2-7 0L7.4 8.5h2.5l4.1 4.2c1.2 1.2 3.1 1.2 4.3 0l4.3-4.2zm0 15h2.5l-5.3-5.4c-1.9-2-5.1-2-7 0L7.4 23.5h2.5l4.1-4.2c1.2-1.2 3.1-1.2 4.3 0l4.3 4.2z"/>
     </symbol>
+    <symbol id="i-asset-doge" viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="15" fill="#c2a633"/>
+      <path fill="#ffffff" fill-opacity="0.92" d="M20.8 12.4c.3-1.5-.6-2.6-2.1-2.9l.5-2.3-1.6-.4-.5 2.2c-.4-.1-.8-.2-1.1-.2l.5-2.1-1.6-.4-.5 2.3c-.3 0-.6 0-.9-.1l-.3 1.4c.7.1 1 .3 1.1.7l-.6 3.2c-.1.2-.2.4-.6.4l-.6 2.6 1.7.4c.3.1.6.1.9.1l-.4 2.2 1.6.4.4-2.1c2.2.3 3.9-.2 4.6-1.9.4-1 .1-1.9-.7-2.4.6-.3 1-.8 1.2-1.5zm-3.6 4.1c-.5 1.7-2.9.7-3.5.5l.7-2.8c.7.2 2.4.8 2.8 1.3zM17 14.4c-.4 1.3-2.4.6-2.8.4l.6-2.5c.6.1 2.2.7 2.2 2.1z"/>
+    </symbol>
   </svg>
 
   <div class="login-wrapper">
@@ -179,9 +183,9 @@
       <section class="view is-active" id="view-fleet" data-view="fleet" aria-labelledby="hdr-fleet">
         <header class="page-header page-header--compact">
           <div>
-            <p class="eyebrow">Portfolio · 4 ativos</p>
+            <p class="eyebrow">Portfolio · 5 ativos</p>
             <h1 id="hdr-fleet">Resumo da frota</h1>
-            <p class="page-header__sub" id="fleet-last-update">Comparativo BTC · ETH · SOL · XRP</p>
+            <p class="page-header__sub" id="fleet-last-update">Comparativo BTC · ETH · SOL · XRP · DOGE</p>
           </div>
           <div class="page-header__badges">
             <span class="badge" id="fleet-wallet-badge">Portfolio —</span>
@@ -201,7 +205,7 @@
           <article class="kpi-card kpi-card--pnl">
             <span class="kpi-card__label">PnL frota</span>
             <strong class="kpi-card__value" id="fleet-kpi-pnl">—</strong>
-            <em class="kpi-card__meta" id="fleet-kpi-pnl-meta">soma dos 4 ativos</em>
+            <em class="kpi-card__meta" id="fleet-kpi-pnl-meta">soma dos 5 ativos</em>
           </article>
           <article class="kpi-card">
             <span class="kpi-card__label">Ordens abertas</span>
@@ -210,7 +214,7 @@
           </article>
           <article class="kpi-card">
             <span class="kpi-card__label">Engines online</span>
-            <strong class="kpi-card__value" id="fleet-kpi-online">0 / 4</strong>
+            <strong class="kpi-card__value" id="fleet-kpi-online">0 / 5</strong>
             <em class="kpi-card__meta" id="fleet-kpi-online-meta">reachability</em>
           </article>
           <article class="kpi-card">
@@ -275,6 +279,14 @@
                   <em id="fleet-spark-xrp-meta">—</em>
                 </div>
                 <canvas id="chart-fleet-eq-xrp" class="chart-canvas chart-canvas--spark" width="280" height="64" aria-label="Equity XRP"></canvas>
+              </div>
+              <div class="fleet-spark" data-asset="doge">
+                <div class="fleet-spark__head">
+                  <span class="fleet-spark__icon"><svg><use href="#i-asset-doge"/></svg></span>
+                  <strong>DOGE</strong>
+                  <em id="fleet-spark-doge-meta">—</em>
+                </div>
+                <canvas id="chart-fleet-eq-doge" class="chart-canvas chart-canvas--spark" width="280" height="64" aria-label="Equity DOGE"></canvas>
               </div>
             </div>
           </article>
@@ -414,6 +426,11 @@
             <span class="kpi-card__label">XRP</span>
             <strong class="kpi-card__value" id="fleet-state-xrp">—</strong>
             <em class="kpi-card__meta" id="fleet-meta-xrp">—</em>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-card__label">DOGE</span>
+            <strong class="kpi-card__value" id="fleet-state-doge">—</strong>
+            <em class="kpi-card__meta" id="fleet-meta-doge">—</em>
           </article>
         </section>
 

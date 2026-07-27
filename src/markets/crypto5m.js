@@ -37,6 +37,14 @@ export const CRYPTO_5M_ASSETS = Object.freeze({
     ptbSymbol: 'XRP',
     presetId: 'xrp-gold-v1',
   },
+  doge: {
+    slugPrefix: 'doge-updown-5m',
+    marketScope: 'doge-updown-5m',
+    sourceKind: 'doge5m',
+    rtdsSymbol: 'doge/usd',
+    ptbSymbol: 'DOGE',
+    presetId: 'doge-gold-v1',
+  },
 });
 
 export function resolveCrypto5mAsset(assetOrKind) {
@@ -51,7 +59,7 @@ export function resolveCrypto5mAsset(assetOrKind) {
 
 export function isCrypto5mSourceKind(kind) {
   const k = String(kind || '');
-  return k === 'btc5m' || k === 'eth5m' || k === 'sol5m' || k === 'xrp5m';
+  return k === 'btc5m' || k === 'eth5m' || k === 'sol5m' || k === 'xrp5m' || k === 'doge5m';
 }
 
 /**

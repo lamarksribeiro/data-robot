@@ -152,6 +152,9 @@ export function createEngineApp(opts = {}) {
       } else if (marketId.startsWith('xrp-updown-5m')) {
         asset = 'XRP';
         window = 'Up/Down 5m';
+      } else if (marketId.startsWith('doge-updown-5m')) {
+        asset = 'DOGE';
+        window = 'Up/Down 5m';
       } else if (marketId.includes('fixture')) {
         asset = 'FIXTURE';
         window = 'simulado';
@@ -159,11 +162,17 @@ export function createEngineApp(opts = {}) {
     } else if (source.kind === 'btc5m') {
       asset = 'BTC';
       window = 'Up/Down 5m';
+    } else if (source.kind === 'eth5m') {
+      asset = 'ETH';
+      window = 'Up/Down 5m';
     } else if (source.kind === 'sol5m') {
       asset = 'SOL';
       window = 'Up/Down 5m';
     } else if (source.kind === 'xrp5m') {
       asset = 'XRP';
+      window = 'Up/Down 5m';
+    } else if (source.kind === 'doge5m') {
+      asset = 'DOGE';
       window = 'Up/Down 5m';
     } else if (source.kind === 'fixture') {
       asset = 'FIXTURE';

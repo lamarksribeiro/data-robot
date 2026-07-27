@@ -32,7 +32,7 @@ const out =
     assetKey === 'btc' ? 'active-strategy.json' : `active-strategy.${assetKey}.json`,
   );
 
-const portfolioLabel = 'Portfolio $2.5–$4 · 4 ativos · FAK/GTC';
+const portfolioLabel = 'Portfolio $2.5–$4 · 5 ativos · FAK/GTC';
 
 const payload = {
   familyId: 'midas',

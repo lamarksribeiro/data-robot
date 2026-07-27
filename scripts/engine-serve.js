@@ -75,7 +75,7 @@ if (mode === 'live' && !liveEnabled) {
 
 if (mode === 'live' && !isCrypto5mSourceKind(sourceKind)) {
   console.error(
-    '[engine:serve] Recusa: ENGINE_MODE=live exige ENGINE_SNAPSHOT_SOURCE=btc5m|eth5m|sol5m|xrp5m',
+    '[engine:serve] Recusa: ENGINE_MODE=live exige ENGINE_SNAPSHOT_SOURCE=btc5m|eth5m|sol5m|xrp5m|doge5m',
   );
   process.exit(2);
 }
@@ -232,7 +232,7 @@ if (activeStrategy?.params && Object.keys(activeStrategy.params).length) {
 if (strategyId === MIDAS_V1_STRATEGY_ID) {
   if (!isCrypto5mSourceKind(sourceKind)) {
     console.error(
-      '[engine:serve] Recusa: MIDAS P9 exige ENGINE_SNAPSHOT_SOURCE=btc5m|eth5m|sol5m|xrp5m',
+      '[engine:serve] Recusa: MIDAS P9 exige ENGINE_SNAPSHOT_SOURCE=btc5m|eth5m|sol5m|xrp5m|doge5m',
     );
     process.exit(2);
   }

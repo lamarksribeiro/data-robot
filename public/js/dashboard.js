@@ -195,6 +195,7 @@ const MIDAS_PRESET_UI = {
   'eth-gold-v1': { backtestVersion: 12, displayTitle: 'MIDAS v12 · ETH Portfolio', budgetLabel: '$2.5 / $4' },
   'sol-gold-v1': { backtestVersion: 13, displayTitle: 'MIDAS v13 · SOL Portfolio', budgetLabel: '$2.5 / $4' },
   'xrp-gold-v1': { backtestVersion: 14, displayTitle: 'MIDAS v14 · XRP Portfolio', budgetLabel: '$2.5 / $4' },
+  'doge-gold-v1': { backtestVersion: 15, displayTitle: 'MIDAS v15 · DOGE Portfolio', budgetLabel: '$2.5 / $4' },
   'btc-gold-lab-v1': { backtestVersion: 11, displayTitle: 'MIDAS v11 · BTC Gold lab', budgetLabel: '$10 / $30' },
 };
 
@@ -837,13 +838,14 @@ const SECTION_TITLES = {
   system: 'Sistema',
 };
 
-const FLEET_ASSET_ORDER = ['btc', 'eth', 'sol', 'xrp'];
+const FLEET_ASSET_ORDER = ['btc', 'eth', 'sol', 'xrp', 'doge'];
 const FLEET_POLL_MS = 10_000;
 const FLEET_ICON = {
   btc: 'i-asset-btc',
   eth: 'i-asset-eth',
   sol: 'i-asset-sol',
   xrp: 'i-asset-xrp',
+  doge: 'i-asset-doge',
 };
 
 let fleetRows = [];
@@ -1021,11 +1023,11 @@ function renderFleetBoard(rows) {
     'fleet-kpi-pnl-meta',
     rows.some((r) => (r.pending || 0) > 0)
       ? `${rows.reduce((s, r) => s + (r.pending || 0), 0)} pendente(s)`
-      : 'soma dos 4 ativos',
+      : 'soma dos 5 ativos',
   );
   text('fleet-kpi-orders', String(totalOrders));
   text('fleet-kpi-orders-meta', totalOrders ? 'atenção: há exposição aberta' : 'em todas as engines');
-  text('fleet-kpi-online', `${online} / ${Math.max(rows.length, 4)}`);
+  text('fleet-kpi-online', `${online} / ${Math.max(rows.length, 5)}`);
   text('fleet-kpi-online-meta', online === rows.length ? 'todas reachable' : 'alguma offline');
   text('fleet-kpi-entries', String(entriesOn));
   text('fleet-kpi-entries-meta', entriesOn ? 'armadas com entry' : 'todas OFF');
@@ -3677,7 +3679,7 @@ function renderStratSelects() {
     const a = lastStatus?.market?.asset;
     if (!a) return null;
     const k = String(a).toLowerCase();
-    return ['btc', 'eth', 'sol', 'xrp'].includes(k) ? k : null;
+    return ['btc', 'eth', 'sol', 'xrp', 'doge'].includes(k) ? k : null;
   })();
 
   versionSel.replaceChildren();
@@ -3706,7 +3708,7 @@ function renderStratSelects() {
     ? rawPresets.filter((p) => {
         const pid = String(p?.presetId ?? '');
         const prefix = pid.split('-')[0];
-        const assetSpecific = ['btc', 'eth', 'sol', 'xrp'].includes(prefix);
+        const assetSpecific = ['btc', 'eth', 'sol', 'xrp', 'doge'].includes(prefix);
         // se for um preset “asset-specific”, mostra só o native da engine selecionada
         return !assetSpecific || prefix === assetKey;
       })

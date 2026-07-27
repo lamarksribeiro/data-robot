@@ -370,7 +370,8 @@ export function isMidasGoldPresetId(presetId) {
     id === 'btc-gold-v1' ||
     id === 'eth-gold-v1' ||
     id === 'sol-gold-v1' ||
-    id === 'xrp-gold-v1'
+    id === 'xrp-gold-v1' ||
+    id === 'doge-gold-v1'
   );
 }
 
@@ -457,6 +458,11 @@ export const MIDAS_PRESET_META = Object.freeze({
   'xrp-gold-v1': {
     backtestVersion: 14,
     labName: 'XRP Portfolio',
+    budgetLabel: '$2.5 / $4',
+  },
+  'doge-gold-v1': {
+    backtestVersion: 15,
+    labName: 'DOGE Portfolio',
     budgetLabel: '$2.5 / $4',
   },
 });
