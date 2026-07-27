@@ -174,6 +174,9 @@ export function aggregateActivityCashflows(activity = []) {
         firstTsSec: null,
         lastTsSec: null,
         outcome: null,
+        redeemed: false,
+        pendingSettlement: false,
+        inferredLoss: false,
       });
     }
     return byMarket.get(marketId);
@@ -211,16 +214,59 @@ export function aggregateActivityCashflows(activity = []) {
       if (Number.isFinite(size) && size > 0) bucket.sellQty += size;
       continue;
     }
-    if (type === 'REDEEM' && Number.isFinite(usdc) && usdc > 0) {
+    // REDEEM $0 = settlement perdedor (comum em up/down); precisa fechar o trade.
+    if (type === 'REDEEM' && Number.isFinite(usdc) && usdc >= 0) {
       bucket.redeemUsd += usdc;
+      bucket.redeemed = true;
       if (Number.isFinite(size) && size > 0) bucket.redeemQty += size;
     }
   }
 
   for (const bucket of byMarket.values()) {
-    bucket.pnl = bucket.sellUsd + bucket.redeemUsd - bucket.buyUsd;
+    finalizeActivityCashflow(bucket);
   }
   return byMarket;
+}
+
+/**
+ * Extrai slot unix do slug crypto-updown-5m-<slot>.
+ * @param {string} marketId
+ * @returns {number|null}
+ */
+export function slotStartFromMarketId(marketId) {
+  const m = String(marketId || '').match(/-(\d{9,12})$/);
+  if (!m) return null;
+  const slot = Number(m[1]);
+  return Number.isFinite(slot) ? slot : null;
+}
+
+/**
+ * Fecha cashflow sem SELL/REDEEM quando o mercado 5m já expirou.
+ * Sem REDEEM na Data API (perda total) o BUY ficava "open" e sumia do painel.
+ * @param {object} cf
+ * @param {number} [nowSec]
+ * @param {number} [graceSec] espera pós-slot antes de inferir perda
+ */
+export function finalizeActivityCashflow(cf, nowSec = Math.floor(Date.now() / 1000), graceSec = 120) {
+  if (!cf || !(cf.buyUsd > 0)) return cf;
+  cf.pnl = cf.sellUsd + cf.redeemUsd - cf.buyUsd;
+  if (cf.sellUsd > 0 || cf.redeemed === true) return cf;
+
+  const slotStart = slotStartFromMarketId(cf.marketId);
+  if (slotStart == null) return cf;
+  const slotEnd = slotStart + 300;
+  if (nowSec < slotEnd + graceSec) {
+    cf.pendingSettlement = true;
+    return cf;
+  }
+  // Expirado sem exit na activity → perda total (redeem implícito $0).
+  cf.redeemed = true;
+  cf.inferredLoss = true;
+  cf.pendingSettlement = false;
+  cf.redeemUsd = Number(cf.redeemUsd) || 0;
+  cf.pnl = cf.sellUsd + cf.redeemUsd - cf.buyUsd;
+  if (cf.lastTsSec == null || cf.lastTsSec < slotEnd) cf.lastTsSec = slotEnd;
+  return cf;
 }
 
 /**

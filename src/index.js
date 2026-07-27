@@ -133,6 +133,7 @@ export {
   filterActivityBySlugPrefix,
   filterCashflowsBySlugPrefix,
   filterCashflowsForRobotScope,
+  finalizeActivityCashflow,
   parseSinceToUnixSec,
   assetKeyFromMarketId,
 } from './clob/polymarketActivity.js';

@@ -409,4 +409,34 @@ describe('tradeJournal', () => {
     assert.equal(recovery.has('btc-updown-5m-manual'), true);
     assert.equal(recovery.has('btc-updown-5m-old'), false);
   });
+
+  it('infere perda fechada quando BUY 5m expirou sem REDEEM na activity', () => {
+    const slot = 1_700_000_000;
+    const cashflows = aggregateActivityCashflows([
+      {
+        type: 'TRADE',
+        side: 'BUY',
+        eventSlug: `doge-updown-5m-${slot}`,
+        usdcSize: 1.62,
+        size: 2,
+        price: 0.81,
+        timestamp: slot + 60,
+        outcome: 'Down',
+      },
+    ]);
+    const cf = cashflows.get(`doge-updown-5m-${slot}`);
+    assert.ok(cf);
+    // slot 1700000000 já expirou → inferredLoss.
+    assert.equal(cf.inferredLoss, true);
+    assert.equal(cf.redeemed, true);
+    assert.ok(Math.abs(cf.pnl - -1.62) < 1e-9);
+    const [trade] = mergeJournalWithPolymarketCashflows([], cashflows);
+    assert.equal(trade.status, 'closed');
+    assert.equal(trade.exitKind, 'SETTLEMENT');
+    assert.equal(trade.exitPrice, 0);
+    assert.ok(Math.abs(trade.pnl - -1.62) < 1e-9);
+    const summary = summarizeTradePnl([trade]);
+    assert.equal(summary.losses, 1);
+    assert.ok(Math.abs(summary.lost - 1.62) < 1e-9);
+  });
 });

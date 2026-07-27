@@ -95,15 +95,21 @@ function applyCashflowToTrade(trade, cf) {
     const openedMs = Number(cf.firstTsSec) * 1000;
     if (Number.isFinite(openedMs)) next.openedAtMs = openedMs;
   }
-  if (cf.sellUsd > 0 || cf.redeemUsd > 0) {
+  const settled =
+    cf.sellUsd > 0 || cf.redeemUsd > 0 || cf.redeemed === true || cf.inferredLoss === true;
+  if (cf.pendingSettlement === true && !settled) {
+    next.status = 'settlement_pending';
+    next.pnl = null;
+  } else if (settled) {
     next.status = 'closed';
     if (cf.lastTsSec != null) {
       const closedMs = Number(cf.lastTsSec) * 1000;
       if (Number.isFinite(closedMs)) next.closedAtMs = closedMs;
     }
-    if (cf.redeemUsd > 0) {
+    if (cf.redeemed === true || cf.inferredLoss === true || cf.redeemUsd > 0) {
       next.exitKind = 'SETTLEMENT';
-      next.exitPrice = cf.buyQty > 0 ? cf.redeemUsd / cf.buyQty : 1;
+      next.exitPrice =
+        cf.buyQty > 0 && cf.redeemUsd > 0 ? cf.redeemUsd / cf.buyQty : cf.inferredLoss ? 0 : 1;
     } else if (cf.sellUsd > 0 && cf.sellQty > 0) {
       next.exitKind = next.exitKind === 'SETTLEMENT' ? 'SETTLEMENT' : 'EXIT';
       next.exitPrice = cf.sellUsd / cf.sellQty;
@@ -117,6 +123,7 @@ function applyCashflowToTrade(trade, cf) {
     sellUsd: cf.sellUsd,
     redeemUsd: cf.redeemUsd,
     pnl: cf.pnl,
+    inferredLoss: cf.inferredLoss === true,
   };
   return next;
 }
