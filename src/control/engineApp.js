@@ -16,6 +16,8 @@ import {
   aggregateActivityCashflows,
   fetchPolymarketActivity,
   filterCashflowsBySlugPrefix,
+  filterCashflowsForRobotScope,
+  parseSinceToUnixSec,
 } from '../clob/polymarketActivity.js';
 import { isCrypto5mSourceKind, resolveCrypto5mAsset } from '../markets/crypto5m.js';
 import config from '../config.js';
@@ -1029,11 +1031,20 @@ export function createEngineApp(opts = {}) {
       ).trim();
       if (/^0x[a-fA-F0-9]{40}$/.test(funder)) {
         try {
+          // Cutover portfolio MIDAS (docs/operacao/midas-portfolio-monitor-baseline-2026-07-27.md).
+          // Sem isso a Data API devolve histórico inteiro da carteira (manual + canários antigos).
+          const sinceSec =
+            parseSinceToUnixSec(
+              process.env.ENGINE_PNL_SINCE || opts.pnlSince || '2026-07-27T05:27:00Z',
+            ) ?? null;
+          const buyUsdMin = Number(process.env.ENGINE_PNL_BUY_USD_MIN ?? '1.8');
+          const buyUsdMax = Number(process.env.ENGINE_PNL_BUY_USD_MAX ?? '6.5');
           const activity = await fetchPolymarketActivity({
             funderAddress: funder,
             dataApiBase: config.dataApiBase,
             pageSize: 200,
             maxItems: Number(process.env.ENGINE_POLYMARKET_ACTIVITY_MAX || 2000) || 2000,
+            sinceSec,
           });
           let cashflows = aggregateActivityCashflows(activity);
           let slugPrefix = opts.marketSlugPrefix || null;
@@ -1050,6 +1061,13 @@ export function createEngineApp(opts = {}) {
           if (slugPrefix) {
             cashflows = filterCashflowsBySlugPrefix(cashflows, slugPrefix);
           }
+          const localMarketIds = all.map((trade) => trade.marketId).filter(Boolean);
+          cashflows = filterCashflowsForRobotScope(cashflows, {
+            alwaysKeepMarketIds: localMarketIds,
+            sinceSec,
+            buyUsdMin: Number.isFinite(buyUsdMin) ? buyUsdMin : 1.8,
+            buyUsdMax: Number.isFinite(buyUsdMax) ? buyUsdMax : 6.5,
+          });
           all = mergeJournalWithPolymarketCashflows(all, cashflows, { limit: 1000 });
           pnlSource = 'polymarket';
         } catch (err) {

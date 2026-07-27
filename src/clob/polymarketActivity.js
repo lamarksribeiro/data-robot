@@ -5,6 +5,28 @@
 import { CRYPTO_5M_ASSETS } from '../markets/crypto5m.js';
 
 /**
+ * Parseia ISO/unix para segundos epoch. Retorna null se inválido.
+ * @param {string|number|null|undefined} value
+ * @returns {number|null}
+ */
+export function parseSinceToUnixSec(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1e12 ? Math.floor(value / 1000) : Math.floor(value);
+  }
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return null;
+    return n > 1e12 ? Math.floor(n / 1000) : Math.floor(n);
+  }
+  const ms = Date.parse(raw);
+  if (!Number.isFinite(ms)) return null;
+  return Math.floor(ms / 1000);
+}
+
+/**
  * @param {{
  *   funderAddress: string,
  *   fetchFn?: typeof fetch,
@@ -13,6 +35,8 @@ import { CRYPTO_5M_ASSETS } from '../markets/crypto5m.js';
  *   limit?: number,
  *   maxItems?: number,
  *   pageSize?: number,
+ *   sinceSec?: number|null,
+ *   since?: string|number|null,
  * }} opts
  * @returns {Promise<object[]>}
  */
@@ -29,6 +53,10 @@ export async function fetchPolymarketActivity(opts) {
     pageSize,
     Math.min(5000, Number(opts.maxItems ?? opts.limit ?? 1000) || 1000),
   );
+  const sinceSec =
+    opts.sinceSec != null && Number.isFinite(Number(opts.sinceSec))
+      ? Math.floor(Number(opts.sinceSec))
+      : parseSinceToUnixSec(opts.since);
   const timeoutMs = Number(opts.timeoutMs ?? 12_000);
   /** @type {object[]} */
   const out = [];
@@ -37,18 +65,34 @@ export async function fetchPolymarketActivity(opts) {
   while (out.length < maxItems) {
     const limit = Math.min(pageSize, maxItems - out.length);
     try {
-      const response = await fetchFn(
-        `${base}/activity?user=${encodeURIComponent(funder)}&limit=${limit}&offset=${offset}`,
-        {
-          signal: AbortSignal.timeout(timeoutMs),
-          headers: { accept: 'application/json' },
-        },
-      );
+      const url = new URL(`${base}/activity`);
+      url.searchParams.set('user', funder);
+      url.searchParams.set('limit', String(limit));
+      url.searchParams.set('offset', String(offset));
+      if (sinceSec != null) url.searchParams.set('start', String(sinceSec));
+      const response = await fetchFn(url.toString(), {
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: { accept: 'application/json' },
+      });
       if (!response.ok) break;
       const body = await response.json();
       const chunk = Array.isArray(body) ? body : [];
       if (chunk.length === 0) break;
-      out.push(...chunk);
+      const filtered =
+        sinceSec == null
+          ? chunk
+          : chunk.filter((row) => {
+              const ts = Number(row?.timestamp);
+              return !Number.isFinite(ts) || ts >= sinceSec;
+            });
+      out.push(...filtered);
+      // Página inteira antiga: parar (activity vem do mais recente → antigo).
+      if (sinceSec != null && chunk.length > 0) {
+        const oldest = Math.min(
+          ...chunk.map((row) => Number(row?.timestamp)).filter((n) => Number.isFinite(n)),
+        );
+        if (Number.isFinite(oldest) && oldest < sinceSec) break;
+      }
       if (chunk.length < limit) break;
       offset += chunk.length;
     } catch {
@@ -200,6 +244,61 @@ export function filterCashflowsBySlugPrefix(cashflowsByMarket, slugPrefix) {
       .trim()
       .toLowerCase();
     if (id === prefix || id.startsWith(`${prefix}-`)) out.set(marketId, cf);
+  }
+  return out;
+}
+
+/**
+ * Restringe cashflows ao escopo "robô":
+ * - alwaysKeepMarketIds: mercados do audit/OMS local (ordens da engine)
+ * - sinceSec: ignora markets cujo 1º fill é anterior (histórico manual/antigo)
+ * - buyUsdMin/Max: fingerprint do sizing do robô (portfolio ~$2.5–$4)
+ *
+ * @param {Map<string, object>|Iterable<[string, object]>} cashflowsByMarket
+ * @param {{
+ *   alwaysKeepMarketIds?: Iterable<string>,
+ *   sinceSec?: number|null,
+ *   buyUsdMin?: number|null,
+ *   buyUsdMax?: number|null,
+ * }} [opts]
+ */
+export function filterCashflowsForRobotScope(cashflowsByMarket, opts = {}) {
+  const map =
+    cashflowsByMarket instanceof Map
+      ? cashflowsByMarket
+      : new Map(cashflowsByMarket ?? []);
+  const keep = new Set(
+    [...(opts.alwaysKeepMarketIds ?? [])].map((id) => String(id || '').trim()).filter(Boolean),
+  );
+  const sinceSec =
+    opts.sinceSec != null && Number.isFinite(Number(opts.sinceSec))
+      ? Math.floor(Number(opts.sinceSec))
+      : null;
+  const buyMin =
+    opts.buyUsdMin != null && Number.isFinite(Number(opts.buyUsdMin))
+      ? Number(opts.buyUsdMin)
+      : null;
+  const buyMax =
+    opts.buyUsdMax != null && Number.isFinite(Number(opts.buyUsdMax))
+      ? Number(opts.buyUsdMax)
+      : null;
+
+  /** @type {Map<string, object>} */
+  const out = new Map();
+  for (const [marketId, cf] of map) {
+    if (keep.has(marketId)) {
+      out.set(marketId, cf);
+      continue;
+    }
+    if (!(cf?.buyUsd > 0)) continue;
+    if (sinceSec != null) {
+      const first = Number(cf.firstTsSec ?? cf.lastTsSec);
+      if (Number.isFinite(first) && first < sinceSec) continue;
+    }
+    const buy = Number(cf.buyUsd);
+    if (buyMin != null && !(buy >= buyMin)) continue;
+    if (buyMax != null && !(buy <= buyMax)) continue;
+    out.set(marketId, cf);
   }
   return out;
 }

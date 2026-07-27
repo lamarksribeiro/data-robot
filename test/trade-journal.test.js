@@ -7,7 +7,10 @@ import {
   reconcileTradesWithPolymarketCashflows,
   summarizeTradePnl,
 } from '../src/oms/tradeJournal.js';
-import { aggregateActivityCashflows } from '../src/clob/polymarketActivity.js';
+import {
+  aggregateActivityCashflows,
+  filterCashflowsForRobotScope,
+} from '../src/clob/polymarketActivity.js';
 
 describe('tradeJournal', () => {
   it('monta trade fechado por settlement', () => {
@@ -322,5 +325,80 @@ describe('tradeJournal', () => {
     const summary = summarizeTradePnl(merged);
     assert.equal(summary.closed, 2);
     assert.ok(Math.abs(summary.net - 2) < 1e-9);
+  });
+
+  it('filterCashflowsForRobotScope mantém audit local e corta histórico antigo/fora do sizing', () => {
+    const cashflows = aggregateActivityCashflows([
+      {
+        type: 'TRADE',
+        side: 'BUY',
+        eventSlug: 'btc-updown-5m-old',
+        usdcSize: 2.5,
+        size: 5,
+        price: 0.5,
+        timestamp: 100,
+      },
+      {
+        type: 'REDEEM',
+        eventSlug: 'btc-updown-5m-old',
+        usdcSize: 5,
+        timestamp: 200,
+      },
+      {
+        type: 'TRADE',
+        side: 'BUY',
+        eventSlug: 'btc-updown-5m-robot',
+        usdcSize: 2.5,
+        size: 5,
+        price: 0.5,
+        timestamp: 1000,
+      },
+      {
+        type: 'REDEEM',
+        eventSlug: 'btc-updown-5m-robot',
+        usdcSize: 4,
+        timestamp: 1100,
+      },
+      {
+        type: 'TRADE',
+        side: 'BUY',
+        eventSlug: 'btc-updown-5m-manual-big',
+        usdcSize: 50,
+        size: 100,
+        price: 0.5,
+        timestamp: 1200,
+      },
+      {
+        type: 'REDEEM',
+        eventSlug: 'btc-updown-5m-manual-big',
+        usdcSize: 40,
+        timestamp: 1300,
+      },
+      {
+        type: 'TRADE',
+        side: 'BUY',
+        eventSlug: 'btc-updown-5m-local',
+        usdcSize: 0.5,
+        size: 1,
+        price: 0.5,
+        timestamp: 50,
+      },
+      {
+        type: 'REDEEM',
+        eventSlug: 'btc-updown-5m-local',
+        usdcSize: 1,
+        timestamp: 60,
+      },
+    ]);
+    const scoped = filterCashflowsForRobotScope(cashflows, {
+      alwaysKeepMarketIds: ['btc-updown-5m-local'],
+      sinceSec: 500,
+      buyUsdMin: 1.8,
+      buyUsdMax: 6.5,
+    });
+    assert.equal(scoped.has('btc-updown-5m-local'), true);
+    assert.equal(scoped.has('btc-updown-5m-robot'), true);
+    assert.equal(scoped.has('btc-updown-5m-old'), false);
+    assert.equal(scoped.has('btc-updown-5m-manual-big'), false);
   });
 });
