@@ -9,13 +9,15 @@ import { createOmsSink } from '../oms/omsSink.js';
 import {
   buildEquityCurveFromTrades,
   buildTradeJournal,
-  reconcileTradesWithPolymarketCashflows,
+  mergeJournalWithPolymarketCashflows,
   summarizeTradePnl,
 } from '../oms/tradeJournal.js';
 import {
   aggregateActivityCashflows,
   fetchPolymarketActivity,
+  filterCashflowsBySlugPrefix,
 } from '../clob/polymarketActivity.js';
+import { isCrypto5mSourceKind, resolveCrypto5mAsset } from '../markets/crypto5m.js';
 import config from '../config.js';
 import { createMetrics } from '../observability/metrics.js';
 import { createLogger } from '../observability/logger.js';
@@ -1021,6 +1023,7 @@ export function createEngineApp(opts = {}) {
         limit: 1000,
       });
 
+      let pnlSource = 'engine';
       const funder = String(
         config.polymarketFunderAddress || opts.funderAddress || '',
       ).trim();
@@ -1029,10 +1032,26 @@ export function createEngineApp(opts = {}) {
           const activity = await fetchPolymarketActivity({
             funderAddress: funder,
             dataApiBase: config.dataApiBase,
-            limit: 300,
+            pageSize: 200,
+            maxItems: Number(process.env.ENGINE_POLYMARKET_ACTIVITY_MAX || 2000) || 2000,
           });
-          const cashflows = aggregateActivityCashflows(activity);
-          all = reconcileTradesWithPolymarketCashflows(all, cashflows);
+          let cashflows = aggregateActivityCashflows(activity);
+          let slugPrefix = opts.marketSlugPrefix || null;
+          if (!slugPrefix) {
+            const sourceKind =
+              snapshotSource?.kind ||
+              opts.snapshotSourceKind ||
+              process.env.ENGINE_SNAPSHOT_SOURCE ||
+              '';
+            if (isCrypto5mSourceKind(sourceKind)) {
+              slugPrefix = resolveCrypto5mAsset(sourceKind).slugPrefix;
+            }
+          }
+          if (slugPrefix) {
+            cashflows = filterCashflowsBySlugPrefix(cashflows, slugPrefix);
+          }
+          all = mergeJournalWithPolymarketCashflows(all, cashflows, { limit: 1000 });
+          pnlSource = 'polymarket';
         } catch (err) {
           logger.warn('polymarket_activity_reconcile_failed', {
             reason: err?.message ?? String(err),
@@ -1058,7 +1077,7 @@ export function createEngineApp(opts = {}) {
         pageSize,
         totalPages,
         scope: 'robot',
-        pnlSource: 'polymarket+engine',
+        pnlSource,
       };
     },
     getWallet: opts.getWallet,

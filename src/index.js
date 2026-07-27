@@ -130,10 +130,15 @@ export {
 export {
   fetchPolymarketActivity,
   aggregateActivityCashflows,
+  filterActivityBySlugPrefix,
+  filterCashflowsBySlugPrefix,
+  assetKeyFromMarketId,
 } from './clob/polymarketActivity.js';
 export {
   buildTradeJournal,
   reconcileTradesWithPolymarketCashflows,
+  mergeJournalWithPolymarketCashflows,
+  buildTradesFromActivityCashflows,
   summarizeTradePnl,
   buildEquityCurveFromTrades,
 } from './oms/tradeJournal.js';

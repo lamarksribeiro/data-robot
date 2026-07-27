@@ -71,6 +71,102 @@ export function computePnlFromLegs(trade) {
 }
 
 /**
+ * Aplica cashflow Polymarket a um trade do journal (mutação shallow via clone).
+ * @param {object} trade
+ * @param {object} cf
+ */
+function applyCashflowToTrade(trade, cf) {
+  if (!cf || !(cf.buyUsd > 0)) return trade;
+  const next = { ...trade };
+  next.pnlSource = 'polymarket';
+  next.pnl = Number(cf.pnl);
+  if (cf.avgBuyPrice != null && Number.isFinite(cf.avgBuyPrice)) {
+    next.entryPrice = cf.avgBuyPrice;
+  }
+  if (cf.buyQty > 0) {
+    next.qty = cf.buyQty;
+    if (next.entryQty == null) next.entryQty = cf.buyQty;
+  }
+  if (cf.outcome && !next.side) {
+    const outcome = String(cf.outcome).toUpperCase();
+    if (outcome === 'UP' || outcome === 'DOWN') next.side = outcome;
+  }
+  if (cf.firstTsSec != null && next.openedAtMs == null) {
+    const openedMs = Number(cf.firstTsSec) * 1000;
+    if (Number.isFinite(openedMs)) next.openedAtMs = openedMs;
+  }
+  if (cf.sellUsd > 0 || cf.redeemUsd > 0) {
+    next.status = 'closed';
+    if (cf.lastTsSec != null) {
+      const closedMs = Number(cf.lastTsSec) * 1000;
+      if (Number.isFinite(closedMs)) next.closedAtMs = closedMs;
+    }
+    if (cf.redeemUsd > 0) {
+      next.exitKind = 'SETTLEMENT';
+      next.exitPrice = cf.buyQty > 0 ? cf.redeemUsd / cf.buyQty : 1;
+    } else if (cf.sellUsd > 0 && cf.sellQty > 0) {
+      next.exitKind = next.exitKind === 'SETTLEMENT' ? 'SETTLEMENT' : 'EXIT';
+      next.exitPrice = cf.sellUsd / cf.sellQty;
+    }
+  }
+  if (next.openedAtMs && next.closedAtMs) {
+    next.durationMs = Math.max(0, next.closedAtMs - next.openedAtMs);
+  }
+  next.polymarket = {
+    buyUsd: cf.buyUsd,
+    sellUsd: cf.sellUsd,
+    redeemUsd: cf.redeemUsd,
+    pnl: cf.pnl,
+  };
+  return next;
+}
+
+/**
+ * Trade sintético só a partir do cashflow da Data API (sem audit local).
+ * @param {object} cf
+ */
+export function tradeFromActivityCashflow(cf) {
+  if (!cf?.marketId || !(cf.buyUsd > 0)) return null;
+  const base = {
+    tradeId: cf.marketId,
+    marketId: cf.marketId,
+    side: null,
+    entryPrice: null,
+    qty: null,
+    entryQty: null,
+    legs: [],
+    exitKind: null,
+    exitPrice: null,
+    pnl: null,
+    pnlSource: 'polymarket',
+    winner: null,
+    openedAtMs: null,
+    closedAtMs: null,
+    durationMs: null,
+    status: 'open',
+  };
+  return applyCashflowToTrade(base, cf);
+}
+
+/**
+ * Sintetiza trades fechados/abertos a partir do mapa de cashflows.
+ * @param {Map<string, object>|Iterable<[string, object]>} cashflowsByMarket
+ * @param {{ limit?: number }} [opts]
+ */
+export function buildTradesFromActivityCashflows(cashflowsByMarket, opts = {}) {
+  const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 1000));
+  const map =
+    cashflowsByMarket instanceof Map
+      ? cashflowsByMarket
+      : new Map(cashflowsByMarket ?? []);
+  return [...map.values()]
+    .map((cf) => tradeFromActivityCashflow(cf))
+    .filter(Boolean)
+    .sort((a, b) => (b.closedAtMs ?? b.openedAtMs ?? 0) - (a.closedAtMs ?? a.openedAtMs ?? 0))
+    .slice(0, limit);
+}
+
+/**
  * Sobrescreve PnL/qty/entry com cashflow real da Polymarket quando houver BUY.
  * @param {object[]} trades
  * @param {Map<string, object>|Iterable<[string, object]>} cashflowsByMarket
@@ -82,39 +178,34 @@ export function reconcileTradesWithPolymarketCashflows(trades = [], cashflowsByM
       : new Map(cashflowsByMarket ?? []);
   return (trades || []).map((trade) => {
     const cf = map.get(trade.marketId);
-    if (!cf || !(cf.buyUsd > 0)) return trade;
-    const next = { ...trade };
-    next.pnlSource = 'polymarket';
-    next.pnl = Number(cf.pnl);
-    if (cf.avgBuyPrice != null && Number.isFinite(cf.avgBuyPrice)) {
-      next.entryPrice = cf.avgBuyPrice;
-    }
-    if (cf.buyQty > 0) next.qty = cf.buyQty;
-    if (cf.sellUsd > 0 || cf.redeemUsd > 0) {
-      next.status = 'closed';
-      if (cf.lastTsSec != null) {
-        const closedMs = Number(cf.lastTsSec) * 1000;
-        if (Number.isFinite(closedMs)) next.closedAtMs = closedMs;
-      }
-      if (cf.redeemUsd > 0) {
-        next.exitKind = 'SETTLEMENT';
-        next.exitPrice = 1;
-      } else if (cf.sellUsd > 0 && cf.sellQty > 0) {
-        next.exitKind = next.exitKind === 'SETTLEMENT' ? 'SETTLEMENT' : 'EXIT';
-        next.exitPrice = cf.sellUsd / cf.sellQty;
-      }
-    }
-    if (next.openedAtMs && next.closedAtMs) {
-      next.durationMs = Math.max(0, next.closedAtMs - next.openedAtMs);
-    }
-    next.polymarket = {
-      buyUsd: cf.buyUsd,
-      sellUsd: cf.sellUsd,
-      redeemUsd: cf.redeemUsd,
-      pnl: cf.pnl,
-    };
-    return next;
+    return applyCashflowToTrade(trade, cf);
   });
+}
+
+/**
+ * Merge: reconcile do journal local + sintetiza markets que só existem na Polymarket.
+ * Fonte de verdade do PnL = Data API; audit local só preenche legs/pending.
+ * @param {object[]} localTrades
+ * @param {Map<string, object>|Iterable<[string, object]>} cashflowsByMarket
+ * @param {{ limit?: number }} [opts]
+ */
+export function mergeJournalWithPolymarketCashflows(localTrades = [], cashflowsByMarket, opts = {}) {
+  const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 1000));
+  const map =
+    cashflowsByMarket instanceof Map
+      ? cashflowsByMarket
+      : new Map(cashflowsByMarket ?? []);
+  const reconciled = reconcileTradesWithPolymarketCashflows(localTrades, map);
+  const seen = new Set(reconciled.map((t) => t.marketId));
+  const synthesized = [];
+  for (const [marketId, cf] of map) {
+    if (seen.has(marketId)) continue;
+    const trade = tradeFromActivityCashflow(cf);
+    if (trade) synthesized.push(trade);
+  }
+  return [...reconciled, ...synthesized]
+    .sort((a, b) => (b.closedAtMs ?? b.openedAtMs ?? 0) - (a.closedAtMs ?? a.openedAtMs ?? 0))
+    .slice(0, limit);
 }
 
 /**

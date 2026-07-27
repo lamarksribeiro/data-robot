@@ -347,6 +347,10 @@ const app = createEngineApp({
   auditMaxDays: Number(process.env.ENGINE_AUDIT_KEEP_DAYS || 3),
   backupDir: path.join(instanceStateDir, 'journal-backups'),
   executionAuditDir: path.join(instanceStateDir, 'execution-audit'),
+  marketSlugPrefix: isCrypto5mSourceKind(sourceKind)
+    ? resolveCrypto5mAsset(sourceKind).slugPrefix
+    : null,
+  snapshotSourceKind: sourceKind,
   snapshotSource,
   catalogEntry,
   catalog,

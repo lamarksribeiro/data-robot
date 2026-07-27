@@ -2,6 +2,8 @@
  * Activity da Data API Polymarket (TRADE / REDEEM) — fonte de caixa real para PnL.
  */
 
+import { CRYPTO_5M_ASSETS } from '../markets/crypto5m.js';
+
 /**
  * @param {{
  *   funderAddress: string,
@@ -9,6 +11,8 @@
  *   dataApiBase?: string,
  *   timeoutMs?: number,
  *   limit?: number,
+ *   maxItems?: number,
+ *   pageSize?: number,
  * }} opts
  * @returns {Promise<object[]>}
  */
@@ -17,21 +21,74 @@ export async function fetchPolymarketActivity(opts) {
   if (!/^0x[a-fA-F0-9]{40}$/.test(funder)) return [];
   const fetchFn = opts.fetchFn ?? fetch;
   const base = String(opts.dataApiBase ?? 'https://data-api.polymarket.com').replace(/\/$/, '');
-  const limit = Math.max(1, Math.min(500, Number(opts.limit ?? 200) || 200));
-  try {
-    const response = await fetchFn(
-      `${base}/activity?user=${encodeURIComponent(funder)}&limit=${limit}`,
-      {
-        signal: AbortSignal.timeout(Number(opts.timeoutMs ?? 8000)),
-        headers: { accept: 'application/json' },
-      },
-    );
-    if (!response.ok) return [];
-    const body = await response.json();
-    return Array.isArray(body) ? body : [];
-  } catch {
-    return [];
+  const pageSize = Math.max(
+    1,
+    Math.min(500, Number(opts.pageSize ?? opts.limit ?? 200) || 200),
+  );
+  const maxItems = Math.max(
+    pageSize,
+    Math.min(5000, Number(opts.maxItems ?? opts.limit ?? 1000) || 1000),
+  );
+  const timeoutMs = Number(opts.timeoutMs ?? 12_000);
+  /** @type {object[]} */
+  const out = [];
+  let offset = 0;
+
+  while (out.length < maxItems) {
+    const limit = Math.min(pageSize, maxItems - out.length);
+    try {
+      const response = await fetchFn(
+        `${base}/activity?user=${encodeURIComponent(funder)}&limit=${limit}&offset=${offset}`,
+        {
+          signal: AbortSignal.timeout(timeoutMs),
+          headers: { accept: 'application/json' },
+        },
+      );
+      if (!response.ok) break;
+      const body = await response.json();
+      const chunk = Array.isArray(body) ? body : [];
+      if (chunk.length === 0) break;
+      out.push(...chunk);
+      if (chunk.length < limit) break;
+      offset += chunk.length;
+    } catch {
+      break;
+    }
   }
+
+  return out;
+}
+
+/**
+ * Prefixo de slug crypto-updown a partir do marketId / eventSlug.
+ * @param {string} marketId
+ * @returns {string|null} btc|eth|sol|xrp|doge
+ */
+export function assetKeyFromMarketId(marketId) {
+  const slug = String(marketId || '').trim().toLowerCase();
+  if (!slug) return null;
+  for (const [assetKey, meta] of Object.entries(CRYPTO_5M_ASSETS)) {
+    const prefix = String(meta.slugPrefix || '').toLowerCase();
+    if (prefix && (slug === prefix || slug.startsWith(`${prefix}-`))) return assetKey;
+  }
+  return null;
+}
+
+/**
+ * @param {object[]} activity
+ * @param {string|null|undefined} slugPrefix ex. btc-updown-5m
+ */
+export function filterActivityBySlugPrefix(activity = [], slugPrefix) {
+  const prefix = String(slugPrefix || '')
+    .trim()
+    .toLowerCase();
+  if (!prefix) return Array.isArray(activity) ? activity : [];
+  return (activity || []).filter((row) => {
+    const marketId = String(row?.eventSlug || row?.slug || '')
+      .trim()
+      .toLowerCase();
+    return marketId === prefix || marketId.startsWith(`${prefix}-`);
+  });
 }
 
 /**
@@ -49,7 +106,9 @@ export async function fetchPolymarketActivity(opts) {
  *   redeemQty: number,
  *   avgBuyPrice: number|null,
  *   pnl: number,
+ *   firstTsSec: number|null,
  *   lastTsSec: number|null,
+ *   outcome: string|null,
  * }>}
  */
 export function aggregateActivityCashflows(activity = []) {
@@ -68,7 +127,9 @@ export function aggregateActivityCashflows(activity = []) {
         redeemQty: 0,
         avgBuyPrice: null,
         pnl: 0,
+        firstTsSec: null,
         lastTsSec: null,
+        outcome: null,
       });
     }
     return byMarket.get(marketId);
@@ -83,11 +144,14 @@ export function aggregateActivityCashflows(activity = []) {
     const size = Number(row?.size);
     const price = Number(row?.price);
     const ts = Number(row?.timestamp);
+    const outcome = row?.outcome != null ? String(row.outcome) : null;
     const bucket = ensure(marketId);
 
     if (Number.isFinite(ts)) {
+      bucket.firstTsSec = bucket.firstTsSec == null ? ts : Math.min(bucket.firstTsSec, ts);
       bucket.lastTsSec = bucket.lastTsSec == null ? ts : Math.max(bucket.lastTsSec, ts);
     }
+    if (outcome && !bucket.outcome) bucket.outcome = outcome;
 
     if (type === 'TRADE' && side === 'BUY' && Number.isFinite(usdc) && usdc > 0) {
       bucket.buyUsd += usdc;
@@ -113,4 +177,29 @@ export function aggregateActivityCashflows(activity = []) {
     bucket.pnl = bucket.sellUsd + bucket.redeemUsd - bucket.buyUsd;
   }
   return byMarket;
+}
+
+/**
+ * Filtra mapa de cashflows pelo prefixo do ativo da engine.
+ * @param {Map<string, object>|Iterable<[string, object]>} cashflowsByMarket
+ * @param {string|null|undefined} slugPrefix
+ */
+export function filterCashflowsBySlugPrefix(cashflowsByMarket, slugPrefix) {
+  const prefix = String(slugPrefix || '')
+    .trim()
+    .toLowerCase();
+  const map =
+    cashflowsByMarket instanceof Map
+      ? cashflowsByMarket
+      : new Map(cashflowsByMarket ?? []);
+  if (!prefix) return map;
+  /** @type {Map<string, object>} */
+  const out = new Map();
+  for (const [marketId, cf] of map) {
+    const id = String(marketId || '')
+      .trim()
+      .toLowerCase();
+    if (id === prefix || id.startsWith(`${prefix}-`)) out.set(marketId, cf);
+  }
+  return out;
 }

@@ -47,13 +47,18 @@ Templates gerados em `runs/strategy-config/portfolio/{eth,sol,xrp,doge}.json`.
 
 ## Coolify (Giovanna) — apps provisionadas 2026-07-27
 
-| Ativo | App Coolify | UUID | Porta | Source |
-|---|---|---|---:|---|
-| BTC | `data-robot-engine` | `rx06uazamupj1w98pvl2b1d9` | 3201 | `btc5m` |
-| ETH | `data-robot-engine-eth` | `ir7qwkhr091qey8vtjcmx46n` | 3202 | `eth5m` |
-| SOL | `data-robot-engine-sol` | `anaej3bcg2wtssydhsuergpz` | 3203 | `sol5m` |
-| XRP | `data-robot-engine-xrp` | `jcjwzh9f3flg529u642cplir` | 3204 | `xrp5m` |
-| DOGE | `data-robot-engine-doge` | `hkw605v51syexmgyl6exs0pl` | 3205 | `doge5m` |
+| Ativo | App Coolify | UUID | Porta | Source | Volume `runs/` | Network alias |
+|---|---|---|---:|---|---|---|
+| BTC | `data-robot-engine` | `rx06uazamupj1w98pvl2b1d9` | 3201 | `btc5m` | obrigatório | `data-robot-engine` |
+| ETH | `data-robot-engine-eth` | `ir7qwkhr091qey8vtjcmx46n` | 3202 | `eth5m` | obrigatório | `data-robot-engine-eth` |
+| SOL | `data-robot-engine-sol` | `anaej3bcg2wtssydhsuergpz` | 3203 | `sol5m` | obrigatório | `data-robot-engine-sol` |
+| XRP | `data-robot-engine-xrp` | `jcjwzh9f3flg529u642cplir` | 3204 | `xrp5m` | obrigatório | `data-robot-engine-xrp` |
+| DOGE | `data-robot-engine-doge` | `hkw605v51syexmgyl6exs0pl` | 3205 | `doge5m` | obrigatório | `data-robot-engine-doge` |
+
+**Crítico no Coolify (não omitir ao provisionar engine nova):**
+
+1. **Persistent storage** montado em `/usr/src/app/runs` — sem isso, redeploy apaga audit/trades/checkpoints e o painel zera P&L/ordens daquele ativo.
+2. **Custom network alias** igual ao hostname do `ENGINE_REGISTRY` do dashboard — sem isso o painel marca a engine offline.
 
 BTC usa `ENGINE_MAX_ACCOUNT_EXPOSURE=16` + file book. ETH/SOL/XRP/DOGE usam teto **$4** por instância (`ENGINE_SHARE_ACCOUNT_BOOK=0`) até haver volume compartilhado.
 

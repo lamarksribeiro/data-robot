@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   buildEquityCurveFromTrades,
   buildTradeJournal,
+  mergeJournalWithPolymarketCashflows,
   reconcileTradesWithPolymarketCashflows,
   summarizeTradePnl,
 } from '../src/oms/tradeJournal.js';
@@ -253,5 +254,73 @@ describe('tradeJournal', () => {
     assert.ok(Math.abs(trade.pnl - (4 - 3.4357)) < 1e-9);
     assert.equal(trade.polymarket.redeemUsd, 4);
     assert.equal(trade.polymarket.buyUsd, 3.4357);
+  });
+
+  it('mergeJournalWithPolymarketCashflows sintetiza markets só na Polymarket', () => {
+    const cashflows = aggregateActivityCashflows([
+      {
+        type: 'TRADE',
+        side: 'BUY',
+        eventSlug: 'eth-updown-5m-9',
+        usdcSize: 2.5,
+        size: 5,
+        price: 0.5,
+        timestamp: 100,
+        outcome: 'Up',
+      },
+      {
+        type: 'REDEEM',
+        eventSlug: 'eth-updown-5m-9',
+        usdcSize: 5,
+        size: 5,
+        timestamp: 300,
+      },
+      {
+        type: 'TRADE',
+        side: 'BUY',
+        eventSlug: 'btc-updown-5m-1',
+        usdcSize: 1,
+        size: 2,
+        price: 0.5,
+        timestamp: 50,
+      },
+      {
+        type: 'REDEEM',
+        eventSlug: 'btc-updown-5m-1',
+        usdcSize: 0.5,
+        size: 2,
+        timestamp: 80,
+      },
+    ]);
+    const merged = mergeJournalWithPolymarketCashflows(
+      [
+        {
+          marketId: 'btc-updown-5m-1',
+          status: 'closed',
+          entryPrice: 0.5,
+          qty: 2,
+          pnl: -0.1,
+          pnlSource: 'engine',
+          openedAtMs: 50_000,
+          closedAtMs: 80_000,
+          legs: [],
+        },
+      ],
+      cashflows,
+    );
+    assert.equal(merged.length, 2);
+    const eth = merged.find((t) => t.marketId === 'eth-updown-5m-9');
+    const btc = merged.find((t) => t.marketId === 'btc-updown-5m-1');
+    assert.ok(eth);
+    assert.equal(eth.pnlSource, 'polymarket');
+    assert.equal(eth.status, 'closed');
+    assert.equal(eth.side, 'UP');
+    assert.ok(Math.abs(eth.pnl - 2.5) < 1e-9);
+    assert.ok(btc);
+    assert.equal(btc.pnlSource, 'polymarket');
+    assert.ok(Math.abs(btc.pnl - -0.5) < 1e-9);
+    const summary = summarizeTradePnl(merged);
+    assert.equal(summary.closed, 2);
+    assert.ok(Math.abs(summary.net - 2) < 1e-9);
   });
 });
