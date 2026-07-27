@@ -53,7 +53,7 @@ Templates gerados em `runs/strategy-config/portfolio/{eth,sol,xrp,doge}.json`.
 | ETH | `data-robot-engine-eth` | `ir7qwkhr091qey8vtjcmx46n` | 3202 | `eth5m` |
 | SOL | `data-robot-engine-sol` | `anaej3bcg2wtssydhsuergpz` | 3203 | `sol5m` |
 | XRP | `data-robot-engine-xrp` | `jcjwzh9f3flg529u642cplir` | 3204 | `xrp5m` |
-| DOGE | `data-robot-engine-doge` | `— (criar no Coolify)` | 3205 | `doge5m` |
+| DOGE | `data-robot-engine-doge` | `hkw605v51syexmgyl6exs0pl` | 3205 | `doge5m` |
 
 BTC usa `ENGINE_MAX_ACCOUNT_EXPOSURE=16` + file book. ETH/SOL/XRP/DOGE usam teto **$4** por instância (`ENGINE_SHARE_ACCOUNT_BOOK=0`) até haver volume compartilhado.
 
