@@ -7,6 +7,8 @@ runs/*.json
 runs/journal-backups/
 runs/execution-audit/
 runs/instances/
+runs/**/*.db
+runs/**/*.db-*
 !runs/.gitkeep
 config/custom-presets/
 config/active-strategy.json

@@ -12,9 +12,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/styles.css?v=1.17.5">
+  <link rel="stylesheet" href="/styles.css?v=1.18.0">
 
-  <script src="/js/dashboard.js?v=1.17.5" defer></script>
+  <script src="/js/dashboard.js?v=1.18.0" defer></script>
   <script src="/js/mascot.js?v=1.16.9" defer></script>
 </head>
 <body>
@@ -52,6 +52,9 @@
     </symbol>
     <symbol id="i-fleet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="7" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><circle cx="7" cy="17" r="3"/><circle cx="17" cy="17" r="3"/>
+    </symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>
     </symbol>
     <symbol id="i-asset-btc" viewBox="0 0 32 32">
       <circle cx="16" cy="16" r="15" fill="#f7931a"/><path fill="#fff" d="M18.2 14.4c.3-1.8-1.1-2.8-3-3.4l.6-2.5-1.5-.4-.6 2.4c-.4-.1-.8-.2-1.2-.3l.6-2.4-1.5-.4-.6 2.5c-.3-.1-.6-.1-.9-.2l-2.1-.5-.4 1.6s1.1.3 1.1.3c.6.2.7.5.7.9l-.7 2.8c0 0 .1 0 .2.1h-.2l-1 4c-.1.2-.3.5-.8.4 0 0-1.1-.3-1.1-.3l-.8 1.7 2 .5c.4.1.7.2 1.1.3l-.6 2.5 1.5.4.6-2.5c.4.1.8.2 1.2.3l-.6 2.4 1.5.4.6-2.5c2.6.5 4.5.3 5.3-2 .7-1.8 0-2.9-1.4-3.5 1-.2 1.7-1 1.9-2.4zm-3.4 4.8c-.5 1.9-3.6.9-4.6.6l.8-3.3c1 .3 4.3.8 3.8 2.7zm.5-4.9c-.4 1.8-3 .9-3.8.6l.7-3c.9.2 3.6.7 3.1 2.4z"/>
@@ -146,6 +149,10 @@
         <a class="navlink" href="#system" data-view="system">
           <span class="navlink__icon" aria-hidden="true"><svg><use href="#i-cpu"/></svg></span>
           <span class="navlink__label">Sistema</span>
+        </a>
+        <a class="navlink" href="#settings" data-view="settings">
+          <span class="navlink__icon" aria-hidden="true"><svg><use href="#i-settings"/></svg></span>
+          <span class="navlink__label">Configurações</span>
         </a>
       </nav>
 
@@ -671,6 +678,7 @@
             <p class="page-header__sub">Resultado desde o início deste robô · ganhos, perdas e taxa de acerto</p>
           </div>
           <div class="page-header__badges">
+            <span id="position-pnl-source" class="badge">fonte: engine</span>
             <span id="position-badge" class="badge">flat</span>
           </div>
         </header>
@@ -1271,6 +1279,73 @@
           <pre class="console-box" id="diagnostics">Aguardando dados…</pre>
         </details>
       </section>
+
+      <!-- ═══════════════ VIEW: CONFIGURAÇÕES ═══════════════ -->
+      <section class="view" id="view-settings" data-view="settings" aria-labelledby="hdr-settings" hidden>
+        <header class="page-header page-header--compact">
+          <div>
+            <p class="eyebrow">Por engine</p>
+            <h1 id="hdr-settings">Configurações</h1>
+            <p class="page-header__sub">Fonte de PnL e validação Polymarket desta engine selecionada</p>
+          </div>
+          <div class="page-header__badges">
+            <span id="settings-pnl-badge" class="badge">engine</span>
+          </div>
+        </header>
+
+        <article class="panel panel--solo" id="pnl-settings-panel">
+          <div class="panel__header">
+            <div>
+              <p class="panel__kicker">Estatísticas</p>
+              <h2>Fonte de lucro e prejuízo</h2>
+              <p class="panel__hint">
+                Padrão: só a engine (SQLite local). Polymarket na mesma carteira pode misturar trades manuais
+                ou de outra estratégia — use só para conferência ou correção.
+              </p>
+            </div>
+          </div>
+
+          <form id="pnl-settings-form" class="settings-form">
+            <fieldset class="settings-fieldset">
+              <legend>Modo de PnL</legend>
+              <label class="settings-option">
+                <input type="radio" name="pnlMode" value="engine" checked>
+                <span>
+                  <strong>Só engine</strong>
+                  <em>Ledger SQLite desta instância — isola outras estratégias</em>
+                </span>
+              </label>
+              <label class="settings-option">
+                <input type="radio" name="pnlMode" value="polymarket">
+                <span>
+                  <strong>Só Polymarket</strong>
+                  <em>Data API da carteira (comportamento anterior)</em>
+                </span>
+              </label>
+              <label class="settings-option">
+                <input type="radio" name="pnlMode" value="hybrid">
+                <span>
+                  <strong>Hybrid</strong>
+                  <em>KPIs da engine + validação Polymarket nos mesmos mercados</em>
+                </span>
+              </label>
+            </fieldset>
+
+            <label class="settings-check" id="auto-correct-wrap">
+              <input type="checkbox" id="auto-correct-polymarket" name="autoCorrectPolymarket">
+              <span>
+                <strong>Aplicar correções Polymarket no banco</strong>
+                <em>Só no modo hybrid. Preserva engine_pnl e grava o cashflow real.</em>
+              </span>
+            </label>
+
+            <div class="settings-actions">
+              <button class="btn btn--primary" type="submit" id="btn-save-pnl-settings">Salvar</button>
+              <span class="settings-status" id="pnl-settings-status" aria-live="polite"></span>
+            </div>
+          </form>
+        </article>
+      </section>
     </main>
   </div>
 
@@ -1311,6 +1386,9 @@
         </a>
         <a class="navlink" href="#system" data-view="system">
           <span class="navlink__icon"><svg><use href="#i-cpu"/></svg></span><span>Sistema</span>
+        </a>
+        <a class="navlink" href="#settings" data-view="settings">
+          <span class="navlink__icon"><svg><use href="#i-settings"/></svg></span><span>Configurações</span>
         </a>
       </nav>
       <div class="mobile-nav__footer">

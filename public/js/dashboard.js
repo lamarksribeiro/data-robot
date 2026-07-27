@@ -73,6 +73,7 @@ function renderEngineTabs() {
       stratStudio.paramSearch = '';
       clearSeries();
       await refresh({ force: true });
+      if (currentView === 'settings') void loadPnlSettings();
     });
     box.append(btn);
   }
@@ -836,6 +837,7 @@ const SECTION_TITLES = {
   strategies: 'Estratégias',
   audit: 'Auditoria',
   system: 'Sistema',
+  settings: 'Configurações',
 };
 
 const FLEET_ASSET_ORDER = ['btc', 'eth', 'sol', 'xrp', 'doge'];
@@ -2096,6 +2098,15 @@ function renderTrades(payload = {}) {
   renderTradesTable(trades, 'position-trades-body', 8);
   renderPager('orders-trades', page, totalPages, total);
   renderPager('position-trades', page, totalPages, total);
+  const source = Array.isArray(payload) ? 'engine' : payload.pnlSource || payload.settings?.pnlMode || 'engine';
+  const sourceLabel =
+    source === 'polymarket'
+      ? 'fonte: polymarket'
+      : source === 'hybrid'
+        ? 'fonte: hybrid'
+        : 'fonte: engine';
+  text('position-pnl-source', sourceLabel);
+  text('settings-pnl-badge', String(source));
 }
 
 let tradesCache = [];
@@ -2104,6 +2115,86 @@ let tradesEquity = [];
 let tradesPage = 1;
 const TRADES_PAGE_SIZE = 25;
 let tradesFetchSeq = 0;
+let pnlSettingsLoadedFor = null;
+
+function applyPnlSettingsForm(settings = {}) {
+  const mode = String(settings.pnlMode || 'engine').toLowerCase();
+  const form = $('pnl-settings-form');
+  if (!form) return;
+  for (const input of form.querySelectorAll('input[name="pnlMode"]')) {
+    input.checked = input.value === mode;
+  }
+  const auto = $('auto-correct-polymarket');
+  if (auto) auto.checked = settings.autoCorrectPolymarket === true;
+  const wrap = $('auto-correct-wrap');
+  if (wrap) wrap.hidden = mode !== 'hybrid';
+  text('settings-pnl-badge', mode);
+  text(
+    'position-pnl-source',
+    mode === 'polymarket'
+      ? 'fonte: polymarket'
+      : mode === 'hybrid'
+        ? 'fonte: hybrid'
+        : 'fonte: engine',
+  );
+}
+
+async function loadPnlSettings() {
+  const statusEl = $('pnl-settings-status');
+  try {
+    const settings = await apiEngine('/settings');
+    applyPnlSettingsForm(settings);
+    pnlSettingsLoadedFor = selectedEngineId;
+    if (statusEl) {
+      statusEl.className = 'settings-status';
+      statusEl.textContent = '';
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.className = 'settings-status is-err';
+      statusEl.textContent = err?.message || 'Falha ao carregar';
+    }
+  }
+}
+
+async function savePnlSettings(event) {
+  event?.preventDefault?.();
+  const form = $('pnl-settings-form');
+  const statusEl = $('pnl-settings-status');
+  const btn = $('btn-save-pnl-settings');
+  if (!form) return;
+  const mode =
+    form.querySelector('input[name="pnlMode"]:checked')?.value || 'engine';
+  const autoCorrect = Boolean($('auto-correct-polymarket')?.checked);
+  if (btn) btn.disabled = true;
+  if (statusEl) {
+    statusEl.className = 'settings-status';
+    statusEl.textContent = 'Salvando…';
+  }
+  try {
+    const result = await apiEngine('/settings', {
+      method: 'PUT',
+      body: JSON.stringify({
+        pnlMode: mode,
+        autoCorrectPolymarket: autoCorrect,
+      }),
+    });
+    const settings = result?.settings ?? result;
+    applyPnlSettingsForm(settings);
+    if (statusEl) {
+      statusEl.className = 'settings-status is-ok';
+      statusEl.textContent = 'Salvo nesta engine';
+    }
+    await refreshTrades({ silent: true, page: 1 });
+  } catch (err) {
+    if (statusEl) {
+      statusEl.className = 'settings-status is-err';
+      statusEl.textContent = err?.message || 'Falha ao salvar';
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
 
 async function refreshTrades({ silent = false, page } = {}) {
   const seq = ++tradesFetchSeq;
@@ -4351,6 +4442,9 @@ function showView(viewId, { pushHash = true } = {}) {
       }
     })();
   }
+  if (id === 'settings') {
+    void loadPnlSettings();
+  }
   if (id === 'audit') refreshAudit({ silent: true });
   if (id === 'orders' || id === 'position' || id === 'overview') refreshTrades({ silent: true });
   if (id === 'fleet') refreshFleet({ force: true });
@@ -4569,6 +4663,16 @@ $('position-trades-scope-toggle')?.addEventListener('click', async () => {
   updateTradesScopeToggle();
   clearSeries();
   await refresh({ force: true });
+});
+$('pnl-settings-form')?.addEventListener('submit', (event) => {
+  void savePnlSettings(event);
+});
+$('pnl-settings-form')?.addEventListener('change', (event) => {
+  const target = event.target;
+  if (target?.name === 'pnlMode') {
+    const wrap = $('auto-correct-wrap');
+    if (wrap) wrap.hidden = target.value !== 'hybrid';
+  }
 });
 $('audit-scope-toggle')?.addEventListener('click', async () => {
   auditScopeAll = !auditScopeAll;

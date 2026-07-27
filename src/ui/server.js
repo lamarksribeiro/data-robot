@@ -237,6 +237,7 @@ export function createUiServer(opts = {}) {
         ['strategy-library', '/strategy-library'],
         ['strategy-active', '/strategy-active'],
         ['wallet', '/wallet'],
+        ['settings', '/settings'],
       ]);
 
       const engineControlActionToSpec = new Map([
@@ -328,8 +329,15 @@ export function createUiServer(opts = {}) {
             const qs = url.searchParams.toString();
             return proxyEngine(req, res, engineBaseUrlForProxy, qs ? `/trades?${qs}` : '/trades');
           }
-          // fallback: GET desconhecido dentro de /api/engines
           return json(res, 404, { ok: false, reason: 'NOT_FOUND', detail: leaf });
+        }
+
+        if (req.method === 'PUT') {
+          if (tail.length === 1 && tail[0] === 'settings') {
+            const body = await readJson(req);
+            return proxyEngine(req, res, engineBaseUrlForProxy, '/settings', 'PUT', body);
+          }
+          return json(res, 404, { ok: false, reason: 'NOT_FOUND', detail: tail.join('/') });
         }
 
         if (req.method === 'POST') {
@@ -383,6 +391,15 @@ export function createUiServer(opts = {}) {
         if (!requireSession(req, res)) return;
         const qs = url.searchParams.toString();
         return proxyEngine(req, res, defaultEngineBaseUrlForProxy, qs ? `/trades?${qs}` : '/trades');
+      }
+      if (req.method === 'GET' && url.pathname === '/api/engine/settings') {
+        if (!requireSession(req, res)) return;
+        return proxyEngine(req, res, defaultEngineBaseUrlForProxy, '/settings');
+      }
+      if (req.method === 'PUT' && url.pathname === '/api/engine/settings') {
+        if (!requireSession(req, res)) return;
+        const body = await readJson(req);
+        return proxyEngine(req, res, defaultEngineBaseUrlForProxy, '/settings', 'PUT', body);
       }
       if (req.method === 'GET' && url.pathname === '/api/engine/wallet') {
         if (!requireSession(req, res)) return;

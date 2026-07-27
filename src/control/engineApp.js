@@ -10,8 +10,14 @@ import {
   buildEquityCurveFromTrades,
   buildTradeJournal,
   mergeJournalWithPolymarketCashflows,
+  reconcileTradesWithPolymarketCashflows,
   summarizeTradePnl,
 } from '../oms/tradeJournal.js';
+import {
+  createTradeLedgerDb,
+  normalizeAutoCorrect,
+  normalizePnlMode,
+} from '../oms/tradeLedgerDb.js';
 import {
   aggregateActivityCashflows,
   fetchPolymarketActivity,
@@ -71,18 +77,12 @@ export function createEngineApp(opts = {}) {
     });
   const snapshotSource = opts.snapshotSource ?? null;
   const startArmed = opts.startArmed ?? mode !== 'live';
-
-  const engine = bootstrapEngine({
-    strategyId,
-    mode,
-    preset,
-    sink,
-    clock: opts.clock,
-    liveEnabled: opts.liveEnabled === true,
-    riskOpts: opts.riskOpts,
-    strategyInstanceId: opts.strategyInstanceId,
-    onAudit: (type, payload) => executionAudit.append(type, payload),
-  });
+  const tradeLedger = Object.prototype.hasOwnProperty.call(opts, 'tradeLedger')
+    ? opts.tradeLedger
+    : createTradeLedgerDb({
+        // Sem path explícito (testes / scripts): memória. Produção passa tradeLedgerDbPath.
+        dbPath: opts.tradeLedgerDbPath || ':memory:',
+      });
 
   let lastCheckpoint = null;
   let ticks = 0;
@@ -104,6 +104,74 @@ export function createEngineApp(opts = {}) {
   let lastSnapshotForSettlement = null;
   let settlementQueue = Promise.resolve();
   const marketIdentities = new Map();
+
+  function buildJournalFromAudit(limit = 1000) {
+    const auditRows = executionAudit.listRecent({
+      limit: 5000,
+      types: 'decision,position_settled,settlement_queued,order_terminal',
+    });
+    return buildTradeJournal({
+      auditRows,
+      orders: sink.oms?.listOrders?.() ?? [],
+      settlementPending: pendingSettlements,
+      limit,
+    });
+  }
+
+  function syncLedgerFromAudit() {
+    if (!tradeLedger) return 0;
+    const journal = buildJournalFromAudit(1000);
+    let n = 0;
+    for (const trade of journal) {
+      if (!trade?.marketId) continue;
+      const existing = tradeLedger.getTrade(trade.marketId);
+      const next = {
+        ...trade,
+        pnlSource: 'engine',
+        enginePnl: trade.pnl,
+      };
+      // Correção hybrid já aplicada: mantém PnL Polymarket, atualiza engine_pnl do audit.
+      if (
+        existing?.pnlSource === 'hybrid_corrected' &&
+        existing.status === 'closed' &&
+        trade.status === 'closed'
+      ) {
+        next.pnl = existing.pnl;
+        next.pnlSource = 'hybrid_corrected';
+        next.enginePnl = trade.pnl;
+        next.polymarket = existing.polymarket ?? null;
+      }
+      tradeLedger.upsertTrade(next, { preserveEnginePnl: false });
+      n += 1;
+    }
+    return n;
+  }
+
+  const engine = bootstrapEngine({
+    strategyId,
+    mode,
+    preset,
+    sink,
+    clock: opts.clock,
+    liveEnabled: opts.liveEnabled === true,
+    riskOpts: opts.riskOpts,
+    strategyInstanceId: opts.strategyInstanceId,
+    onAudit: (type, payload) => {
+      executionAudit.append(type, payload);
+      if (
+        type === 'order_terminal' ||
+        type === 'decision' ||
+        type === 'position_settled' ||
+        type === 'settlement_queued'
+      ) {
+        try {
+          syncLedgerFromAudit();
+        } catch (err) {
+          logger.warn('trade_ledger_sync_failed', { reason: err?.message ?? String(err), type });
+        }
+      }
+    },
+  });
   /** Throttle do poll Gamma (ingest pode ser 50ms; não martelar a API). */
   let lastSettlementPollAtMs = 0;
   const settlementPollMs = Math.max(
@@ -549,6 +617,15 @@ export function createEngineApp(opts = {}) {
     return metrics.snapshot();
   }
 
+  function appendSettlementAudit(type, payload) {
+    executionAudit.append(type, payload);
+    try {
+      syncLedgerFromAudit();
+    } catch (err) {
+      logger.warn('trade_ledger_sync_failed', { reason: err?.message ?? String(err), type });
+    }
+  }
+
   async function processPendingSettlements(snapshot, pollOpts = {}) {
     if (!pendingSettlements.length || mode !== 'live') return;
     const force = pollOpts.force === true;
@@ -568,7 +645,7 @@ export function createEngineApp(opts = {}) {
           reason: 'binary_expiry_settlement',
           toMarketId: snapshot?.marketId ?? pending.toMarketId ?? null,
         });
-        executionAudit.append('position_settled', {
+        appendSettlementAudit('position_settled', {
           fromMarketId: pending.marketId,
           toMarketId: snapshot?.marketId ?? pending.toMarketId ?? null,
           winner: resolution.winner,
@@ -631,7 +708,7 @@ export function createEngineApp(opts = {}) {
         reason: 'binary_expiry_settlement',
         marketId: current.marketId,
       });
-      executionAudit.append('position_settled', {
+      appendSettlementAudit('position_settled', {
         fromMarketId: current.marketId,
         toMarketId: lastSnapshotForSettlement?.marketId ?? null,
         winner: resolution.winningOutcome,
@@ -661,7 +738,7 @@ export function createEngineApp(opts = {}) {
       toMarketId: lastSnapshotForSettlement?.marketId ?? pending.toMarketId ?? null,
     });
     pendingSettlements = pendingSettlements.filter((candidate) => candidate !== pending);
-    executionAudit.append('position_settled', {
+    appendSettlementAudit('position_settled', {
       fromMarketId: pending.marketId,
       toMarketId: lastSnapshotForSettlement?.marketId ?? pending.toMarketId ?? null,
       winner: resolution.winningOutcome,
@@ -752,7 +829,7 @@ export function createEngineApp(opts = {}) {
           reason: 'binary_expiry_settlement',
           marketId: fromMarketId,
         });
-        executionAudit.append('position_settled', {
+        appendSettlementAudit('position_settled', {
           fromMarketId,
           toMarketId: snapshot.marketId,
           winner: resolution.winner,
@@ -799,7 +876,7 @@ export function createEngineApp(opts = {}) {
           if (!pendingSettlements.some((p) => p.marketId === pending.marketId)) {
             pendingSettlements.push(pending);
           }
-          executionAudit.append('settlement_queued', {
+          appendSettlementAudit('settlement_queued', {
             fromMarketId: released.marketId,
             toMarketId: snapshot.marketId,
             side: released.side,
@@ -988,6 +1065,85 @@ export function createEngineApp(opts = {}) {
     return engine.getStatus();
   }
 
+  function resolveSlugPrefix() {
+    let slugPrefix = opts.marketSlugPrefix || null;
+    if (!slugPrefix) {
+      const sourceKind =
+        snapshotSource?.kind ||
+        opts.snapshotSourceKind ||
+        process.env.ENGINE_SNAPSHOT_SOURCE ||
+        '';
+      if (isCrypto5mSourceKind(sourceKind)) {
+        slugPrefix = resolveCrypto5mAsset(sourceKind).slugPrefix;
+      }
+    }
+    return slugPrefix;
+  }
+
+  async function fetchPolymarketCashflowsForMarkets(localMarketIds = []) {
+    const funder = String(
+      config.polymarketFunderAddress || opts.funderAddress || '',
+    ).trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(funder)) {
+      return { cashflows: new Map(), ok: false, reason: 'FUNDER_MISSING' };
+    }
+    const sinceSec =
+      parseSinceToUnixSec(
+        process.env.ENGINE_PNL_SINCE || opts.pnlSince || '2026-07-27T05:27:00Z',
+      ) ?? null;
+    const activity = await fetchPolymarketActivity({
+      funderAddress: funder,
+      dataApiBase: config.dataApiBase,
+      pageSize: 200,
+      maxItems: Number(process.env.ENGINE_POLYMARKET_ACTIVITY_MAX || 2000) || 2000,
+      sinceSec,
+    });
+    let cashflows = aggregateActivityCashflows(activity);
+    const slugPrefix = resolveSlugPrefix();
+    if (slugPrefix) {
+      cashflows = filterCashflowsBySlugPrefix(cashflows, slugPrefix);
+    }
+    cashflows = filterCashflowsForRobotScope(cashflows, {
+      alwaysKeepMarketIds: localMarketIds,
+      sinceSec,
+      onlyKeepMarketIds: localMarketIds.length > 0,
+    });
+    return { cashflows, ok: true, sinceSec };
+  }
+
+  function paginateTradesResult(all, query = {}, extra = {}) {
+    const pageSize = Math.max(
+      5,
+      Math.min(100, Number(query.pageSize ?? query.limit ?? 25) || 25),
+    );
+    const page = Math.max(1, Number(query.page ?? 1) || 1);
+    const visible = all.filter(
+      (t) => t.status === 'closed' || t.status === 'settlement_pending',
+    );
+    const summary = summarizeTradePnl(all);
+    const equity = buildEquityCurveFromTrades(all);
+    const total = visible.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const start = (safePage - 1) * pageSize;
+    const settings = tradeLedger?.getSettings?.() ?? {
+      pnlMode: normalizePnlMode(query.pnlMode),
+      autoCorrectPolymarket: false,
+    };
+    return {
+      trades: visible.slice(start, start + pageSize),
+      summary,
+      equity,
+      total,
+      page: safePage,
+      pageSize,
+      totalPages,
+      scope: 'robot',
+      settings,
+      ...extra,
+    };
+  }
+
   const httpServer = createControlServer({
     port: opts.port,
     host: opts.host,
@@ -1008,96 +1164,147 @@ export function createEngineApp(opts = {}) {
       },
     ],
     getAudit: (limitOrOpts) => executionAudit.listRecent(limitOrOpts),
+    getSettings: () =>
+      tradeLedger?.getSettings?.() ?? {
+        pnlMode: 'engine',
+        autoCorrectPolymarket: false,
+      },
+    onUpdateSettings: (body = {}) => {
+      if (!tradeLedger) throw new Error('TRADE_LEDGER_UNAVAILABLE');
+      return tradeLedger.setSettings({
+        pnlMode: body.pnlMode,
+        autoCorrectPolymarket: body.autoCorrectPolymarket,
+      });
+    },
     getTrades: async (query = {}) => {
-      const pageSize = Math.max(
-        5,
-        Math.min(100, Number(query.pageSize ?? query.limit ?? 25) || 25),
+      const settings = tradeLedger?.getSettings?.() ?? {
+        pnlMode: 'engine',
+        autoCorrectPolymarket: false,
+      };
+      const pnlMode = normalizePnlMode(query.pnlMode ?? settings.pnlMode);
+      const autoCorrect = normalizeAutoCorrect(
+        query.autoCorrectPolymarket ?? settings.autoCorrectPolymarket,
       );
-      const page = Math.max(1, Number(query.page ?? 1) || 1);
-      const auditRows = executionAudit.listRecent({
-        limit: 5000,
-        types: 'decision,position_settled,settlement_queued,order_terminal',
-      });
-      let all = buildTradeJournal({
-        auditRows,
-        orders: sink.oms?.listOrders?.() ?? [],
-        settlementPending: pendingSettlements,
-        limit: 1000,
-      });
 
-      let pnlSource = 'engine';
-      const funder = String(
-        config.polymarketFunderAddress || opts.funderAddress || '',
-      ).trim();
-      if (/^0x[a-fA-F0-9]{40}$/.test(funder)) {
+      if (pnlMode === 'engine') {
         try {
-          // Cutover portfolio MIDAS (docs/operacao/midas-portfolio-monitor-baseline-2026-07-27.md).
-          // A Data API não distingue robô vs UI na mesma carteira — usamos:
-          // 1) mercados do audit local (ordens da engine) como fonte de verdade;
-          // 2) ENGINE_PNL_SINCE para recovery quando o audit está vazio.
-          const sinceSec =
-            parseSinceToUnixSec(
-              process.env.ENGINE_PNL_SINCE || opts.pnlSince || '2026-07-27T05:27:00Z',
-            ) ?? null;
-          const activity = await fetchPolymarketActivity({
-            funderAddress: funder,
-            dataApiBase: config.dataApiBase,
-            pageSize: 200,
-            maxItems: Number(process.env.ENGINE_POLYMARKET_ACTIVITY_MAX || 2000) || 2000,
-            sinceSec,
-          });
-          let cashflows = aggregateActivityCashflows(activity);
-          let slugPrefix = opts.marketSlugPrefix || null;
-          if (!slugPrefix) {
-            const sourceKind =
-              snapshotSource?.kind ||
-              opts.snapshotSourceKind ||
-              process.env.ENGINE_SNAPSHOT_SOURCE ||
-              '';
-            if (isCrypto5mSourceKind(sourceKind)) {
-              slugPrefix = resolveCrypto5mAsset(sourceKind).slugPrefix;
+          syncLedgerFromAudit();
+        } catch (err) {
+          logger.warn('trade_ledger_sync_failed', { reason: err?.message ?? String(err) });
+        }
+        const all = tradeLedger?.listTrades?.({ limit: 1000 }) ?? buildJournalFromAudit(1000);
+        return paginateTradesResult(all, query, { pnlSource: 'engine' });
+      }
+
+      if (pnlMode === 'hybrid') {
+        try {
+          syncLedgerFromAudit();
+        } catch (err) {
+          logger.warn('trade_ledger_sync_failed', { reason: err?.message ?? String(err) });
+        }
+        let all = tradeLedger?.listTrades?.({ limit: 1000 }) ?? buildJournalFromAudit(1000);
+        const engineSnapshot = new Map(
+          all.map((t) => [t.marketId, { pnl: t.pnl, enginePnl: t.enginePnl, pnlSource: t.pnlSource }]),
+        );
+        let validation = { matched: 0, diverged: 0, corrected: 0 };
+        try {
+          const localMarketIds = all.map((t) => t.marketId).filter(Boolean);
+          const { cashflows, ok } = await fetchPolymarketCashflowsForMarkets(localMarketIds);
+          if (ok) {
+            // Só mercados da engine — sem sintetizar externos.
+            const scoped = filterCashflowsForRobotScope(cashflows, {
+              alwaysKeepMarketIds: localMarketIds,
+              onlyKeepMarketIds: true,
+            });
+            const reconciled = reconcileTradesWithPolymarketCashflows(all, scoped);
+            const next = [];
+            for (const trade of reconciled) {
+              const prior = engineSnapshot.get(trade.marketId);
+              const enginePnl =
+                prior?.enginePnl != null && Number.isFinite(Number(prior.enginePnl))
+                  ? Number(prior.enginePnl)
+                  : prior?.pnl != null && Number.isFinite(Number(prior.pnl))
+                    ? Number(prior.pnl)
+                    : null;
+              const polyPnl =
+                trade.polymarket?.pnl != null && Number.isFinite(Number(trade.polymarket.pnl))
+                  ? Number(trade.polymarket.pnl)
+                  : null;
+              const annotated = {
+                ...trade,
+                enginePnl,
+                pnlDeltaVsEngine:
+                  polyPnl != null && enginePnl != null ? polyPnl - enginePnl : null,
+              };
+              if (polyPnl != null && enginePnl != null) {
+                if (Math.abs(polyPnl - enginePnl) < 1e-6) validation.matched += 1;
+                else validation.diverged += 1;
+              }
+              if (
+                autoCorrect &&
+                tradeLedger &&
+                polyPnl != null &&
+                trade.status === 'closed' &&
+                (enginePnl == null || Math.abs(polyPnl - enginePnl) >= 1e-6)
+              ) {
+                const cf = scoped.get(trade.marketId);
+                if (cf) {
+                  const corrected = tradeLedger.applyPolymarketCorrection(
+                    trade.marketId,
+                    cf,
+                    { ...annotated, enginePnl },
+                  );
+                  if (corrected) {
+                    validation.corrected += 1;
+                    next.push({
+                      ...corrected,
+                      pnlDeltaVsEngine: annotated.pnlDeltaVsEngine,
+                    });
+                    continue;
+                  }
+                }
+              }
+              // Hybrid: KPIs usam PnL da engine (não sobrescreve com Polymarket).
+              next.push({
+                ...annotated,
+                pnl: enginePnl ?? annotated.pnl,
+                pnlSource:
+                  prior?.pnlSource === 'hybrid_corrected'
+                    ? 'hybrid_corrected'
+                    : 'engine',
+              });
             }
+            all = next;
           }
-          if (slugPrefix) {
-            cashflows = filterCashflowsBySlugPrefix(cashflows, slugPrefix);
-          }
-          const localMarketIds = all.map((trade) => trade.marketId).filter(Boolean);
-          cashflows = filterCashflowsForRobotScope(cashflows, {
-            alwaysKeepMarketIds: localMarketIds,
-            sinceSec,
-            // Com audit local: não inventa trades manuais da carteira.
-            // Sem audit (volume apagado): sintetiza só pós-ENGINE_PNL_SINCE.
-            onlyKeepMarketIds: localMarketIds.length > 0,
-          });
-          all = mergeJournalWithPolymarketCashflows(all, cashflows, { limit: 1000 });
-          pnlSource = 'polymarket';
         } catch (err) {
           logger.warn('polymarket_activity_reconcile_failed', {
             reason: err?.message ?? String(err),
+            mode: 'hybrid',
           });
         }
+        return paginateTradesResult(all, query, {
+          pnlSource: 'hybrid',
+          validation,
+        });
       }
 
-      const visible = all.filter(
-        (t) => t.status === 'closed' || t.status === 'settlement_pending',
-      );
-      const summary = summarizeTradePnl(all);
-      const equity = buildEquityCurveFromTrades(all);
-      const total = visible.length;
-      const totalPages = Math.max(1, Math.ceil(total / pageSize));
-      const safePage = Math.min(page, totalPages);
-      const start = (safePage - 1) * pageSize;
-      return {
-        trades: visible.slice(start, start + pageSize),
-        summary,
-        equity,
-        total,
-        page: safePage,
-        pageSize,
-        totalPages,
-        scope: 'robot',
-        pnlSource,
-      };
+      // polymarket — comportamento legado (activity + merge), sem gravar no ledger
+      let all = buildJournalFromAudit(1000);
+      let pnlSource = 'engine';
+      try {
+        const localMarketIds = all.map((trade) => trade.marketId).filter(Boolean);
+        const { cashflows, ok } = await fetchPolymarketCashflowsForMarkets(localMarketIds);
+        if (ok) {
+          all = mergeJournalWithPolymarketCashflows(all, cashflows, { limit: 1000 });
+          pnlSource = 'polymarket';
+        }
+      } catch (err) {
+        logger.warn('polymarket_activity_reconcile_failed', {
+          reason: err?.message ?? String(err),
+          mode: 'polymarket',
+        });
+      }
+      return paginateTradesResult(all, query, { pnlSource });
     },
     getWallet: opts.getWallet,
     getStrategyLibrary: opts.getStrategyLibrary,
@@ -1140,6 +1347,7 @@ export function createEngineApp(opts = {}) {
     alerts,
     backup,
     executionAudit,
+    tradeLedger,
     httpServer,
     health,
     status,
@@ -1207,6 +1415,17 @@ export function createEngineApp(opts = {}) {
         deployment: opts.deployment ?? null,
         catalog: opts.catalogEntry ?? null,
       });
+      try {
+        const before = tradeLedger?.countTrades?.() ?? 0;
+        const upserted = syncLedgerFromAudit();
+        logger.info('trade_ledger_ready', {
+          before,
+          upserted,
+          dbPath: tradeLedger?.dbPath ?? null,
+        });
+      } catch (err) {
+        logger.warn('trade_ledger_backfill_failed', { reason: err?.message ?? String(err) });
+      }
       logger.info('engine_started', { strategyId, mode, state: engine.state });
       if (snapshotSource) {
         try {
@@ -1282,6 +1501,11 @@ export function createEngineApp(opts = {}) {
         }
       }
       sink.dispose?.();
+      try {
+        tradeLedger?.close?.();
+      } catch {
+        /* ignore */
+      }
       started = false;
       executionAudit.append('engine_stopped', { strategyId, mode });
       logger.info('engine_stopped');

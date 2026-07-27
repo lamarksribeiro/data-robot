@@ -2888,3 +2888,64 @@ body.modal-open { overflow: hidden; }
   .fleet-board { grid-template-columns: minmax(0, 1fr); }
   .fleet-sparklines { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Configurações — fonte de PnL */
+.settings-form {
+  display: grid;
+  gap: 1.25rem;
+  padding: 0.25rem 0 0.5rem;
+}
+.settings-fieldset {
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 12px;
+  padding: 1rem 1.1rem;
+  margin: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.settings-fieldset legend {
+  padding: 0 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-2, #9aa3b2);
+}
+.settings-option,
+.settings-check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: start;
+  cursor: pointer;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+}
+.settings-option:hover,
+.settings-check:hover {
+  background: rgba(255,255,255,0.03);
+}
+.settings-option strong,
+.settings-check strong {
+  display: block;
+  font-size: 0.95rem;
+}
+.settings-option em,
+.settings-check em {
+  display: block;
+  margin-top: 0.15rem;
+  font-style: normal;
+  font-size: 0.8rem;
+  color: var(--text-2, #9aa3b2);
+}
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+.settings-status {
+  font-size: 0.85rem;
+  color: var(--text-2, #9aa3b2);
+}
+.settings-status.is-ok { color: var(--ok, #3dd68c); }
+.settings-status.is-err { color: var(--danger, #ff6b6b); }

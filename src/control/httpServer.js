@@ -13,7 +13,9 @@ import http from 'node:http';
  * @param {() => object} [opts.getCatalog]
  * @param {() => object} [opts.getInstances]
  * @param {(limitOrOpts:number|object) => object[]} [opts.getAudit]
- * @param {(limit?:number) => object[]} [opts.getTrades]
+ * @param {(query?:object) => object|Promise<object>} [opts.getTrades]
+ * @param {() => object} [opts.getSettings]
+ * @param {(body:object) => object} [opts.onUpdateSettings]
  * @param {() => object} [opts.getStrategyLibrary]
  * @param {() => object|null} [opts.getActiveStrategy]
  * @param {(body:object) => object|Promise<object>} [opts.onSaveStrategyPreset]
@@ -40,6 +42,7 @@ export function createControlServer(opts) {
     '/instances',
     '/audit',
     '/trades',
+    '/settings',
     '/strategy-library',
     '/strategy-active',
   ]);
@@ -124,8 +127,25 @@ export function createControlServer(opts) {
         const pageSize = Number(
           url.searchParams.get('pageSize') ?? url.searchParams.get('limit') ?? 25,
         );
-        const payload = await opts.getTrades?.({ page, pageSize });
+        const payload = await opts.getTrades?.({
+          page,
+          pageSize,
+          pnlMode: url.searchParams.get('pnlMode') ?? undefined,
+          autoCorrectPolymarket: url.searchParams.get('autoCorrectPolymarket') ?? undefined,
+        });
         return send(res, 200, payload ?? { trades: [], total: 0 });
+      }
+      if (req.method === 'GET' && pathName === '/settings') {
+        return send(res, 200, opts.getSettings?.() ?? { pnlMode: 'engine', autoCorrectPolymarket: false });
+      }
+      if (req.method === 'PUT' && pathName === '/settings') {
+        if (!authorize(req)) return send(res, 401, { ok: false, reason: 'UNAUTHORIZED' });
+        if (typeof opts.onUpdateSettings !== 'function') {
+          return send(res, 501, { ok: false, reason: 'ACTION_NOT_IMPLEMENTED' });
+        }
+        const body = await readJson(req, 16_000);
+        const result = opts.onUpdateSettings(body);
+        return send(res, 200, { ok: true, settings: result });
       }
       if (req.method === 'GET' && pathName === '/wallet') {
         if (typeof opts.getWallet !== 'function') {
