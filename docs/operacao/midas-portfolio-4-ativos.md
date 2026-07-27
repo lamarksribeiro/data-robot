@@ -15,6 +15,7 @@ Sizing live para banca ~$150: **BTC + ETH + SOL + XRP**.
 1. Deploy código com portfolio presets.
 2. Env:
    - `ENGINE_CANARY_MAX_BUDGET=6`
+   - `ENGINE_START_ARMED=0` (boot sempre DISARMED; armar manualmente quando fizer sentido)
    - `ENGINE_MAX_ACCOUNT_EXPOSURE=24`
    - `ENGINE_ACCOUNT_BOOK_FILE=runs/shared/account-risk-book.json`
    - `ENGINE_SNAPSHOT_SOURCE=btc5m`
@@ -35,6 +36,7 @@ Cada ativo precisa de um processo engine com:
 | Env | ETH | SOL | XRP |
 |---|---|---|---|
 | `ENGINE_SNAPSHOT_SOURCE` | `eth5m` | `sol5m` | `xrp5m` |
+| `ENGINE_START_ARMED` | 0 | 0 | 0 |
 | `ENGINE_STRATEGY_INSTANCE_ID` | `midas-carry-v1_eth5m_primary` | `…_sol5m_…` | `…_xrp5m_…` |
 | `ENGINE_PORT` | 3202 | 3203 | 3204 |
 | active-strategy | `portfolio/eth.json` → copiar p/ active | idem | idem |

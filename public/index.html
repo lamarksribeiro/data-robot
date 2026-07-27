@@ -147,6 +147,7 @@
       <div class="topbar__actions">
         <span class="topbar-pill" id="topbar-mode">—</span>
         <span class="topbar-pill topbar-pill--live" id="topbar-entries" title="Estado das entradas">—</span>
+        <div class="engine-tabs" id="engine-tabs" aria-label="Engines"></div>
         <button class="btn btn--ghost btn--sm" id="refresh-button" type="button">Atualizar</button>
         <button class="btn btn--ghost btn--sm logout-button" type="button">Sair</button>
       </div>
@@ -245,6 +246,30 @@
             <span class="kpi-card__label">Commit</span>
             <strong class="kpi-card__value" id="source-commit">—</strong>
             <em class="kpi-card__meta" id="instance-short">instância —</em>
+          </article>
+        </section>
+
+        <!-- ═══════════════ FROTA (mini cards por engine) ═══════════════ -->
+        <section class="kpi-strip" aria-label="Frota por engine">
+          <article class="kpi-card">
+            <span class="kpi-card__label">BTC</span>
+            <strong class="kpi-card__value" id="fleet-state-btc">—</strong>
+            <em class="kpi-card__meta" id="fleet-meta-btc">—</em>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-card__label">ETH</span>
+            <strong class="kpi-card__value" id="fleet-state-eth">—</strong>
+            <em class="kpi-card__meta" id="fleet-meta-eth">—</em>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-card__label">SOL</span>
+            <strong class="kpi-card__value" id="fleet-state-sol">—</strong>
+            <em class="kpi-card__meta" id="fleet-meta-sol">—</em>
+          </article>
+          <article class="kpi-card">
+            <span class="kpi-card__label">XRP</span>
+            <strong class="kpi-card__value" id="fleet-state-xrp">—</strong>
+            <em class="kpi-card__meta" id="fleet-meta-xrp">—</em>
           </article>
         </section>
 
@@ -545,7 +570,10 @@
                 Cada trade fechado desde que este robô/estratégia começou a operar (audit persistente).
               </p>
             </div>
-            <span class="badge" id="position-trades-count">0 trades</span>
+          <span class="badge" id="position-trades-count">0 trades</span>
+          <button class="btn btn--ghost btn--sm" type="button" id="position-trades-scope-toggle" aria-pressed="false">
+            Engines: selecionada
+          </button>
           </div>
           <div class="table-wrap table-wrap--fit">
             <table>
@@ -707,6 +735,9 @@
               <p class="panel__hint">Histórico completo desde o início deste robô. Resumo em Posição &amp; PnL.</p>
             </div>
             <span class="badge" id="trades-count">0 trades</span>
+            <button class="btn btn--ghost btn--sm" type="button" id="trades-scope-toggle" aria-pressed="false">
+              Engine: selecionada
+            </button>
           </div>
           <div class="table-wrap">
             <table>
@@ -922,6 +953,9 @@
           <div class="page-header__badges">
             <span id="audit-count" class="badge">0 eventos</span>
             <span id="audit-fail-count" class="badge badge--warn">0 falhas</span>
+            <button class="btn btn--ghost btn--sm" type="button" id="audit-scope-toggle" aria-pressed="false">
+              Audit: selecionada
+            </button>
           </div>
         </header>
 

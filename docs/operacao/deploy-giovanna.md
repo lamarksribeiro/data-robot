@@ -38,7 +38,7 @@ Baseline latência (20/07/2026, 3×): mediana total **~380 ms** (ping 56 / creat
 - UI e engine são containers separados: UI autenticada `:3200`; engine long-lived `:3201`.
 - Engine sem FQDN público, acessível pelo alias privado `data-robot-engine`; UI usa `http://data-robot-engine:3201`.
 - Em 23/07, ambos os apps foram implantados no commit `b39b737`, `running:healthy`.
-- Engine atual: MIDAS BTC 5m em `shadow`, `ENGINE_START_ARMED=0`, estado operacional inicial `DISARMED`.
+- Engines MIDAS (BTC/ETH/SOL/XRP) em `shadow`, `ENGINE_START_ARMED=0` em todas, estado operacional inicial `DISARMED`.
 - Checkpoints e logs de shadow MIDAS persistem no volume `rx06uazamupj1w98pvl2b1d9-engine-runs`, montado em `/usr/src/app/runs` (inclui `runs/midas-shadow/`).
 - Secrets: env no Coolify (não commitar `.env`).
 - Engine Ready usa fixtures e **não** depende de TFC nem MIDAS ([ADR-002](../arquitetura/adr-002-strategy-catalog-supervision.md)).

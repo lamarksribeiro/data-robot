@@ -7,6 +7,8 @@ const app = createUiServer({
   host: process.env.HOST || '0.0.0.0',
   port: Number(process.env.PORT || 3200),
   engineBaseUrl: process.env.ENGINE_INTERNAL_URL || 'http://127.0.0.1:3201',
+  engineRegistry: process.env.ENGINE_REGISTRY,
+  engineDefaultEngineId: process.env.ENGINE_DEFAULT_ENGINE,
   engineOpsToken: process.env.ENGINE_OPS_TOKEN,
   dashboardUser: process.env.DASHBOARD_USER,
   dashboardPassword: process.env.DASHBOARD_PASSWORD,

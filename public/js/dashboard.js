@@ -9,6 +9,140 @@ let actionRunning = false;
 let lastStatus = null;
 let currentView = 'overview';
 
+// -----------------------------
+// Fleet (multi-engine)
+// -----------------------------
+const ENGINE_STORAGE_KEY = 'dr_selected_engine_id';
+let enginesSnapshot = null;
+let selectedEngineId = localStorage.getItem(ENGINE_STORAGE_KEY) || null;
+let enginesProbeAt = 0;
+let enginesProbeInFlight = null;
+
+function apiEngine(path, options = {}) {
+  const id = selectedEngineId || 'btc';
+  return api(`/api/engines/${encodeURIComponent(id)}${path}`, options);
+}
+
+function apiEngineById(engineId, path, options = {}) {
+  return api(`/api/engines/${encodeURIComponent(engineId)}${path}`, options);
+}
+
+function renderEngineTabs() {
+  const box = $('engine-tabs');
+  if (!box) return;
+  box.replaceChildren();
+  if (!Array.isArray(enginesSnapshot) || enginesSnapshot.length === 0) {
+    const empty = document.createElement('span');
+    empty.textContent = '—';
+    box.append(empty);
+    return;
+  }
+
+  for (const eng of enginesSnapshot) {
+    const mode = String(eng.status?.mode ?? eng.health?.mode ?? 'shadow').toLowerCase();
+    const state = eng.status?.state ?? (eng.health?.ready === true ? 'READY' : 'OFFLINE');
+    const reachable = eng.reachable !== false;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = reachable
+      ? `btn btn--sm ${String(eng.id) === String(selectedEngineId) ? 'btn--primary' : 'btn--ghost'}`
+      : 'btn btn--sm btn--ghost';
+    btn.disabled = !reachable;
+    btn.textContent = eng.asset || eng.label || eng.id;
+    btn.title = `${eng.label} · ${mode} · ${state}`;
+    btn.setAttribute('aria-pressed', String(eng.id) === String(selectedEngineId));
+    btn.addEventListener('click', async () => {
+      selectedEngineId = String(eng.id);
+      renderEngineTabs();
+      try {
+        localStorage.setItem(ENGINE_STORAGE_KEY, selectedEngineId);
+      } catch {
+        /* ignore */
+      }
+      // Reset do studio para não “vazar” edits/estado de outra engine.
+      stratStudio.dirty = false;
+      stratStudio.loaded = false;
+      stratStudio.familyId = null;
+      stratStudio.version = null;
+      stratStudio.presetId = null;
+      stratStudio.baseParams = {};
+      stratStudio.editableKeys = [];
+      stratStudio.paramSearch = '';
+      clearSeries();
+      await refresh();
+    });
+    box.append(btn);
+  }
+}
+
+function renderFleetCards() {
+  if (!Array.isArray(enginesSnapshot) || enginesSnapshot.length === 0) return;
+  for (const eng of enginesSnapshot) {
+    const id = String(eng.id || '').toLowerCase();
+    const stateEl = $(`fleet-state-${id}`);
+    const metaEl = $(`fleet-meta-${id}`);
+    if (!stateEl || !metaEl) continue;
+
+    const mode = String(eng.status?.mode ?? eng.health?.mode ?? 'shadow').toLowerCase();
+    const state = eng.status?.state ?? '—';
+    const entryEnabled = eng.status?.entryEnabled;
+    const feedsOk = eng.health?.feedsOk;
+
+    stateEl.textContent = state;
+    const parts = [];
+    parts.push(mode);
+    parts.push(entryEnabled === true ? 'entradas ON' : entryEnabled === false ? 'entradas OFF' : 'entradas —');
+    parts.push(feedsOk === true ? 'feed OK' : feedsOk === false ? 'feed atenção' : 'feed —');
+    metaEl.textContent = parts.join(' · ');
+  }
+}
+
+async function ensureEnginesSnapshot({ force = false } = {}) {
+  if (force === false && enginesSnapshot && Date.now() - enginesProbeAt < 15_000) return;
+  if (enginesProbeInFlight) return enginesProbeInFlight;
+  enginesProbeInFlight = (async () => {
+    const res = await api('/api/engines', { acceptError: true });
+    const list = res?.engines ?? [];
+    enginesSnapshot = Array.isArray(list) ? list : [];
+    enginesProbeAt = Date.now();
+
+    if (!selectedEngineId || !enginesSnapshot.some((e) => String(e.id) === String(selectedEngineId))) {
+      selectedEngineId = enginesSnapshot?.[0]?.id ?? 'btc';
+      try {
+        localStorage.setItem(ENGINE_STORAGE_KEY, selectedEngineId);
+      } catch {
+        /* ignore */
+      }
+    }
+    renderEngineTabs();
+    renderFleetCards();
+  })().finally(() => {
+    enginesProbeInFlight = null;
+  });
+  return enginesProbeInFlight;
+}
+
+// Scope das tabelas (somente trades/auditoria).
+// Por segurança, controles (arm/pause/kill) continuam escopados na engine selecionada.
+let tradesScopeAll = false;
+let auditScopeAll = false;
+
+function updateTradesScopeToggle() {
+  for (const id of ['trades-scope-toggle', 'position-trades-scope-toggle']) {
+    const btn = $(id);
+    if (!btn) continue;
+    btn.setAttribute('aria-pressed', String(tradesScopeAll));
+    btn.textContent = tradesScopeAll ? 'Engines: todas' : 'Engine: selecionada';
+  }
+}
+
+function updateAuditScopeToggle() {
+  const btn = $('audit-scope-toggle');
+  if (!btn) return;
+  btn.setAttribute('aria-pressed', String(auditScopeAll));
+  btn.textContent = auditScopeAll ? 'Audit: todas' : 'Audit: selecionada';
+}
+
 /** Rótulos e textos de confirmação dos controles (API interna continua arm/disarm). */
 const CONTROL_ACTION_COPY = {
   arm: {
@@ -665,9 +799,9 @@ function renderEquityChart() {
 
 const MODE_COPY = {
   shadow: {
-    title: 'SHADOW',
+    title: 'SHADOW ORDERS',
     explain: 'Mercado real, decisões reais, sem ordens na Polymarket.',
-    badge: 'Shadow · sem dinheiro real',
+    badge: 'SHADOW ORDERS · sem dinheiro real',
     tone: 'warn',
   },
   live: {
@@ -1369,7 +1503,8 @@ function renderTradesTable(trades = [], bodyId, colCount) {
     const marketBtn = document.createElement('button');
     marketBtn.type = 'button';
     marketBtn.className = 'linkish';
-    marketBtn.textContent = shortId(trade.marketId, 22);
+    const engineSuffix = trade.engineId ? ` · ${String(trade.engineId).toUpperCase()}` : '';
+    marketBtn.textContent = `${shortId(trade.marketId, 22)}${engineSuffix}`;
     marketBtn.title = trade.marketId;
     marketBtn.addEventListener('click', () => gotoAuditForMarket(trade.marketId));
 
@@ -1481,28 +1616,70 @@ async function refreshTrades({ silent = false, page } = {}) {
   const seq = ++tradesFetchSeq;
   const nextPage = Math.max(1, Number(page ?? tradesPage) || 1);
   try {
-    const payload = await api(
-      `/api/engine/trades?page=${nextPage}&pageSize=${TRADES_PAGE_SIZE}`,
+    if (!tradesScopeAll) {
+      const payload = await apiEngine(
+        `/trades?page=${nextPage}&pageSize=${TRADES_PAGE_SIZE}`,
+      );
+      if (seq !== tradesFetchSeq) return;
+      const normalized = Array.isArray(payload)
+        ? {
+            trades: payload,
+            summary: summarizeTradePnl(payload),
+            equity: buildEquityCurveFromTrades(payload),
+            total: payload.length,
+            page: 1,
+            totalPages: 1,
+            pageSize: payload.length,
+          }
+        : payload;
+      tradesCache = Array.isArray(normalized.trades) ? normalized.trades : [];
+      tradesSummary = normalized.summary ?? summarizeTradePnl(tradesCache);
+      tradesEquity = Array.isArray(normalized.equity)
+        ? normalized.equity
+        : buildEquityCurveFromTrades(tradesCache);
+      tradesPage = Number(normalized.page ?? nextPage) || 1;
+      renderTrades(normalized);
+      renderPnlBreakdown(tradesSummary, lastStatus?.position?.realizedPnl);
+      renderEquityChart();
+      return;
+    }
+
+    // Modo agregado: busca em paralelo na frota, junta e ordena por tempo.
+    await ensureEnginesSnapshot();
+    const engines = Array.isArray(enginesSnapshot) ? enginesSnapshot : [];
+    const pageToFetch = 1; // best-effort: fetch page 1 de cada engine
+    const requests = engines.map((e) =>
+      apiEngineById(String(e.id), `/trades?page=${pageToFetch}&pageSize=${TRADES_PAGE_SIZE}`),
     );
+    const results = await Promise.allSettled(requests);
     if (seq !== tradesFetchSeq) return;
-    const normalized = Array.isArray(payload)
-      ? {
-          trades: payload,
-          summary: summarizeTradePnl(payload),
-          equity: buildEquityCurveFromTrades(payload),
-          total: payload.length,
-          page: 1,
-          totalPages: 1,
-          pageSize: payload.length,
-        }
-      : payload;
-    tradesCache = Array.isArray(normalized.trades) ? normalized.trades : [];
-    tradesSummary = normalized.summary ?? summarizeTradePnl(tradesCache);
-    tradesEquity = Array.isArray(normalized.equity)
-      ? normalized.equity
-      : buildEquityCurveFromTrades(tradesCache);
-    tradesPage = Number(normalized.page ?? nextPage) || 1;
-    renderTrades(normalized);
+
+    const merged = [];
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      const engineId = String(engines[i]?.id ?? '');
+      if (r.status !== 'fulfilled') continue;
+      const payload = r.value;
+      const trades = Array.isArray(payload) ? payload : payload?.trades ?? [];
+      if (!Array.isArray(trades)) continue;
+      merged.push(...trades.map((t) => ({ ...t, engineId })));
+    }
+
+    merged.sort((a, b) => (b.closedAtMs || b.openedAtMs || 0) - (a.closedAtMs || a.openedAtMs || 0));
+
+    tradesCache = merged;
+    tradesSummary = summarizeTradePnl(tradesCache);
+    tradesEquity = buildEquityCurveFromTrades(tradesCache);
+    tradesPage = 1;
+    renderTrades({
+      trades: tradesCache,
+      summary: tradesSummary,
+      equity: tradesEquity,
+      total: tradesCache.length,
+      page: 1,
+      totalPages: 1,
+      pageSize: tradesCache.length,
+    });
     renderPnlBreakdown(tradesSummary, lastStatus?.position?.realizedPnl);
     renderEquityChart();
   } catch (error) {
@@ -1639,8 +1816,15 @@ function auditSummary(entry) {
     bits.push(`${String(entry.fromMarketId).slice(0, 10)}→${String(entry.toMarketId).slice(0, 10)}`);
   }
   if (entry.strategyId) bits.push(entry.strategyId);
-  if (entry.mode) bits.push(entry.mode);
+  if (entry.mode) {
+    const m = String(entry.mode).toLowerCase();
+    if (m === 'shadow') bits.push('SHADOW ORDERS');
+    else if (m === 'dry-run' || m === 'dryrun' || m === 'dryrun') bits.push('DRY-RUN');
+    else if (m === 'live') bits.push('LIVE');
+    else bits.push(String(entry.mode));
+  }
   if (entry.operatorState) bits.push(entry.operatorState);
+  if (entry.engineId) bits.push(`eng ${String(entry.engineId).toUpperCase()}`);
   if (entry.intentCount != null && entry.acceptedCount == null) {
     bits.push(`${entry.intentCount} intents`);
   }
@@ -1788,9 +1972,36 @@ async function refreshAudit({ silent = false } = {}) {
   const seq = ++auditFetchSeq;
   const params = readAuditFilters();
   try {
-    const rows = await api(`/api/engine/audit?${params.toString()}`);
+    const paramsStr = params.toString();
+    const limit = Number(params.get('limit') ?? 200);
+
+    if (!auditScopeAll) {
+      const rows = await apiEngine(`/audit?${paramsStr}`);
+      if (seq !== auditFetchSeq) return;
+      renderAudit(rows);
+      return;
+    }
+
+    // Modo agregado: busca em paralelo na frota e junta (ordenado por tsMs).
+    await ensureEnginesSnapshot();
+    const engines = Array.isArray(enginesSnapshot) ? enginesSnapshot : [];
+    const requests = engines.map((e) => apiEngineById(String(e.id), `/audit?${paramsStr}`));
+    const results = await Promise.allSettled(requests);
     if (seq !== auditFetchSeq) return;
-    renderAudit(rows);
+
+    const merged = [];
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      const engineId = String(engines[i]?.id ?? '');
+      if (r.status !== 'fulfilled') continue;
+      const rows = r.value;
+      const arr = Array.isArray(rows) ? rows : rows?.rows ?? [];
+      if (!Array.isArray(arr)) continue;
+      merged.push(...arr.map((x) => ({ ...x, engineId })));
+    }
+
+    merged.sort((a, b) => (b.tsMs || 0) - (a.tsMs || 0));
+    renderAudit(merged.slice(0, limit));
   } catch (error) {
     if (error.status === 401) return showLogin();
     if (!silent) showAlert(`Auditoria indisponível: ${error.message}`);
@@ -2268,8 +2479,8 @@ function renderGuide(status, health) {
     showControlsLink = true;
   } else if (!live) {
     tone = 'warn';
-    title = 'Simulação (shadow)';
-    body = 'Decisões reais, sem ordens na exchange.';
+    title = 'SHADOW ORDERS';
+    body = 'Decisões reais, sem ordens na Polymarket.';
     next = 'Para capital real: Engine em live + Ativar entradas';
     showControlsLink = true;
   } else if (!armed) {
@@ -2476,7 +2687,7 @@ let walletFetchSeq = 0;
 async function refreshWalletLive({ silent = true } = {}) {
   const seq = ++walletFetchSeq;
   try {
-    const wallet = await api('/api/engine/wallet');
+    const wallet = await apiEngine('/wallet');
     if (seq !== walletFetchSeq) return;
     if (!lastStatus) lastStatus = {};
     const balance = {
@@ -2574,6 +2785,33 @@ function render(status, health, instances) {
       : pres.presetId,
   );
   text('asset-label', market.asset || '—');
+
+  // Atualiza títulos/legendas que hoje estão "fixos" em BTC.
+  // As séries do chart já vêm do mesmo "spot" (market.btc) mesmo quando o asset é ETH/SOL/XRP.
+  const asset = market.asset || null;
+  if (asset) {
+    const c1 = $('chart-cross');
+    const panel1 = c1?.closest?.('article');
+    if (panel1) {
+      const title = panel1.querySelector('h2');
+      if (title) title.textContent = `${asset} vs Price-to-Beat`;
+      const hint = panel1.querySelector('.panel__hint');
+      if (hint) hint.textContent = `Linha verde = ${asset} spot · amarela = PTB. Marcadores = cruzamento (flip do favorito).`;
+      const legendAsset = panel1.querySelector('.chart-legend__item--btc');
+      if (legendAsset) legendAsset.textContent = asset;
+    }
+    const c2 = $('chart-cross-market');
+    const panel2 = c2?.closest?.('article');
+    if (panel2) {
+      const title2 = panel2.querySelector('h2');
+      if (title2) title2.textContent = `${asset} vs Price-to-Beat`;
+      const hint2 = panel2.querySelector('.panel__hint');
+      if (hint2) hint2.textContent = `Mesmo sinal da estratégia: cruzar PTB muda o favorito UP/DOWN.`;
+      const legendAsset2 = panel2.querySelector('.chart-legend__item--btc');
+      if (legendAsset2) legendAsset2.textContent = asset;
+    }
+  }
+
   text('market-window', market.window || '—');
   text('market-id', shortId(market.marketId || status.lastMarketId, 28));
   text(
@@ -3074,6 +3312,12 @@ function renderStratSelects() {
   const runningPresetId = running?.presetId || null;
   const runningVersion = running?.version || null;
   const runningIsThisFamily = running?.strategyId && running.strategyId === family.pluginId;
+  const assetKey = (() => {
+    const a = lastStatus?.market?.asset;
+    if (!a) return null;
+    const k = String(a).toLowerCase();
+    return ['btc', 'eth', 'sol', 'xrp'].includes(k) ? k : null;
+  })();
 
   versionSel.replaceChildren();
   for (const v of family.versions || []) {
@@ -3096,22 +3340,39 @@ function renderStratSelects() {
 
   const version = currentVersion();
   presetSel.replaceChildren();
-  for (const p of version?.presets || []) {
+  const rawPresets = version?.presets || [];
+  const filteredPresets = assetKey
+    ? rawPresets.filter((p) => {
+        const pid = String(p?.presetId ?? '');
+        const prefix = pid.split('-')[0];
+        const assetSpecific = ['btc', 'eth', 'sol', 'xrp'].includes(prefix);
+        // se for um preset “asset-specific”, mostra só o native da engine selecionada
+        return !assetSpecific || prefix === assetKey;
+      })
+    : rawPresets;
+  const presets = filteredPresets.length ? filteredPresets : rawPresets;
+
+  for (const p of presets) {
     const opt = document.createElement('option');
     opt.value = p.presetId;
     const runMark =
       runningIsThisFamily && runningPresetId === p.presetId ? ' · em execução' : '';
     const role = p.role ? ` · ${p.role}` : '';
     const custom = p.custom ? ' · custom' : '';
-    opt.textContent = `${p.displayTitle || p.name}${p.budgetLabel ? ` · ${p.budgetLabel}` : ''} (${p.presetId})${role}${custom}${runMark}`;
+    const pidPrefix = String(p?.presetId ?? '').split('-')[0];
+    const nativeMark = assetKey && pidPrefix === assetKey ? ' · nativo' : '';
+    opt.textContent = `${p.displayTitle || p.name}${p.budgetLabel ? ` · ${p.budgetLabel}` : ''} (${p.presetId})${role}${custom}${runMark}${nativeMark}`;
     presetSel.append(opt);
   }
-  if (!stratStudio.presetId || !version?.presets?.some((p) => p.presetId === stratStudio.presetId)) {
+
+  const nativePresetId = assetKey ? presets.find((p) => String(p?.presetId ?? '').split('-')[0] === assetKey)?.presetId : null;
+  if (!stratStudio.presetId || !presets.some((p) => p.presetId === stratStudio.presetId)) {
     stratStudio.presetId =
       (runningIsThisFamily &&
-        version?.presets?.some((p) => p.presetId === runningPresetId) &&
+        presets.some((p) => p.presetId === runningPresetId) &&
         runningPresetId) ||
-      version?.presets?.[0]?.presetId ||
+      nativePresetId ||
+      presets?.[0]?.presetId ||
       null;
   }
   presetSel.value = stratStudio.presetId || '';
@@ -3192,6 +3453,9 @@ function renderStratStatusStrip(library) {
   const nextName = activeHit?.preset?.displayTitle || activeHit?.preset?.name || active?.name || null;
   const runBudget = runningHit?.preset?.budgetLabel || running?.budgetLabel;
   const nextBudget = activeHit?.preset?.budgetLabel;
+  const engineLabel = selectedEngineId ? String(selectedEngineId).toUpperCase() : '—';
+  const assetLabel = lastStatus?.market?.asset ?? engineLabel;
+  const instanceId = lastStatus?.strategyInstanceId ? shortId(lastStatus.strategyInstanceId, 28) : '—';
   const runLabel = running
     ? `${runName || running.strategyId}${runBudget ? ` · ${runBudget}` : ''}`
     : 'Nenhuma / default env';
@@ -3202,7 +3466,7 @@ function renderStratStatusStrip(library) {
   text(
     'strat-status-running-meta',
     running
-      ? `${running.strategyId} · plugin ${running.version || '—'} · ${running.presetId}${
+      ? `${engineLabel} · ${assetLabel} · preset ${running.presetId} · inst ${instanceId} · plugin ${running.version || '—'}${
           runningHit?.preset?.backtestVersion ? ` · backtest v${runningHit.preset.backtestVersion}` : ''
         }`
       : 'runtime atual da Engine',
@@ -3211,7 +3475,9 @@ function renderStratStatusStrip(library) {
   text(
     'strat-status-next-meta',
     active
-      ? `${active.pluginId || active.strategyId || '—'} · v${active.version || '—'}`
+      ? `${engineLabel} · ${assetLabel} · inst ${instanceId} · próxima preset ${
+          active.presetId || active.strategyId || '—'
+        } · v${active.version || '—'}`
       : 'próxima boot = env / catálogo padrão',
   );
 
@@ -3232,19 +3498,19 @@ function renderStratStatusStrip(library) {
         ? 'Rodando via env/catálogo (não há active-strategy persistido). No seletor: ative o preset desejado e reinicie.'
         : same
           ? 'Runtime e próxima boot estão alinhados.'
-          : 'Runtime ≠ próxima boot — reinicie a Engine para aplicar a estratégia ativa.',
+          : `Runtime ≠ próxima boot — reinicie a Engine ${assetLabel} para aplicar a estratégia ativa.`,
   );
 
   text(
     'strategy-running-badge',
     running
-      ? `rodando ${runName || running.presetId || running.strategyId}`
+      ? `rodando ${assetLabel} · ${runName || running.presetId || running.strategyId}`
       : 'rodando —',
   );
   text(
     'strategy-active-badge',
     active
-      ? `próxima ${nextName || active.presetId}`
+      ? `próxima ${assetLabel} · ${nextName || active.presetId}`
       : 'próxima = env/default',
   );
 }
@@ -3325,7 +3591,7 @@ function renderStrategyStudio(library) {
 
 async function loadStrategyStudio() {
   try {
-    const library = await api('/api/engine/strategy-library');
+    const library = await apiEngine('/strategy-library');
     renderStrategyStudio(library);
   } catch (error) {
     text('strat-action-msg', `Biblioteca indisponível: ${error.message}`);
@@ -3339,7 +3605,7 @@ async function saveStrategyVersion() {
   if (!family || !preset) return;
   const name = $('strat-save-name')?.value?.trim() || `${preset.name} custom`;
   try {
-    const res = await api('/api/engine/strategy-library/presets', {
+    const res = await apiEngine('/strategy-library/presets', {
       method: 'POST',
       body: JSON.stringify({
         familyId: family.familyId,
@@ -3375,6 +3641,8 @@ async function activateStrategy() {
   const version = currentVersion();
   const preset = currentPreset();
   if (!family || !preset) return;
+  const engineLabel = selectedEngineId ? String(selectedEngineId).toUpperCase() : '—';
+  const assetLabel = lastStatus?.market?.asset ?? engineLabel;
   if (!family.runnable) {
     text(
       'strat-action-msg',
@@ -3386,12 +3654,12 @@ async function activateStrategy() {
     kind: 'warning',
     kicker: 'Ativar estratégia',
     title: `${family.label} · ${preset.name}`,
-    body: 'Isso define a próxima boot. A Engine precisa ser reiniciada (npm run local ou restart no Coolify) para passar a operar com este preset. Continuar?',
+    body: `Isso define a próxima boot. A Engine ${assetLabel} (${engineLabel}) precisa ser reiniciada (npm run local ou restart no Coolify) para passar a operar com este preset. Continuar?`,
     confirmLabel: 'Ativar',
   });
   if (!ok) return;
   try {
-    const res = await api('/api/engine/strategy-library/activate', {
+    const res = await apiEngine('/strategy-library/activate', {
       method: 'POST',
       body: JSON.stringify({
         familyId: family.familyId,
@@ -3401,9 +3669,8 @@ async function activateStrategy() {
         params: collectEditedParams(),
       }),
     });
-    const msg =
-      res.result?.message ||
-      'Ativado como próxima boot. Reinicie a Engine para aplicar.';
+    const rawMsg = res.result?.message || `Ativado como próxima boot. Reinicie a Engine ${assetLabel} para aplicar.`;
+    const msg = res.result?.message ? `${rawMsg} (Engine ${assetLabel})` : rawMsg;
     text('strat-action-msg', msg);
     showToast(msg, 'ok');
     stratStudio.dirty = false;
@@ -3444,11 +3711,12 @@ function wireStrategyStudio() {
 
 async function refresh() {
   try {
+    await ensureEnginesSnapshot();
     const [status, health, instances, catalog] = await Promise.all([
-      api('/api/engine/status'),
-      api('/api/engine/health', { acceptError: true }),
-      api('/api/engine/instances'),
-      api('/api/engine/catalog'),
+      apiEngine('/status'),
+      apiEngine('/health', { acceptError: true }),
+      apiEngine('/instances'),
+      apiEngine('/catalog'),
     ]);
     clearAlert();
     const healthView = status.health ?? health;
@@ -3565,7 +3833,7 @@ async function runControl(button) {
   actionRunning = true;
   updateControls({ operatorState: null, state: null, position: {} });
   try {
-    await api(`/api/engine/control/${action}`, {
+    await apiEngine(`/control/${action}`, {
       method: 'POST',
       body: JSON.stringify({ confirm: confirmation }),
     });
@@ -3607,6 +3875,26 @@ $('login-form').addEventListener('submit', async (event) => {
 });
 
 $('refresh-button').addEventListener('click', refresh);
+$('trades-scope-toggle')?.addEventListener('click', async () => {
+  tradesScopeAll = !tradesScopeAll;
+  updateTradesScopeToggle();
+  clearSeries();
+  await refresh();
+});
+$('position-trades-scope-toggle')?.addEventListener('click', async () => {
+  tradesScopeAll = !tradesScopeAll;
+  updateTradesScopeToggle();
+  clearSeries();
+  await refresh();
+});
+$('audit-scope-toggle')?.addEventListener('click', async () => {
+  auditScopeAll = !auditScopeAll;
+  updateAuditScopeToggle();
+  clearSeries();
+  await refresh();
+});
+updateTradesScopeToggle();
+updateAuditScopeToggle();
 for (const button of document.querySelectorAll('.logout-button')) {
   button.addEventListener('click', async () => {
     await api('/api/session', { method: 'DELETE' }).catch(() => {});

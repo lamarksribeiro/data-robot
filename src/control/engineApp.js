@@ -146,12 +146,24 @@ export function createEngineApp(opts = {}) {
       } else if (marketId.startsWith('eth-updown-5m')) {
         asset = 'ETH';
         window = 'Up/Down 5m';
+      } else if (marketId.startsWith('sol-updown-5m')) {
+        asset = 'SOL';
+        window = 'Up/Down 5m';
+      } else if (marketId.startsWith('xrp-updown-5m')) {
+        asset = 'XRP';
+        window = 'Up/Down 5m';
       } else if (marketId.includes('fixture')) {
         asset = 'FIXTURE';
         window = 'simulado';
       }
     } else if (source.kind === 'btc5m') {
       asset = 'BTC';
+      window = 'Up/Down 5m';
+    } else if (source.kind === 'sol5m') {
+      asset = 'SOL';
+      window = 'Up/Down 5m';
+    } else if (source.kind === 'xrp5m') {
+      asset = 'XRP';
       window = 'Up/Down 5m';
     } else if (source.kind === 'fixture') {
       asset = 'FIXTURE';

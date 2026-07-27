@@ -374,7 +374,7 @@ const app = createEngineApp({
     : null,
   startArmed:
     process.env.ENGINE_START_ARMED == null
-      ? mode !== 'live'
+      ? false
       : process.env.ENGINE_START_ARMED === '1',
   canary: canaryStatus,
   getStrategyLibrary: () => {

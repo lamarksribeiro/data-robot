@@ -51,7 +51,49 @@ export function createUiServer(opts = {}) {
   const host = opts.host ?? '0.0.0.0';
   const port = Number(opts.port ?? 3200);
   const publicDir = path.resolve(opts.publicDir ?? 'public');
-  const engineBaseUrl = String(opts.engineBaseUrl ?? 'http://127.0.0.1:3201').replace(/\/$/, '');
+  const defaultEngineBaseUrl = String(opts.engineBaseUrl ?? 'http://127.0.0.1:3201').replace(/\/$/, '');
+  const parseEngineRegistry = (registryStr) => {
+    const raw = String(registryStr ?? '').trim();
+    if (!raw) return [];
+    const parts = raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const engines = [];
+    for (const part of parts) {
+      const [idRaw, labelRaw, baseUrlRaw] = part.split('|').map((s) => (s ?? '').trim());
+      if (!idRaw || !baseUrlRaw) continue;
+      const baseUrl = String(baseUrlRaw).replace(/\/$/, '');
+      let baseUrlHost = null;
+      try {
+        baseUrlHost = new URL(baseUrl).host;
+      } catch {
+        baseUrlHost = null;
+      }
+      const label = labelRaw || idRaw;
+      const asset = label;
+      engines.push({ id: idRaw, label, asset, baseUrl, baseUrlHost });
+    }
+    return engines;
+  };
+
+  const enginesFromRegistry = parseEngineRegistry(opts.engineRegistry ?? process.env.ENGINE_REGISTRY);
+  const engines =
+    enginesFromRegistry.length > 0
+      ? enginesFromRegistry
+      : [{ id: 'btc', label: 'BTC', asset: 'BTC', baseUrl: defaultEngineBaseUrl, baseUrlHost: null }];
+
+  const engineById = new Map(engines.map((e) => [String(e.id), e]));
+  const defaultEngineId = String(opts.engineDefaultEngineId ?? process.env.ENGINE_DEFAULT_ENGINE ?? engines[0].id);
+  if (!engineById.has(defaultEngineId)) {
+    // fallback seguro quando env aponta para um id inexistente
+    // (mantém o comportamento legado de 1 engine).
+    engineById.set(defaultEngineId, engineById.get(engines[0].id));
+  }
+
+  function getEngine(engineId) {
+    return engineById.get(String(engineId)) ?? engineById.get(defaultEngineId) ?? engines[0];
+  }
   const sessionTtlMs = Number(opts.sessionTtlMs ?? 8 * 60 * 60 * 1000);
   const sessions = new Map();
   const loginAttempts = new Map();
@@ -77,7 +119,7 @@ export function createUiServer(opts = {}) {
     return false;
   }
 
-  async function proxyEngine(req, res, enginePath, method = 'GET', body = null) {
+  async function proxyEngine(req, res, engineBaseUrl, enginePath, method = 'GET', body = null) {
     const headers = { accept: 'application/json' };
     let requestBody;
     // GETs operacionais da engine também exigem x-ops-token (status/audit/catalog/etc.).
@@ -184,6 +226,141 @@ export function createUiServer(opts = {}) {
         return json(res, 200, { ok: true }, { 'Set-Cookie': 'dr_session=; Path=/; Max-Age=0' });
       }
 
+      const defaultEngineBaseUrlForProxy = getEngine(defaultEngineId).baseUrl;
+
+      const engineReadSuffixToPath = new Map([
+        ['health', '/health'],
+        ['status', '/status'],
+        ['metrics', '/metrics'],
+        ['catalog', '/catalog'],
+        ['instances', '/instances'],
+        ['strategy-library', '/strategy-library'],
+        ['strategy-active', '/strategy-active'],
+        ['wallet', '/wallet'],
+      ]);
+
+      const engineControlActionToSpec = new Map([
+        ['arm', { path: '/control/arm', confirmation: 'ARM' }],
+        ['pause', { path: '/control/pause', confirmation: 'PAUSE' }],
+        ['stop', { path: '/control/stop', confirmation: 'STOP' }],
+        ['disarm', { path: '/control/disarm', confirmation: 'STOP' }],
+        ['reconcile', { path: '/control/reconcile', confirmation: 'RECONCILE' }],
+        ['cancel-all', { path: '/control/cancel-all', confirmation: 'CANCEL' }],
+        ['checkpoint', { path: '/control/checkpoint', confirmation: 'CHECKPOINT' }],
+        ['rollback', { path: '/control/rollback', confirmation: 'ROLLBACK' }],
+        ['flatten', { path: '/control/flatten', confirmation: 'FLATTEN' }],
+        ['kill', { path: '/control/kill', confirmation: 'HALT' }],
+      ]);
+
+      if (req.method === 'GET' && url.pathname === '/api/engines') {
+        if (!requireSession(req, res)) return;
+        const timeoutMs = Number(opts.engineTimeoutMs ?? 3000);
+        const headers = { accept: 'application/json' };
+        if (opts.engineOpsToken) headers['x-ops-token'] = opts.engineOpsToken;
+
+        const list = await Promise.all(
+          engines.map(async (engine) => {
+            const baseUrl = engine.baseUrl;
+            let reachable = false;
+            let lastError = null;
+            let health = null;
+            let status = null;
+            try {
+              const [h, s] = await Promise.all([
+                fetch(`${baseUrl}/health`, { headers, signal: AbortSignal.timeout(timeoutMs) })
+                  .then((r) => r.json().catch(() => null))
+                  .catch((e) => {
+                    throw e;
+                  }),
+                fetch(`${baseUrl}/status`, { headers, signal: AbortSignal.timeout(timeoutMs) })
+                  .then((r) => r.json().catch(() => null))
+                  .catch((e) => {
+                    throw e;
+                  }),
+              ]);
+              reachable = h != null || s != null;
+              health = h;
+              status = s;
+            } catch (error) {
+              lastError = error?.message ?? String(error);
+            }
+            return {
+              id: engine.id,
+              label: engine.label,
+              asset: engine.asset,
+              baseUrlHost: engine.baseUrlHost,
+              reachable,
+              lastError,
+              health,
+              status,
+            };
+          }),
+        );
+
+        return json(res, 200, { ok: true, engines: list });
+      }
+
+      // Proxy multi-engine: /api/engines/:engineId/<enginePath>
+      if (url.pathname.startsWith('/api/engines/')) {
+        if (!requireSession(req, res)) return;
+
+        const parts = url.pathname.split('/').filter(Boolean);
+        const engineId = parts[2];
+        const tail = parts.slice(3);
+
+        if (!engineId || tail.length === 0) {
+          return json(res, 404, { ok: false, reason: 'NOT_FOUND' });
+        }
+
+        const engine = getEngine(engineId);
+        const engineBaseUrlForProxy = engine.baseUrl;
+
+        if (req.method === 'GET') {
+          const leaf = tail.join('/');
+          if (tail.length === 1 && engineReadSuffixToPath.has(tail[0])) {
+            return proxyEngine(req, res, engineBaseUrlForProxy, engineReadSuffixToPath.get(tail[0]));
+          }
+          if (tail.length === 1 && tail[0] === 'audit') {
+            const qs = url.searchParams.toString();
+            return proxyEngine(req, res, engineBaseUrlForProxy, qs ? `/audit?${qs}` : '/audit');
+          }
+          if (tail.length === 1 && tail[0] === 'trades') {
+            const qs = url.searchParams.toString();
+            return proxyEngine(req, res, engineBaseUrlForProxy, qs ? `/trades?${qs}` : '/trades');
+          }
+          // fallback: GET desconhecido dentro de /api/engines
+          return json(res, 404, { ok: false, reason: 'NOT_FOUND', detail: leaf });
+        }
+
+        if (req.method === 'POST') {
+          // POST /api/engines/:id/control/:action
+          if (tail[0] === 'control' && tail.length === 2 && engineControlActionToSpec.has(tail[1])) {
+            const action = engineControlActionToSpec.get(tail[1]);
+            const body = await readJson(req);
+            if (body.confirm !== action.confirmation) {
+              return json(res, 400, {
+                ok: false,
+                reason: 'CONFIRMATION_REQUIRED',
+                confirmation: action.confirmation,
+              });
+            }
+            return proxyEngine(req, res, engineBaseUrlForProxy, action.path, 'POST', body);
+          }
+          // POST /api/engines/:id/strategy-library/presets
+          if (tail[0] === 'strategy-library' && tail[1] === 'presets') {
+            const body = await readJson(req);
+            return proxyEngine(req, res, engineBaseUrlForProxy, '/strategy-library/presets', 'POST', body);
+          }
+          // POST /api/engines/:id/strategy-library/activate
+          if (tail[0] === 'strategy-library' && tail[1] === 'activate') {
+            const body = await readJson(req);
+            return proxyEngine(req, res, engineBaseUrlForProxy, '/strategy-library/activate', 'POST', body);
+          }
+          return json(res, 404, { ok: false, reason: 'NOT_FOUND', detail: tail.join('/') });
+        }
+      }
+
+      // Legado: mantém /api/engine/* como alias da engine default.
       const readRoutes = new Map([
         ['/api/engine/health', '/health'],
         ['/api/engine/status', '/status'],
@@ -195,21 +372,21 @@ export function createUiServer(opts = {}) {
       ]);
       if (req.method === 'GET' && readRoutes.has(url.pathname)) {
         if (!requireSession(req, res)) return;
-        return proxyEngine(req, res, readRoutes.get(url.pathname));
+        return proxyEngine(req, res, defaultEngineBaseUrlForProxy, readRoutes.get(url.pathname));
       }
       if (req.method === 'GET' && url.pathname === '/api/engine/audit') {
         if (!requireSession(req, res)) return;
         const qs = url.searchParams.toString();
-        return proxyEngine(req, res, qs ? `/audit?${qs}` : '/audit');
+        return proxyEngine(req, res, defaultEngineBaseUrlForProxy, qs ? `/audit?${qs}` : '/audit');
       }
       if (req.method === 'GET' && url.pathname === '/api/engine/trades') {
         if (!requireSession(req, res)) return;
         const qs = url.searchParams.toString();
-        return proxyEngine(req, res, qs ? `/trades?${qs}` : '/trades');
+        return proxyEngine(req, res, defaultEngineBaseUrlForProxy, qs ? `/trades?${qs}` : '/trades');
       }
       if (req.method === 'GET' && url.pathname === '/api/engine/wallet') {
         if (!requireSession(req, res)) return;
-        return proxyEngine(req, res, '/wallet');
+        return proxyEngine(req, res, defaultEngineBaseUrlForProxy, '/wallet');
       }
 
       const controlRoutes = new Map([
@@ -235,17 +412,17 @@ export function createUiServer(opts = {}) {
             confirmation: action.confirmation,
           });
         }
-        return proxyEngine(req, res, action.path, 'POST', body);
+        return proxyEngine(req, res, defaultEngineBaseUrlForProxy, action.path, 'POST', body);
       }
       if (req.method === 'POST' && url.pathname === '/api/engine/strategy-library/presets') {
         if (!requireSession(req, res)) return;
         const body = await readJson(req);
-        return proxyEngine(req, res, '/strategy-library/presets', 'POST', body);
+        return proxyEngine(req, res, defaultEngineBaseUrlForProxy, '/strategy-library/presets', 'POST', body);
       }
       if (req.method === 'POST' && url.pathname === '/api/engine/strategy-library/activate') {
         if (!requireSession(req, res)) return;
         const body = await readJson(req);
-        return proxyEngine(req, res, '/strategy-library/activate', 'POST', body);
+        return proxyEngine(req, res, defaultEngineBaseUrlForProxy, '/strategy-library/activate', 'POST', body);
       }
       if (url.pathname.startsWith('/api/')) {
         return json(res, 404, { ok: false, reason: 'NOT_FOUND' });

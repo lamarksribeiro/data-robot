@@ -3,6 +3,8 @@
 **Cutover BTC:** `2026-07-27T05:27:55Z` · `entry=$3 · cap=$6 · accountExposure=$24`  
 **ETH/SOL/XRP:** live ARMED no mesmo commit (`ee1c280`), feeds `eth5m`/`sol5m`/`xrp5m` OK.
 
+UI/Operação: quando as engines sobem em `ENGINE_MODE=shadow`, o painel marca explicitamente `SHADOW ORDERS` e a auditoria exibe o modo no resumo de cada evento.
+
 ## Pré-cutover (histórico 26–27)
 
 Monitor `--days 2` ainda vê o ENTER Gold de **$14,96** (ask 0,88) — esperado; fora do regime portfolio.
