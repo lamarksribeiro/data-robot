@@ -236,7 +236,7 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
     );
     process.exit(2);
   }
-  // Live MIDAS: portfolio $3/$6 (Gold IDs) ou micro $2/$4.
+  // Live MIDAS: portfolio $2.5/$4 (Gold IDs) ou micro $2/$4.
   preset = resolveMidasLivePreset(presetId, preset);
   const maxCanaryBudget = resolveMidasCanaryCap(
     preset,

@@ -1,22 +1,22 @@
-# MIDAS Portfolio — 4 ativos ($3/$6)
+# MIDAS Portfolio — 4 ativos ($2.5/$4)
 
 Sizing live para banca ~$150: **BTC + ETH + SOL + XRP**.
 
 | Param | Valor |
 |---|---|
-| `entryBudget` | $3 |
-| `maxEntryBudget` | $6 |
-| `tierAskBudgetFactor` | 1.5 (high-ask ≈ $4,50) |
-| `ENGINE_MAX_ACCOUNT_EXPOSURE` | **24** (4 × $6) |
+| `entryBudget` | $2.5 |
+| `maxEntryBudget` | $4 |
+| `tierAskBudgetFactor` | 1.5 (high-ask ≈ $3,75) |
+| `ENGINE_MAX_ACCOUNT_EXPOSURE` | **16** (4 × $4) |
 | Livro compartilhado | `runs/shared/account-risk-book.json` |
 
 ## BTC (já no Coolify `data-robot-engine`)
 
 1. Deploy código com portfolio presets.
 2. Env:
-   - `ENGINE_CANARY_MAX_BUDGET=6`
+   - `ENGINE_CANARY_MAX_BUDGET=4`
    - `ENGINE_START_ARMED=0` (boot sempre DISARMED; armar manualmente quando fizer sentido)
-   - `ENGINE_MAX_ACCOUNT_EXPOSURE=24`
+   - `ENGINE_MAX_ACCOUNT_EXPOSURE=16`
    - `ENGINE_ACCOUNT_BOOK_FILE=runs/shared/account-risk-book.json`
    - `ENGINE_SNAPSHOT_SOURCE=btc5m`
 3. Escrever `runs/strategy-config/active-strategy.json` via:
@@ -27,7 +27,7 @@ node scripts/midas/write-portfolio-active-strategy.js --asset btc --all
 
 4. Restart engine. Log esperado:
 
-`midas-live-preset btc-gold-v1 · entry=$3 · cap=$6 · accountExposure=$24`
+`midas-live-preset btc-gold-v1 · entry=$2.5 · cap=$4 · accountExposure=$16`
 
 ## ETH / SOL / XRP (engines irmãs)
 
@@ -54,22 +54,7 @@ Templates gerados em `runs/strategy-config/portfolio/{eth,sol,xrp}.json`.
 | SOL | `data-robot-engine-sol` | `anaej3bcg2wtssydhsuergpz` | 3203 | `sol5m` |
 | XRP | `data-robot-engine-xrp` | `jcjwzh9f3flg529u642cplir` | 3204 | `xrp5m` |
 
-BTC usa `ENGINE_MAX_ACCOUNT_EXPOSURE=24` + file book. ETH/SOL/XRP usam teto **$6** por instância (`ENGINE_SHARE_ACCOUNT_BOOK=0`) até haver volume compartilhado.
-
-## Rede Docker (obrigatório para o dashboard)
-
-A UI resolve engines por alias DNS estável na rede `coolify` (não pelo nome do container, que muda a cada deploy):
-
-| Alias | App |
-|---|---|
-| `data-robot-engine` | BTC (`:3201`) |
-| `data-robot-engine-eth` | ETH (`:3202`) |
-| `data-robot-engine-sol` | SOL (`:3203`) |
-| `data-robot-engine-xrp` | XRP (`:3204`) |
-
-UI env: `ENGINE_REGISTRY=btc|BTC|http://data-robot-engine:3201,eth|ETH|http://data-robot-engine-eth:3202,...`
-
-No Coolify, campo **Custom Network Aliases** (coluna `custom_network_aliases`) de cada engine irmã deve ter o alias acima. Sem isso o dashboard marca ETH/SOL/XRP como OFFLINE mesmo com o app healthy.
+BTC usa `ENGINE_MAX_ACCOUNT_EXPOSURE=16` + file book. ETH/SOL/XRP usam teto **$4** por instância (`ENGINE_SHARE_ACCOUNT_BOOK=0`) até haver volume compartilhado.
 
 ## Monitor (48h)
 
@@ -77,4 +62,4 @@ No Coolify, campo **Custom Network Aliases** (coluna `custom_network_aliases`) d
 node scripts/midas/monitor-portfolio-sizing.js --days 2
 ```
 
-Critério: `cost_max ≤ 6.05`, `overBudget6 = 0`, acompanhar `exposureBlocks`.
+Critério: `cost_max ≤ 4.05`, `overBudget4 = 0`, acompanhar `exposureBlocks`.

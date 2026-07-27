@@ -21,9 +21,9 @@ import {
 
 /** Hard cap legado do micro-canário ($4). */
 export const MIDAS_CANARY_HARD_CAP_USD = CANARY_LIMITS.maxCanaryBudget;
-/** Teto live portfolio ($6). prepareMidasCanaryRuntime usa este. */
+/** Teto live portfolio ($4). prepareMidasCanaryRuntime usa este. */
 export const MIDAS_LIVE_HARD_CAP_USD = PORTFOLIO_PRODUCTION.maxEntryBudget;
-/** Exposição agregada portfolio (4 × $6). */
+/** Exposição agregada portfolio (4 × $4). */
 export const MIDAS_PORTFOLIO_MAX_ACCOUNT_EXPOSURE_USD = PORTFOLIO_MAX_ACCOUNT_EXPOSURE_USD;
 
 function positive(value, fallback) {

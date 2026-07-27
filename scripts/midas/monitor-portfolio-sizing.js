@@ -93,8 +93,8 @@ function summarize(list) {
     cost_max: +Math.max(...costs).toFixed(3),
     cost_avg: +avg.toFixed(3),
     ask_avg: +(list.reduce((s, e) => s + e.price, 0) / list.length).toFixed(3),
-    overBudget6: list.filter((e) => e.cost > 6.01).length,
-    overBudget4_5: list.filter((e) => e.cost > 4.51).length,
+    overBudget4: list.filter((e) => e.cost > 4.01).length,
+    overBudget3_75: list.filter((e) => e.cost > 3.76).length,
   };
 }
 
@@ -119,7 +119,7 @@ const report = {
   exposureBlockSamples: exposureBlocks.slice(-5),
   ok:
     enters.length === 0 ||
-    (summarize(enters).cost_max <= 6.05 && summarize(enters).overBudget6 === 0),
+    (summarize(enters).cost_max <= 4.05 && summarize(enters).overBudget4 === 0),
 };
 
 console.log(JSON.stringify(report, null, 2));

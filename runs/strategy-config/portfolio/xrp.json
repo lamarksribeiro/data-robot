@@ -3,10 +3,10 @@
   "pluginId": "midas-carry-v1",
   "version": "1.0.0",
   "presetId": "xrp-gold-v1",
-  "name": "MIDAS v14 · XRP Portfolio · Portfolio $3–$6 · 4 ativos · FAK/GTC",
+  "name": "MIDAS v14 · XRP Portfolio · Portfolio $2.5–$4 · 4 ativos · FAK/GTC",
   "params": {
-    "entryBudget": 3,
-    "maxEntryBudget": 6,
+    "entryBudget": 2.5,
+    "maxEntryBudget": 4,
     "minShares": 1,
     "entrySlippageMax": 0.02,
     "minLiquidityRatio": 0.6,
@@ -90,12 +90,12 @@
   "marketScope": "xrp-updown-5m",
   "runnable": true,
   "source": "runtime",
-  "updatedAt": "2026-07-27T05:19:29.597Z",
+  "updatedAt": "2026-07-27T08:25:18.817Z",
   "engineEnv": {
     "ENGINE_SNAPSHOT_SOURCE": "xrp5m",
     "ENGINE_STRATEGY_INSTANCE_ID": "midas-carry-v1_xrp5m_primary",
-    "ENGINE_CANARY_MAX_BUDGET": "6",
-    "ENGINE_MAX_ACCOUNT_EXPOSURE": "24",
+    "ENGINE_CANARY_MAX_BUDGET": "4",
+    "ENGINE_MAX_ACCOUNT_EXPOSURE": "16",
     "ENGINE_ACCOUNT_BOOK_FILE": "runs/shared/account-risk-book.json"
   }
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Gera active-strategy.json portfolio ($3/$6) para um ativo.
+ * Gera active-strategy.json portfolio ($2.5/$4) para um ativo.
  * Uso:
  *   node scripts/midas/write-portfolio-active-strategy.js --asset btc
  *   node scripts/midas/write-portfolio-active-strategy.js --asset eth --out runs/strategy-config/active-strategy.eth.json
@@ -8,7 +8,11 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { midasPortfolioPreset, describeMidasPreset } from '../../src/tfc/preset-midas.js';
+import {
+  midasPortfolioPreset,
+  describeMidasPreset,
+  PORTFOLIO_MAX_ACCOUNT_EXPOSURE_USD,
+} from '../../src/tfc/preset-midas.js';
 import { CRYPTO_5M_ASSETS, resolveCrypto5mAsset } from '../../src/markets/crypto5m.js';
 
 function arg(name, fallback = null) {
@@ -28,12 +32,14 @@ const out =
     assetKey === 'btc' ? 'active-strategy.json' : `active-strategy.${assetKey}.json`,
   );
 
+const portfolioLabel = 'Portfolio $2.5–$4 · 4 ativos · FAK/GTC';
+
 const payload = {
   familyId: 'midas',
   pluginId: 'midas-carry-v1',
   version: '1.0.0',
   presetId: asset.presetId,
-  name: `${described.displayTitle} · Portfolio $3–$6 · 4 ativos · FAK/GTC`,
+  name: `${described.displayTitle} · ${portfolioLabel}`,
   params: { ...preset },
   marketScope: asset.marketScope,
   runnable: true,
@@ -78,7 +84,7 @@ if (process.argv.includes('--all')) {
           pluginId: 'midas-carry-v1',
           version: '1.0.0',
           presetId: a.presetId,
-          name: `${d.displayTitle} · Portfolio $3–$6 · 4 ativos · FAK/GTC`,
+          name: `${d.displayTitle} · ${portfolioLabel}`,
           params: { ...p },
           marketScope: a.marketScope,
           runnable: true,
@@ -88,7 +94,7 @@ if (process.argv.includes('--all')) {
             ENGINE_SNAPSHOT_SOURCE: a.sourceKind,
             ENGINE_STRATEGY_INSTANCE_ID: `midas-carry-v1_${a.sourceKind}_primary`,
             ENGINE_CANARY_MAX_BUDGET: String(p.maxEntryBudget),
-            ENGINE_MAX_ACCOUNT_EXPOSURE: '24',
+            ENGINE_MAX_ACCOUNT_EXPOSURE: String(PORTFOLIO_MAX_ACCOUNT_EXPOSURE_USD),
             ENGINE_ACCOUNT_BOOK_FILE: 'runs/shared/account-risk-book.json',
           },
         },
