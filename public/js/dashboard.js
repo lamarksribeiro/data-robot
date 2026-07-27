@@ -1370,10 +1370,37 @@ function renderPnlBreakdown(summaryOrTrades = [], fallbackNet = null) {
   text(
     'pnl-breakdown',
     summary.closed > 0
-      ? `${money(summary.won)} ganho · −$${Math.abs(summary.lost).toFixed(2)} perdido · acerto ${formatWinRate(summary.winRate)}`
+      ? `desde o início · ${summary.closed} fechado${summary.closed === 1 ? '' : 's'}`
       : summary.pending > 0
         ? `${summary.pending} aguardando settlement`
         : 'ainda sem trades fechados',
+  );
+
+  text('overview-pnl-won', money(summary.won));
+  setPnlTone($('overview-pnl-won'), summary.won || 0);
+  text(
+    'overview-pnl-won-meta',
+    summary.wins > 0
+      ? `${summary.wins} trade${summary.wins === 1 ? '' : 's'} no verde`
+      : 'nenhum ganho ainda',
+  );
+  text('overview-pnl-lost', summary.lost > 0 ? `−$${summary.lost.toFixed(2)}` : money(0));
+  setPnlTone($('overview-pnl-lost'), summary.lost > 0 ? -summary.lost : 0);
+  text(
+    'overview-pnl-lost-meta',
+    summary.losses > 0
+      ? `${summary.losses} trade${summary.losses === 1 ? '' : 's'} no vermelho`
+      : 'nenhuma perda ainda',
+  );
+  text('overview-win-rate', formatWinRate(summary.winRate));
+  text(
+    'overview-win-rate-meta',
+    summary.decided > 0
+      ? `${summary.wins}W / ${summary.losses}L` +
+          (summary.breakeven ? ` · ${summary.breakeven} empate` : '')
+      : summary.pending > 0
+        ? `${summary.pending} aguardando`
+        : 'sem trades decididos',
   );
 
   text('position-pnl', money(net));
@@ -4294,6 +4321,84 @@ async function runControl(button) {
   }
 }
 
+/**
+ * Controles em massa na Frota (arm/pause em todas as engines).
+ * Sempre exige confirmação explícita listando os ativos.
+ */
+async function runFleetBulkControl(action) {
+  if (actionRunning) return;
+  const isArm = action === 'arm';
+  const confirmation = isArm ? 'ARM' : 'PAUSE';
+  const label = isArm ? 'Ligar todas as engines' : 'Pausar todas as engines';
+
+  await ensureEnginesSnapshot({ force: true });
+  const engines = Array.isArray(enginesSnapshot) ? enginesSnapshot : [];
+  if (!engines.length) {
+    showToast('Nenhuma engine no registry', 'warning');
+    return;
+  }
+
+  const names = engines
+    .map((e) => String(e.asset || e.label || e.id || '?').toUpperCase())
+    .join(', ');
+  const liveCount = engines.filter(
+    (e) => String(e.status?.mode || e.health?.mode || '').toLowerCase() === 'live',
+  ).length;
+
+  const ok = await appConfirm({
+    kind: isArm ? 'danger' : 'warning',
+    kicker: 'Controle em massa · Frota',
+    title: label,
+    body: isArm
+      ? `Ativa entradas em: ${names}.\n\nCada engine passa por preflight/reconciliação. ${
+          liveCount > 0
+            ? `${liveCount} engine(s) em LIVE — capital real pode ser usado.`
+            : 'Nenhuma marcada como live no snapshot atual.'
+        }\n\nConfirme somente se pretende operar a frota inteira.`
+      : `Pausa novas entradas em: ${names}.\n\nSaídas/proteção de posição aberta continuam ativas em cada engine.`,
+    confirmLabel: isArm ? 'Ligar todas' : 'Pausar todas',
+  });
+  if (!ok) return;
+
+  actionRunning = true;
+  const armBtn = $('fleet-arm-all');
+  const pauseBtn = $('fleet-pause-all');
+  if (armBtn) armBtn.disabled = true;
+  if (pauseBtn) pauseBtn.disabled = true;
+
+  try {
+    const results = await Promise.allSettled(
+      engines.map((e) =>
+        apiEngineById(String(e.id), `/control/${action}`, {
+          method: 'POST',
+          body: JSON.stringify({ confirm: confirmation }),
+        }).then(() => String(e.asset || e.id).toUpperCase()),
+      ),
+    );
+    const okIds = [];
+    const failIds = [];
+    for (let i = 0; i < results.length; i++) {
+      const name = String(engines[i]?.asset || engines[i]?.id || '?').toUpperCase();
+      if (results[i].status === 'fulfilled') okIds.push(name);
+      else failIds.push(`${name}: ${results[i].reason?.message || 'erro'}`);
+    }
+    if (failIds.length === 0) {
+      showToast(`${label}: OK em ${okIds.join(', ')}`, 'ok');
+    } else if (okIds.length === 0) {
+      showToast(`${label} falhou: ${failIds.join(' · ')}`, 'error');
+      showAlert(`${label} falhou em todas.`);
+    } else {
+      showToast(`Parcial: OK ${okIds.join(', ')} · falhas ${failIds.join(' · ')}`, 'warning');
+      showAlert(`Frota parcial — falhas: ${failIds.join(' · ')}`, 'warning');
+    }
+  } finally {
+    actionRunning = false;
+    if (armBtn) armBtn.disabled = false;
+    if (pauseBtn) pauseBtn.disabled = false;
+    await refreshFleet({ force: true });
+  }
+}
+
 $('login-form').addEventListener('submit', async (event) => {
   event.preventDefault();
   const submitButton = event.currentTarget.querySelector('button[type="submit"]');
@@ -4352,6 +4457,8 @@ for (const button of document.querySelectorAll(
 )) {
   button.addEventListener('click', () => runControl(button));
 }
+$('fleet-arm-all')?.addEventListener('click', () => runFleetBulkControl('arm'));
+$('fleet-pause-all')?.addEventListener('click', () => runFleetBulkControl('pause'));
 $('guide-cta')?.addEventListener('click', () => {
   const arm = document.querySelector('#control-grid-primary button[data-action="arm"]');
   if (arm && !arm.disabled) runControl(arm);

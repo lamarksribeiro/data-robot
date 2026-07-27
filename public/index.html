@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/styles.css?v=1.17.4">
+  <link rel="stylesheet" href="/styles.css?v=1.17.5">
 
   <script src="/js/dashboard.js?v=1.17.5" defer></script>
   <script src="/js/mascot.js?v=1.16.9" defer></script>
@@ -186,6 +186,14 @@
           <div class="page-header__badges">
             <span class="badge" id="fleet-wallet-badge">Portfolio —</span>
             <span class="badge" id="fleet-online-badge">0 online</span>
+            <div class="fleet-bulk-actions">
+              <button class="btn btn--primary btn--sm" type="button" id="fleet-arm-all">
+                Ligar todas
+              </button>
+              <button class="btn btn--warning btn--sm" type="button" id="fleet-pause-all">
+                Pausar todas
+              </button>
+            </div>
           </div>
         </header>
 
@@ -327,7 +335,22 @@
           <article class="kpi-card kpi-card--pnl">
             <span class="kpi-card__label">PnL líquido</span>
             <strong class="kpi-card__value" id="pnl-realized">—</strong>
-            <em class="kpi-card__meta" id="pnl-breakdown">ganhos — · perdas —</em>
+            <em class="kpi-card__meta" id="pnl-breakdown">desde o início deste robô</em>
+          </article>
+          <article class="kpi-card kpi-card--won">
+            <span class="kpi-card__label">Ganho</span>
+            <strong class="kpi-card__value" id="overview-pnl-won">—</strong>
+            <em class="kpi-card__meta" id="overview-pnl-won-meta">trades no verde</em>
+          </article>
+          <article class="kpi-card kpi-card--lost">
+            <span class="kpi-card__label">Perdido</span>
+            <strong class="kpi-card__value" id="overview-pnl-lost">—</strong>
+            <em class="kpi-card__meta" id="overview-pnl-lost-meta">trades no vermelho</em>
+          </article>
+          <article class="kpi-card kpi-card--rate">
+            <span class="kpi-card__label">Acerto</span>
+            <strong class="kpi-card__value" id="overview-win-rate">—</strong>
+            <em class="kpi-card__meta" id="overview-win-rate-meta">W / L</em>
           </article>
           <article class="kpi-card kpi-card--wallet">
             <span class="kpi-card__label">Portfolio Polymarket</span>

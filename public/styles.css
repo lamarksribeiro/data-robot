@@ -2658,6 +2658,15 @@ body.modal-open { overflow: hidden; }
   gap: 12px;
   margin: 4px 0 8px;
 }
+.fleet-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.kpi-card--won .kpi-card__value { color: #34d399; }
+.kpi-card--lost .kpi-card__value { color: #f87171; }
+.kpi-card--rate .kpi-card__value { color: #38bdf8; }
 .fleet-board {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
