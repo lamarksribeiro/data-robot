@@ -2673,6 +2673,10 @@ body.modal-open { overflow: hidden; }
   gap: 14px;
   margin-bottom: 16px;
 }
+
+.kpi-strip--fleet {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
 .fleet-card {
   position: relative;
   display: flex;
@@ -2752,6 +2756,37 @@ body.modal-open { overflow: hidden; }
 }
 .fleet-card__pnl.is-pos { color: #34d399; }
 .fleet-card__pnl.is-neg { color: #f87171; }
+.fleet-card__pnl-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 10px;
+}
+.fleet-card__pnl-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fleet-card__pnl-stat span {
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.fleet-card__pnl-stat strong {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.fleet-card__pnl-stat strong.is-pos { color: #34d399; }
+.fleet-card__pnl-stat strong.is-neg { color: #f87171; }
+.fleet-card__rate { color: #38bdf8; }
+.fleet-card__pnl-hint {
+  margin: -2px 0 0;
+  font-size: 11px;
+  color: var(--text-3);
+}
 .fleet-card__meta {
   display: grid;
   grid-template-columns: 1fr 1fr;

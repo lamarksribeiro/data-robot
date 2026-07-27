@@ -190,6 +190,7 @@
           <div class="page-header__badges">
             <span class="badge" id="fleet-wallet-badge">Portfolio —</span>
             <span class="badge" id="fleet-online-badge">0 online</span>
+            <span class="badge badge--accent" id="fleet-win-rate-badge">Acerto —</span>
             <div class="fleet-bulk-actions">
               <button class="btn btn--primary btn--sm" type="button" id="fleet-arm-all">
                 Ligar todas
@@ -201,11 +202,31 @@
           </div>
         </header>
 
-        <section class="kpi-strip" aria-label="Indicadores da frota">
+        <section class="kpi-strip kpi-strip--fleet" aria-label="Indicadores da frota">
           <article class="kpi-card kpi-card--pnl">
             <span class="kpi-card__label">PnL frota</span>
             <strong class="kpi-card__value" id="fleet-kpi-pnl">—</strong>
             <em class="kpi-card__meta" id="fleet-kpi-pnl-meta">soma dos 5 ativos</em>
+          </article>
+          <article class="kpi-card kpi-card--won">
+            <span class="kpi-card__label">Ganhou</span>
+            <strong class="kpi-card__value" id="fleet-kpi-won">—</strong>
+            <em class="kpi-card__meta" id="fleet-kpi-won-meta">trades no verde</em>
+          </article>
+          <article class="kpi-card kpi-card--lost">
+            <span class="kpi-card__label">Perdeu</span>
+            <strong class="kpi-card__value" id="fleet-kpi-lost">—</strong>
+            <em class="kpi-card__meta" id="fleet-kpi-lost-meta">trades no vermelho</em>
+          </article>
+          <article class="kpi-card kpi-card--rate">
+            <span class="kpi-card__label">Acerto frota</span>
+            <strong class="kpi-card__value" id="fleet-kpi-win-rate">—</strong>
+            <em class="kpi-card__meta" id="fleet-kpi-win-rate-meta">média agregada da frota</em>
+          </article>
+          <article class="kpi-card kpi-card--wallet">
+            <span class="kpi-card__label">Carteira</span>
+            <strong class="kpi-card__value" id="fleet-kpi-wallet">—</strong>
+            <em class="kpi-card__meta" id="fleet-kpi-wallet-meta">Polymarket · portfolio</em>
           </article>
           <article class="kpi-card">
             <span class="kpi-card__label">Ordens abertas</span>

@@ -871,6 +871,64 @@ function orderSideLabel(orders = []) {
   return { count: open.length, sides: sides.length ? sides.join('/') : 'ORD' };
 }
 
+function fleetWalletPresentation(wallet = fleetWallet) {
+  const portfolioUsd = Number(wallet?.portfolioUsd ?? wallet?.raw?.portfolioUsd ?? wallet?.raw?.balanceUsd);
+  const cashUsd = Number(wallet?.cashUsd ?? wallet?.balance ?? wallet?.raw?.cashUsd);
+  const positionsValueUsd = Number(wallet?.positionsValueUsd ?? wallet?.raw?.positionsValueUsd);
+  const hasPortfolio = Number.isFinite(portfolioUsd);
+  const value = hasPortfolio ? money(portfolioUsd) : '—';
+  let meta = 'sem leitura Polymarket';
+  if (hasPortfolio) {
+    if (Number.isFinite(positionsValueUsd) && positionsValueUsd > 0) {
+      meta = `cash ${money(cashUsd)} · pos ${money(positionsValueUsd)}`;
+    } else if (Number.isFinite(cashUsd)) {
+      meta = `cash ${money(cashUsd)}`;
+    } else {
+      meta = 'Polymarket · portfolio';
+    }
+  }
+  return { value, meta, hasPortfolio };
+}
+
+function mergeFleetTradeSummaries(rows = []) {
+  let net = 0;
+  let won = 0;
+  let lost = 0;
+  let wins = 0;
+  let losses = 0;
+  let pending = 0;
+  let closed = 0;
+  let breakeven = 0;
+  for (const row of rows) {
+    if (Number.isFinite(Number(row.pnlNet))) net += Number(row.pnlNet);
+    won += Number(row.won) || 0;
+    lost += Number(row.lost) || 0;
+    wins += Number(row.wins) || 0;
+    losses += Number(row.losses) || 0;
+    pending += Number(row.pending) || 0;
+    closed += Number(row.closed) || 0;
+    breakeven += Number(row.breakeven) || 0;
+  }
+  const decided = wins + losses;
+  return {
+    net,
+    won,
+    lost,
+    wins,
+    losses,
+    pending,
+    closed,
+    breakeven,
+    decided,
+    winRate: decided > 0 ? wins / decided : null,
+  };
+}
+
+function formatLostMoney(value) {
+  const n = Number(value);
+  return n > 0 ? `−$${n.toFixed(2)}` : money(0);
+}
+
 function drawFleetPnlBars(canvas, rows) {
   if (!canvas) return;
   const emptyEl = $('chart-fleet-pnl-empty');
@@ -980,7 +1038,25 @@ function renderFleetBoard(rows) {
         <span class="badge">${row.entryEnabled ? 'entradas ON' : 'entradas OFF'}</span>
         <span class="badge ${row.feedsOk === false ? 'badge--warn' : 'badge--accent'}">feed ${feed}</span>
       </div>
-      <div class="fleet-card__pnl ${pnlCls}">${money(row.pnlNet)}</div>
+      <div class="fleet-card__pnl-row">
+        <div class="fleet-card__pnl-stat">
+          <span>Lucro</span>
+          <strong class="${pnlCls}">${money(row.pnlNet)}</strong>
+        </div>
+        <div class="fleet-card__pnl-stat">
+          <span>Ganhou</span>
+          <strong class="is-pos">${money(row.won)}</strong>
+        </div>
+        <div class="fleet-card__pnl-stat">
+          <span>Perdeu</span>
+          <strong class="is-neg">${formatLostMoney(row.lost)}</strong>
+        </div>
+        <div class="fleet-card__pnl-stat">
+          <span>Acerto</span>
+          <strong class="fleet-card__rate">${formatWinRate(row.winRate)}</strong>
+        </div>
+      </div>
+      <p class="fleet-card__pnl-hint">${row.decided > 0 ? `${row.wins}W / ${row.losses}L` : row.pending > 0 ? `${row.pending} pendente(s)` : 'sem trades fechados'}</p>
       <dl class="fleet-card__meta">
         <div><dt>Spot / PTB</dt><dd>${spot}</dd></div>
         <div><dt>Tempo</dt><dd>${secs}</dd></div>
@@ -1019,11 +1095,40 @@ function renderFleetBoard(rows) {
   }
 
   text('fleet-kpi-pnl', money(totalPnl));
+  const fleetSummary = mergeFleetTradeSummaries(rows);
   text(
     'fleet-kpi-pnl-meta',
-    rows.some((r) => (r.pending || 0) > 0)
-      ? `${rows.reduce((s, r) => s + (r.pending || 0), 0)} pendente(s)`
-      : 'soma dos 5 ativos',
+    fleetSummary.closed > 0
+      ? `${fleetSummary.closed} fechado${fleetSummary.closed === 1 ? '' : 's'} · soma dos 5 ativos`
+      : rows.some((r) => (r.pending || 0) > 0)
+        ? `${fleetSummary.pending} pendente(s)`
+        : 'soma dos 5 ativos',
+  );
+  text('fleet-kpi-won', money(fleetSummary.won));
+  setPnlTone($('fleet-kpi-won'), fleetSummary.won || 0);
+  text(
+    'fleet-kpi-won-meta',
+    fleetSummary.wins > 0
+      ? `${fleetSummary.wins} trade${fleetSummary.wins === 1 ? '' : 's'} no verde`
+      : 'nenhum ganho ainda',
+  );
+  text('fleet-kpi-lost', formatLostMoney(fleetSummary.lost));
+  setPnlTone($('fleet-kpi-lost'), fleetSummary.lost > 0 ? -fleetSummary.lost : 0);
+  text(
+    'fleet-kpi-lost-meta',
+    fleetSummary.losses > 0
+      ? `${fleetSummary.losses} trade${fleetSummary.losses === 1 ? '' : 's'} no vermelho`
+      : 'nenhuma perda ainda',
+  );
+  text('fleet-kpi-win-rate', formatWinRate(fleetSummary.winRate));
+  text(
+    'fleet-kpi-win-rate-meta',
+    fleetSummary.decided > 0
+      ? `${fleetSummary.wins}W / ${fleetSummary.losses}L` +
+          (fleetSummary.breakeven ? ` · ${fleetSummary.breakeven} empate` : '')
+      : fleetSummary.pending > 0
+        ? `${fleetSummary.pending} aguardando`
+        : 'média agregada da frota',
   );
   text('fleet-kpi-orders', String(totalOrders));
   text('fleet-kpi-orders-meta', totalOrders ? 'atenção: há exposição aberta' : 'em todas as engines');
@@ -1032,12 +1137,21 @@ function renderFleetBoard(rows) {
   text('fleet-kpi-entries', String(entriesOn));
   text('fleet-kpi-entries-meta', entriesOn ? 'armadas com entry' : 'todas OFF');
   text('fleet-online-badge', `${online} online`);
-  if (fleetWallet?.portfolioUsd != null) {
-    text('fleet-wallet-badge', `Portfolio ${money(fleetWallet.portfolioUsd)}`);
+  const walletUi = fleetWalletPresentation();
+  text('fleet-kpi-wallet', walletUi.value);
+  text('fleet-kpi-wallet-meta', walletUi.meta);
+  if (walletUi.hasPortfolio) {
+    text('fleet-wallet-badge', `Portfolio ${walletUi.value}`);
   } else if (fleetWallet?.balance != null) {
     text('fleet-wallet-badge', `Portfolio ${money(fleetWallet.balance)}`);
   }
   text('fleet-pnl-chart-badge', money(totalPnl));
+  text(
+    'fleet-win-rate-badge',
+    fleetSummary.decided > 0
+      ? `Acerto ${formatWinRate(fleetSummary.winRate)} · ${fleetSummary.wins}W/${fleetSummary.losses}L`
+      : 'Acerto —',
+  );
   text('fleet-last-update', `Atualizado ${new Date().toLocaleTimeString('pt-BR')}`);
   drawFleetPnlBars($('chart-fleet-pnl'), rows);
 }
@@ -1103,6 +1217,13 @@ async function refreshFleet({ force = false } = {}) {
           presetId: status?.canary?.presetId || status?.catalog?.presetId || null,
           strategyId: status?.strategyId || null,
           pnlNet: Number(summary?.net),
+          won: Number(summary?.won) || 0,
+          lost: Number(summary?.lost) || 0,
+          wins: Number(summary?.wins) || 0,
+          losses: Number(summary?.losses) || 0,
+          breakeven: Number(summary?.breakeven) || 0,
+          decided: Number(summary?.decided) || 0,
+          winRate: summary?.winRate ?? null,
           closed: summary?.closed ?? 0,
           pending: summary?.pending ?? 0,
           equity,
@@ -1131,6 +1252,13 @@ async function refreshFleet({ force = false } = {}) {
         entryEnabled: false,
         feedsOk: false,
         pnlNet: null,
+        won: 0,
+        lost: 0,
+        wins: 0,
+        losses: 0,
+        breakeven: 0,
+        decided: 0,
+        winRate: null,
         closed: 0,
         pending: 0,
         equity: [],
@@ -1148,7 +1276,9 @@ async function refreshFleet({ force = false } = {}) {
         const wallet = await apiEngineById(walletEngine, '/wallet');
         fleetWallet = {
           portfolioUsd: Number(wallet?.portfolioUsd ?? wallet?.balanceUsd),
+          cashUsd: Number(wallet?.cashUsd ?? wallet?.balanceUsd),
           balance: Number(wallet?.cashUsd ?? wallet?.balanceUsd),
+          positionsValueUsd: Number(wallet?.positionsValueUsd),
           raw: wallet,
         };
       } catch {
