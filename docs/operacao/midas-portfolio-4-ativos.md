@@ -43,6 +43,17 @@ Mesmos secrets Polymarket + `ENGINE_OPS_TOKEN`. **Mesmo volume** `runs/` para o 
 
 Templates gerados em `runs/strategy-config/portfolio/{eth,sol,xrp}.json`.
 
+## Coolify (Giovanna) — apps provisionadas 2026-07-27
+
+| Ativo | App Coolify | UUID | Porta | Source |
+|---|---|---|---:|---|
+| BTC | `data-robot-engine` | `rx06uazamupj1w98pvl2b1d9` | 3201 | `btc5m` |
+| ETH | `data-robot-engine-eth` | `ir7qwkhr091qey8vtjcmx46n` | 3202 | `eth5m` |
+| SOL | `data-robot-engine-sol` | `anaej3bcg2wtssydhsuergpz` | 3203 | `sol5m` |
+| XRP | `data-robot-engine-xrp` | `jcjwzh9f3flg529u642cplir` | 3204 | `xrp5m` |
+
+BTC usa `ENGINE_MAX_ACCOUNT_EXPOSURE=24` + file book. ETH/SOL/XRP usam teto **$6** por instância (`ENGINE_SHARE_ACCOUNT_BOOK=0`) até haver volume compartilhado.
+
 ## Monitor (48h)
 
 ```bash

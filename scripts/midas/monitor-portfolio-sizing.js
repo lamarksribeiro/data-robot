@@ -10,6 +10,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const days = Math.max(1, Number(process.argv.find((a, i, arr) => arr[i - 1] === '--days') || 3));
+const sinceArg = process.argv.find((a, i, arr) => arr[i - 1] === '--since') || null;
+const sinceMs = sinceArg ? Date.parse(sinceArg) : null;
 const root =
   process.env.ENGINE_AUDIT_DIR ||
   path.join(process.env.ENGINE_STATE_DIR || 'runs', 'instances');
@@ -50,6 +52,7 @@ for (const { inst, file, day } of listAuditFiles()) {
       const price = Number(row.price);
       const qty = Number(row.qty);
       if (![price, qty].every(Number.isFinite) || qty <= 0) continue;
+      if (Number.isFinite(sinceMs) && Number(row.tsMs) < sinceMs) continue;
       enters.push({
         inst,
         day,
@@ -61,6 +64,7 @@ for (const { inst, file, day } of listAuditFiles()) {
       });
     }
     if (row.type === 'position_settled') {
+      if (Number.isFinite(sinceMs) && Number(row.tsMs) < sinceMs) continue;
       settles.push({
         inst,
         day,
@@ -72,6 +76,7 @@ for (const { inst, file, day } of listAuditFiles()) {
     }
     const reason = String(row.reason || row.code || row.riskReason || '');
     if (/MAX_ACCOUNT_EXPOSURE|maxAccountExposure/i.test(reason) || /MAX_ACCOUNT_EXPOSURE/i.test(JSON.stringify(row))) {
+      if (Number.isFinite(sinceMs) && Number(row.tsMs) < sinceMs) continue;
       exposureBlocks.push({ inst, day, ts: row.tsMs, type: row.type, reason });
     }
   }
@@ -103,6 +108,7 @@ const report = {
   generatedAt: new Date().toISOString(),
   days,
   cutoffDay,
+  since: sinceArg,
   enters: summarize(enters),
   byInstance: Object.fromEntries(Object.entries(byInst).map(([k, v]) => [k, summarize(v)])),
   settles: {
