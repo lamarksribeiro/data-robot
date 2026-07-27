@@ -72,7 +72,7 @@ function renderEngineTabs() {
       stratStudio.editableKeys = [];
       stratStudio.paramSearch = '';
       clearSeries();
-      await refresh();
+      await refresh({ force: true });
     });
     box.append(btn);
   }
@@ -2846,7 +2846,7 @@ function render(status, health, instances) {
   text('source-commit', status.deployment?.sourceCommit?.slice(0, 12));
   text('instance-short', shortId(status.strategyInstanceId, 28));
   text('instance-id', status.strategyInstanceId);
-  text('instance-count', `${instances.length} ativa${instances.length === 1 ? '' : 's'}`);
+  text('instance-count', `${(Array.isArray(instances) ? instances : []).length} ativa${(Array.isArray(instances) ? instances : []).length === 1 ? '' : 's'}`);
   text('uptime', duration(status.uptimeMs));
   text('uptime-badge', `Uptime ${duration(status.uptimeMs)}`);
   text('last-update', `Atualizado em ${new Date().toLocaleTimeString('pt-BR')}`);
@@ -3712,32 +3712,102 @@ function wireStrategyStudio() {
   });
 }
 
-async function refresh() {
-  try {
-    await ensureEnginesSnapshot({ force: true });
-    const [status, health, instances, catalog] = await Promise.all([
-      apiEngine('/status'),
-      apiEngine('/health', { acceptError: true }),
-      apiEngine('/instances'),
-      apiEngine('/catalog'),
-    ]);
-    clearAlert();
-    const healthView = status.health ?? health;
-    render(status, healthView, instances);
-    renderCatalog(catalog, status.strategyId, status.canary?.presetId || status.catalog?.presetId);
-    await Promise.all([
-      refreshTrades({ silent: true }),
-      refreshWalletLive({ silent: true }),
-    ]);
-    if (currentView === 'audit') await refreshAudit({ silent: true });
-    if (currentView === 'strategies') await loadStrategyStudio();
-  } catch (error) {
-    if (error.status === 401) return showLogin();
-    // Poll a cada 5s: não reescreve o banner se a mensagem for a mesma.
-    const msg = `Engine indisponível: ${error.message}`;
-    if (alertBox && !alertBox.classList.contains('hidden') && alertBox.textContent === msg) return;
-    showAlert(msg);
-  }
+const POLL_LIGHT_MS = 5000;
+const HEAVY_MIN_MS = 15_000;
+const RARE_MIN_MS = 60_000;
+
+let lastHeavyAt = 0;
+let lastRareAt = 0;
+let lastInstances = [];
+let lastCatalog = null;
+let refreshInFlight = null;
+
+function viewNeedsTrades(view = currentView) {
+  return view === 'overview' || view === 'orders' || view === 'position';
+}
+
+function viewNeedsWallet(view = currentView) {
+  return view === 'overview' || view === 'position' || view === 'controls';
+}
+
+function viewNeedsCatalog(view = currentView) {
+  return view === 'strategies' || view === 'system';
+}
+
+function viewNeedsInstances(view = currentView) {
+  return view === 'system';
+}
+
+/**
+ * @param {{ force?: boolean, forceHeavy?: boolean, forceFleet?: boolean }} [opts]
+ */
+async function refresh(opts = {}) {
+  const force = opts.force === true;
+  const forceHeavy = force || opts.forceHeavy === true;
+  const forceFleet = force || opts.forceFleet === true;
+  if (refreshInFlight && !force && !forceHeavy) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    try {
+      await ensureEnginesSnapshot({ force: forceFleet });
+
+      const now = Date.now();
+      const needRare = force || now - lastRareAt >= RARE_MIN_MS;
+      const fetchCatalog = needRare && (force || viewNeedsCatalog());
+      const fetchInstances = needRare && (force || viewNeedsInstances());
+
+      const [status, health, instances, catalog] = await Promise.all([
+        apiEngine('/status'),
+        apiEngine('/health', { acceptError: true }),
+        fetchInstances ? apiEngine('/instances') : Promise.resolve(lastInstances),
+        fetchCatalog ? apiEngine('/catalog') : Promise.resolve(lastCatalog),
+      ]);
+      if (fetchInstances && Array.isArray(instances)) {
+        lastInstances = instances;
+        lastRareAt = now;
+      }
+      if (fetchCatalog && catalog) {
+        lastCatalog = catalog;
+        lastRareAt = now;
+      }
+
+      clearAlert();
+      const healthView = status.health ?? health;
+      const instancesView = Array.isArray(instances) ? instances : lastInstances;
+      render(status, healthView, instancesView);
+      if (lastCatalog) {
+        renderCatalog(
+          lastCatalog,
+          status.strategyId,
+          status.canary?.presetId || status.catalog?.presetId,
+        );
+      }
+
+      const needHeavy = forceHeavy || now - lastHeavyAt >= HEAVY_MIN_MS;
+      if (needHeavy) {
+        const heavy = [];
+        if (forceHeavy || viewNeedsTrades()) heavy.push(refreshTrades({ silent: true }));
+        if (forceHeavy || viewNeedsWallet()) heavy.push(refreshWalletLive({ silent: true }));
+        if (heavy.length) {
+          await Promise.all(heavy);
+          lastHeavyAt = now;
+        }
+      }
+
+      if (currentView === 'audit') await refreshAudit({ silent: true });
+      if (currentView === 'strategies') await loadStrategyStudio();
+    } catch (error) {
+      if (error.status === 401) return showLogin();
+      // Poll periódico: não reescreve o banner se a mensagem for a mesma.
+      const msg = `Engine indisponível: ${error.message}`;
+      if (alertBox && !alertBox.classList.contains('hidden') && alertBox.textContent === msg) return;
+      showAlert(msg);
+    }
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+
+  return refreshInFlight;
 }
 
 function showView(viewId, { pushHash = true } = {}) {
@@ -3770,9 +3840,43 @@ function showView(viewId, { pushHash = true } = {}) {
   closeMobileNav();
   // reflow canvas after view becomes visible
   requestAnimationFrame(() => renderCharts());
-  if (id === 'strategies') loadStrategyStudio();
+  if (id === 'strategies') {
+    loadStrategyStudio();
+    // catalog só sob demanda nesta view
+    void (async () => {
+      try {
+        const catalog = await apiEngine('/catalog');
+        lastCatalog = catalog;
+        lastRareAt = Date.now();
+        if (lastStatus) {
+          renderCatalog(
+            catalog,
+            lastStatus.strategyId,
+            lastStatus.canary?.presetId || lastStatus.catalog?.presetId,
+          );
+        }
+      } catch {
+        /* silent */
+      }
+    })();
+  }
   if (id === 'audit') refreshAudit({ silent: true });
-  if (id === 'orders' || id === 'position') refreshTrades({ silent: true });
+  if (id === 'orders' || id === 'position' || id === 'overview') refreshTrades({ silent: true });
+  if (viewNeedsWallet(id)) refreshWalletLive({ silent: true });
+  if (id === 'system') {
+    void (async () => {
+      try {
+        const instances = await apiEngine('/instances');
+        if (Array.isArray(instances)) {
+          lastInstances = instances;
+          lastRareAt = Date.now();
+          if (lastStatus) render(lastStatus, lastStatus.health ?? null, instances);
+        }
+      } catch {
+        /* silent */
+      }
+    })();
+  }
 }
 
 window.addEventListener('resize', () => {
@@ -3787,9 +3891,9 @@ function showDashboard() {
   document.title = 'Data Robot · Operações';
   const hashView = (location.hash || '#overview').replace('#', '');
   showView(hashView, { pushHash: false });
-  refresh();
+  refresh({ force: true });
   clearInterval(pollTimer);
-  pollTimer = setInterval(refresh, 5000);
+  pollTimer = setInterval(() => refresh(), POLL_LIGHT_MS);
 }
 
 function showLogin() {
@@ -3850,7 +3954,7 @@ async function runControl(button) {
     showAlert(`Falha em ${label}: ${error.message}`);
   } finally {
     actionRunning = false;
-    await refresh();
+    await refresh({ force: true });
   }
 }
 
@@ -3880,24 +3984,24 @@ $('login-form').addEventListener('submit', async (event) => {
   }
 });
 
-$('refresh-button').addEventListener('click', refresh);
+$('refresh-button').addEventListener('click', () => refresh({ force: true }));
 $('trades-scope-toggle')?.addEventListener('click', async () => {
   tradesScopeAll = !tradesScopeAll;
   updateTradesScopeToggle();
   clearSeries();
-  await refresh();
+  await refresh({ force: true });
 });
 $('position-trades-scope-toggle')?.addEventListener('click', async () => {
   tradesScopeAll = !tradesScopeAll;
   updateTradesScopeToggle();
   clearSeries();
-  await refresh();
+  await refresh({ force: true });
 });
 $('audit-scope-toggle')?.addEventListener('click', async () => {
   auditScopeAll = !auditScopeAll;
   updateAuditScopeToggle();
   clearSeries();
-  await refresh();
+  await refresh({ force: true });
 });
 updateTradesScopeToggle();
 updateAuditScopeToggle();
