@@ -11,16 +11,20 @@ import { createUserChannel } from '../executor/userChannel.js';
 import { createOmsSink } from '../oms/omsSink.js';
 import { createLogger } from '../observability/logger.js';
 import { preflightChecksFromResult, runLivePreflight } from '../risk/livePreflight.js';
+import { createFileAccountRiskBook } from '../risk/fileAccountBook.js';
 import {
   CANARY_LIMITS,
-  GOLD_PRODUCTION,
+  PORTFOLIO_PRODUCTION,
+  PORTFOLIO_MAX_ACCOUNT_EXPOSURE_USD,
   canaryMidasPreset,
 } from '../tfc/preset-midas.js';
 
 /** Hard cap legado do micro-canário ($4). */
 export const MIDAS_CANARY_HARD_CAP_USD = CANARY_LIMITS.maxCanaryBudget;
-/** Teto live (Gold $30). prepareMidasCanaryRuntime usa este. */
-export const MIDAS_LIVE_HARD_CAP_USD = GOLD_PRODUCTION.maxEntryBudget;
+/** Teto live portfolio ($6). prepareMidasCanaryRuntime usa este. */
+export const MIDAS_LIVE_HARD_CAP_USD = PORTFOLIO_PRODUCTION.maxEntryBudget;
+/** Exposição agregada portfolio (4 × $6). */
+export const MIDAS_PORTFOLIO_MAX_ACCOUNT_EXPOSURE_USD = PORTFOLIO_MAX_ACCOUNT_EXPOSURE_USD;
 
 function positive(value, fallback) {
   const n = Number(value);
@@ -167,9 +171,22 @@ export async function prepareMidasCanaryRuntime(opts = {}) {
         : Number(process.env.ENGINE_CLOB_HEARTBEAT_MS || 5_000),
     });
 
+  const accountExposure = positive(
+    opts.maxAccountExposure,
+    MIDAS_PORTFOLIO_MAX_ACCOUNT_EXPOSURE_USD,
+  );
+  const sharedBook =
+    opts.accountBook ??
+    (opts.shareAccountBook !== false
+      ? createFileAccountRiskBook({
+          maxAccountExposure: accountExposure,
+          file: opts.accountBookFile,
+        })
+      : undefined);
+
   return {
     sink,
-    // Preset já resolvido pelo engine-serve (Gold vs micro); não rebaixar aqui.
+    // Preset já resolvido pelo engine-serve (portfolio vs micro); não rebaixar aqui.
     preset: opts.preset ?? canaryMidasPreset(),
     riskOpts: {
       preflightChecks: preflightChecksFromResult(preflight),
@@ -177,10 +194,11 @@ export async function prepareMidasCanaryRuntime(opts = {}) {
       maxCanaryBudget: requestedCap,
       maxNotionalPerOrder: requestedCap,
       maxNotionalPerEvent: requestedCap,
-      maxAccountExposure: positive(opts.maxAccountExposure, requestedCap),
-      maxDailyLoss: positive(opts.maxDailyLoss, requestedCap),
+      maxAccountExposure: accountExposure,
+      maxDailyLoss: positive(opts.maxDailyLoss, accountExposure),
       maxSlippage: CANARY_LIMITS.maxSlippage,
       allowLiveReverse: opts.allowLiveReverse !== false,
+      accountBook: sharedBook,
       // 0 = ilimitado na control window; por evento: até maxEntryAttemptsPerEvent
       // (FAK miss libera o slot ONE_INTENT para retry na janela terminal).
       maxEntryAttemptsPerEvent: Number.isFinite(Number(opts.maxEntryAttemptsPerEvent))

@@ -6,7 +6,7 @@
 import { createMarketState } from '../feeds/marketState.js';
 import { startRtdsFeed } from '../feeds/rtdsFeed.js';
 import { createClobFeed } from '../feeds/clobFeed.js';
-import { findActiveBtc5mEvent } from '../markets/btc5m.js';
+import { findActiveCrypto5mEvent, isCrypto5mSourceKind, resolveCrypto5mAsset } from '../markets/crypto5m.js';
 import { fetchPriceToBeat } from '../markets/priceToBeat.js';
 import { buildMarketSnapshot } from './normalize.js';
 import { createMarketHub } from './hub.js';
@@ -224,10 +224,12 @@ export function createFixtureSnapshotSource(opts = {}) {
 }
 
 /**
- * Fonte BTC Up/Down 5m: descoberta/rotação + RTDS + CLOB market WS.
+ * Fonte Up/Down 5m (btc/eth/sol/xrp): descoberta/rotação + RTDS + CLOB market WS.
  * @param {object} [opts]
+ * @param {string} [opts.assetKey] btc|eth|sol|xrp (default btc)
  */
-export function createBtc5mSnapshotSource(opts = {}) {
+export function createCrypto5mSnapshotSource(opts = {}) {
+  const asset = resolveCrypto5mAsset(opts.assetKey || opts.asset || 'btc');
   const clock = opts.clock ?? (() => Date.now());
   // Watchdog: RTDS/CLOB já disparam pollNow. Hot = pré-entrada/tático; idle = longe do slot.
   const idleIntervalMs = positiveMs(opts.idleIntervalMs, 500);
@@ -237,9 +239,14 @@ export function createBtc5mSnapshotSource(opts = {}) {
     ? Math.max(0, Number(opts.preEntryHotSecs))
     : 45;
   const syncIntervalMs = positiveMs(opts.syncIntervalMs, 15_000);
-  const resolveEvent = opts.resolveEvent ?? findActiveBtc5mEvent;
-  const fetchPtb = opts.fetchPtb ?? fetchPriceToBeat;
-  const startRtds = opts.startRtds ?? startRtdsFeed;
+  const resolveEvent =
+    opts.resolveEvent ?? ((now) => findActiveCrypto5mEvent(asset.assetKey, now));
+  const fetchPtb =
+    opts.fetchPtb ??
+    ((start, end) => fetchPriceToBeat(start, end, { symbol: asset.ptbSymbol }));
+  const startRtds =
+    opts.startRtds ??
+    ((state, feedOpts) => startRtdsFeed(state, { ...feedOpts, symbol: asset.rtdsSymbol }));
   const makeClob = opts.createClob ?? createClobFeed;
   const state = opts.state ?? createMarketState();
   const hub = createMarketHub({
@@ -257,7 +264,8 @@ export function createBtc5mSnapshotSource(opts = {}) {
   let nextSyncAtMs = 0;
   let cadenceMode = 'idle';
   let status = {
-    kind: 'btc5m',
+    kind: asset.sourceKind,
+    assetKey: asset.assetKey,
     running: false,
     ok: false,
     reason: 'NOT_STARTED',
@@ -438,7 +446,8 @@ export function createBtc5mSnapshotSource(opts = {}) {
   });
 
   return {
-    kind: 'btc5m',
+    kind: asset.sourceKind,
+    assetKey: asset.assetKey,
     state,
     hub,
     get status() {
@@ -488,9 +497,17 @@ export function createBtc5mSnapshotSource(opts = {}) {
   };
 }
 
+/** @deprecated Prefer createCrypto5mSnapshotSource({ assetKey: 'btc' }) */
+export function createBtc5mSnapshotSource(opts = {}) {
+  return createCrypto5mSnapshotSource({ ...opts, assetKey: 'btc' });
+}
+
 export function createSnapshotSource(kind, opts = {}) {
   if (kind === 'fixture') return createFixtureSnapshotSource(opts);
-  if (kind === 'btc5m') return createBtc5mSnapshotSource(opts);
+  if (isCrypto5mSourceKind(kind)) {
+    const assetKey = String(kind).replace(/5m$/, '');
+    return createCrypto5mSnapshotSource({ ...opts, assetKey });
+  }
   if (kind === 'manual' || kind == null) return null;
   throw new Error(`ENGINE_SNAPSHOT_SOURCE inválido: ${kind}`);
 }

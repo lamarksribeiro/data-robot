@@ -20,6 +20,7 @@ export function startRtdsFeed(state, opts = {}) {
   const clock = opts.clock ?? Date.now;
   const staleMs = Number(opts.staleMs) > 0 ? Number(opts.staleMs) : DEFAULT_STALE_MS;
   const watchdogMs = Number(opts.watchdogMs) > 0 ? Number(opts.watchdogMs) : DEFAULT_WATCHDOG_MS;
+  const symbol = String(opts.symbol || 'btc/usd').toLowerCase();
   const onUpdate = typeof opts.onUpdate === 'function' ? opts.onUpdate : () => {};
   const onStaleReconnect =
     typeof opts.onStaleReconnect === 'function' ? opts.onStaleReconnect : () => {};
@@ -136,7 +137,7 @@ export function startRtdsFeed(state, opts = {}) {
             {
               topic: 'crypto_prices_chainlink',
               type: 'update',
-              filters: JSON.stringify({ symbol: 'btc/usd' }),
+              filters: JSON.stringify({ symbol }),
             },
           ],
         }),

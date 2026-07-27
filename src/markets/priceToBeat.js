@@ -25,12 +25,13 @@ async function fetchJsonWithRetry(url, retries = 3) {
   throw lastErr ?? new Error('fetch failed');
 }
 
-export async function fetchPriceToBeat(eventStart, eventEnd) {
+export async function fetchPriceToBeat(eventStart, eventEnd, opts = {}) {
   try {
     const startIso = eventStart.toISOString().replace('.000Z', 'Z');
     const endIso = eventEnd.toISOString().replace('.000Z', 'Z');
+    const symbol = String(opts.symbol || 'BTC').toUpperCase();
     const params = new URLSearchParams({
-      symbol: 'BTC',
+      symbol,
       eventStartTime: startIso,
       variant: 'fiveminute',
       endDate: endIso,

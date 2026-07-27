@@ -14,11 +14,14 @@ import {
   resolveMidasEquityRawBudget,
   describeMidasPreset,
   resolveMidasCanaryCap,
+  resolveMidasPortfolioAccountExposure,
   canaryMidasPreset,
   canaryMidasGoldPreset,
   midasGoldPreset,
+  midasPortfolioPreset,
   resolveMidasLivePreset,
   GOLD_PRODUCTION,
+  PORTFOLIO_PRODUCTION,
 } from '../src/tfc/preset-midas.js';
 import {
   evaluateDangerExit,
@@ -111,7 +114,7 @@ describe('MIDAS preset metadata (paridade backtest)', () => {
     assert.equal(p.exitOrderType, 'GTC');
   });
 
-  it('midasGoldPreset usa sizing produção $10/$30 e FAK/GTC', () => {
+  it('midasGoldPreset usa sizing lab $10/$30 e FAK/GTC', () => {
     const p = midasGoldPreset({ entryBudget: 2, maxEntryBudget: 4, entryOrderType: 'GTC' });
     assert.equal(p.entryBudget, GOLD_PRODUCTION.entryBudget);
     assert.equal(p.maxEntryBudget, GOLD_PRODUCTION.maxEntryBudget);
@@ -124,6 +127,18 @@ describe('MIDAS preset metadata (paridade backtest)', () => {
     assert.equal(p.tierAskBudgetFactor, 1.5);
   });
 
+  it('midasPortfolioPreset usa sizing $3/$6 e FAK/GTC', () => {
+    const p = midasPortfolioPreset({ entryBudget: 10, maxEntryBudget: 30, entryOrderType: 'GTC' });
+    assert.equal(p.entryBudget, PORTFOLIO_PRODUCTION.entryBudget);
+    assert.equal(p.maxEntryBudget, PORTFOLIO_PRODUCTION.maxEntryBudget);
+    assert.equal(p.entryOrderType, 'FAK');
+    assert.equal(p.exitOrderType, 'GTC');
+    assert.equal(p.tierAskBudgetFactor, 1.5);
+    assert.equal(p.oddsShockEnabled, true);
+    assert.equal(resolveMidasEntryBudget(p, 0.7), 3);
+    assert.equal(resolveMidasEntryBudget(p, 0.88), 4.5);
+  });
+
   it('resolveMidasCanaryCap: micro usa env como throttle/teto', () => {
     const p = canaryMidasPreset();
     assert.equal(resolveMidasCanaryCap(p, 2), 2); // throttle no entry
@@ -131,20 +146,32 @@ describe('MIDAS preset metadata (paridade backtest)', () => {
     assert.equal(resolveMidasCanaryCap(p, 5), 4); // não passa do maxEntryBudget
   });
 
-  it('resolveMidasCanaryCap não rebaixa Gold com env canário stale ($4)', () => {
-    const p = midasGoldPreset();
-    assert.equal(resolveMidasCanaryCap(p, 4), 30);
-    assert.equal(resolveMidasCanaryCap(p, 30), 30);
-    assert.equal(resolveMidasCanaryCap(p, 20), 20);
+  it('resolveMidasCanaryCap não rebaixa portfolio com env canário stale ($4)', () => {
+    const p = midasPortfolioPreset();
+    assert.equal(resolveMidasCanaryCap(p, 4), 6);
+    assert.equal(resolveMidasCanaryCap(p, 6), 6);
+    assert.equal(resolveMidasCanaryCap(p, 5), 5);
   });
 
-  it('resolveMidasLivePreset escolhe Gold vs micro pelo presetId', () => {
+  it('resolveMidasLivePreset escolhe portfolio $3/$6 vs micro pelo presetId', () => {
     const gold = resolveMidasLivePreset('btc-gold-v1', { entryBudget: 2 });
-    assert.equal(gold.entryBudget, 10);
-    assert.equal(gold.maxEntryBudget, 30);
+    assert.equal(gold.entryBudget, 3);
+    assert.equal(gold.maxEntryBudget, 6);
+    assert.equal(gold.tierAskBudgetFactor, 1.5);
+    const eth = resolveMidasLivePreset('eth-gold-v1');
+    assert.equal(eth.entryBudget, 3);
+    const sol = resolveMidasLivePreset('sol-gold-v1');
+    assert.equal(sol.entryBudget, 3);
+    const xrp = resolveMidasLivePreset('xrp-gold-v1');
+    assert.equal(xrp.entryBudget, 3);
     const micro = resolveMidasLivePreset('btc-micro-aggressive-v1');
     assert.equal(micro.entryBudget, 2);
     assert.equal(micro.maxEntryBudget, 4);
+  });
+
+  it('resolveMidasPortfolioAccountExposure default $24 no portfolio', () => {
+    assert.equal(resolveMidasPortfolioAccountExposure(midasPortfolioPreset()), 24);
+    assert.equal(resolveMidasPortfolioAccountExposure(midasPortfolioPreset(), 18), 18);
   });
 
   it('canaryMidasPreset ignora override de sizing campeão ($10/$30)', () => {

@@ -17,6 +17,7 @@ import {
   canaryMidasPreset,
   canaryMidasGoldPreset,
   midasGoldPreset,
+  midasPortfolioPreset,
   describeMidasPreset,
 } from '../tfc/preset-midas.js';
 
@@ -95,7 +96,7 @@ export function builtInLibrary() {
         description: 'Carry terminal com envelope high-ask e tier de budget.',
         pluginId: 'midas-carry-v1',
         runnable: true,
-        marketScope: ['btc-updown-5m'],
+        marketScope: ['btc-updown-5m', 'eth-updown-5m', 'sol-updown-5m', 'xrp-updown-5m'],
         versions: [
           {
             version: '1.0.0',
@@ -130,15 +131,36 @@ export function builtInLibrary() {
                 editableKeys: EDITABLE_MIDAS,
               }),
               midasPreset('btc-gold-v1', {
-                name: 'BTC Gold ($10–$30 · tier 1.5×) · produção · FAK/GTC',
+                name: 'BTC Portfolio ($3–$6 · tier 1.5×) · 4 ativos · FAK/GTC',
                 role: 'champion',
                 source: 'runtime',
-                params: { ...midasGoldPreset() },
+                params: { ...midasPortfolioPreset() },
                 editableKeys: EDITABLE_MIDAS,
               }),
               midasPreset('eth-gold-v1', {
-                name: 'ETH Gold ($10–$30 · tier 1.5×) · produção · FAK/GTC',
+                name: 'ETH Portfolio ($3–$6 · tier 1.5×) · 4 ativos · FAK/GTC',
                 role: 'candidate',
+                source: 'runtime',
+                params: { ...midasPortfolioPreset() },
+                editableKeys: EDITABLE_MIDAS,
+              }),
+              midasPreset('sol-gold-v1', {
+                name: 'SOL Portfolio ($3–$6 · tier 1.5×) · 4 ativos · FAK/GTC',
+                role: 'candidate',
+                source: 'runtime',
+                params: { ...midasPortfolioPreset() },
+                editableKeys: EDITABLE_MIDAS,
+              }),
+              midasPreset('xrp-gold-v1', {
+                name: 'XRP Portfolio ($3–$6 · tier 1.5×) · 4 ativos · FAK/GTC',
+                role: 'candidate',
+                source: 'runtime',
+                params: { ...midasPortfolioPreset() },
+                editableKeys: EDITABLE_MIDAS,
+              }),
+              midasPreset('btc-gold-lab-v1', {
+                name: 'BTC Gold lab ($10–$30 · tier 1.5×) · equity ≥$800',
+                role: 'variant',
                 source: 'runtime',
                 params: { ...midasGoldPreset() },
                 editableKeys: EDITABLE_MIDAS,

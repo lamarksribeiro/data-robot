@@ -163,11 +163,9 @@ export const MICRO_AGGRESSIVE = Object.freeze({
 });
 
 /**
- * Sizing produção MIDAS-GOLD ($10/$30) + política de ordem validada no live:
- * entrada FAK (sem resting adversa) · saída GTC (proteção no book fino 3–8s).
- * Guardian-v3 (minSec9 + tierMinZ 2) incluso — paridade lab `btc-gold-v1` / `eth-gold-v1`.
- * tierAskBudgetFactor 1.5: high-ask ~$15 (lab tier-cap: −5.6% PnL / −18% DD vs 2.0).
- * Teto de liquidez medido ~$40/evento; $10/$30 é o sweet spot (PF estável, PnL ~linear).
+ * Sizing lab MIDAS-GOLD ($10/$30) — referência Estúdio / equity ≥ ~$800.
+ * entrada FAK · saída GTC · guardian-v3 · tier 1.5 (high-ask ~$15).
+ * Live com banca ~$150 usa PORTFOLIO_PRODUCTION ($3/$6), não este.
  */
 export const GOLD_PRODUCTION = Object.freeze({
   entryBudget: 10,
@@ -179,6 +177,25 @@ export const GOLD_PRODUCTION = Object.freeze({
   tierMinZ: 2.0,
   tierAskBudgetFactor: 1.5,
 });
+
+/**
+ * Sizing portfolio live ($3/$6) para banca ~$150 com até 4 ativos (BTC/ETH/SOL/XRP).
+ * Mesmo pacote g3-os do Gold; tier 1.5 → high-ask ≈ $4.50.
+ * Teto global de conta: PORTFOLIO_MAX_ACCOUNT_EXPOSURE_USD (4 × $6).
+ */
+export const PORTFOLIO_PRODUCTION = Object.freeze({
+  entryBudget: 3,
+  maxEntryBudget: 6,
+  minShares: 1,
+  entryOrderType: 'FAK',
+  exitOrderType: 'GTC',
+  minSecondsLeft: 9,
+  tierMinZ: 2.0,
+  tierAskBudgetFactor: 1.5,
+});
+
+/** Exposição agregada máx. (4 ativos × $6) — shared accountBook / env. */
+export const PORTFOLIO_MAX_ACCOUNT_EXPOSURE_USD = 24;
 
 /** @deprecated Prefer MICRO_AGGRESSIVE */
 export const MICRO_ROBUST = Object.freeze({
@@ -320,8 +337,8 @@ export function canaryMidasGoldPreset(override = {}) {
 }
 
 /**
- * MIDAS-GOLD produção (g3-os): mesmo pacote do canário, sizing $10/$30.
- * Paridade lab Estúdio v11 `btc-gold-v1` / v12 `eth-gold-v1`.
+ * MIDAS-GOLD lab (g3-os): sizing $10/$30.
+ * Paridade Estúdio v11+; não é o default live com banca $150.
  * GOLD_PRODUCTION por último: UI/lab não rebaixam sizing nem order types.
  */
 export function midasGoldPreset(override = {}) {
@@ -333,10 +350,28 @@ export function midasGoldPreset(override = {}) {
   };
 }
 
-/** Presets de produção Gold ($10/$30). */
+/**
+ * MIDAS portfolio live (g3-os): sizing $3/$6 · tier 1.5 · 4 ativos / ~$150.
+ * PORTFOLIO_PRODUCTION por último: override de UI não reabre $10/$30 no live.
+ */
+export function midasPortfolioPreset(override = {}) {
+  return {
+    ...MIDAS_AGGRESSIVE_V1,
+    ...MIDAS_ODDS_SHOCK_PARTIAL50,
+    ...override,
+    ...PORTFOLIO_PRODUCTION,
+  };
+}
+
+/** Presets Gold / portfolio (BTC ETH SOL XRP) — live resolve para $3/$6. */
 export function isMidasGoldPresetId(presetId) {
   const id = String(presetId || '');
-  return id === 'btc-gold-v1' || id === 'eth-gold-v1';
+  return (
+    id === 'btc-gold-v1' ||
+    id === 'eth-gold-v1' ||
+    id === 'sol-gold-v1' ||
+    id === 'xrp-gold-v1'
+  );
 }
 
 /** Micro-gold / canário g3-os ($2/$4). */
@@ -351,10 +386,10 @@ export function isMidasMicroGoldPresetId(presetId) {
 
 /**
  * Resolve preset live pelo presetId ativo na UI.
- * Gold → $10/$30; micro-gold → $2/$4 + odds-shock; demais → canário micro seguro.
+ * Gold (btc/eth/sol/xrp) → portfolio $3/$6; micro-gold → $2/$4; demais → canário micro.
  */
 export function resolveMidasLivePreset(presetId, override = {}) {
-  if (isMidasGoldPresetId(presetId)) return midasGoldPreset(override);
+  if (isMidasGoldPresetId(presetId)) return midasPortfolioPreset(override);
   if (isMidasMicroGoldPresetId(presetId)) return canaryMidasGoldPreset(override);
   return canaryMidasPreset(override);
 }
@@ -406,15 +441,43 @@ export const MIDAS_PRESET_META = Object.freeze({
   },
   'btc-gold-v1': {
     backtestVersion: 11,
-    labName: 'BTC Gold',
-    budgetLabel: '$10 / $30',
+    labName: 'BTC Portfolio',
+    budgetLabel: '$3 / $6',
   },
   'eth-gold-v1': {
     backtestVersion: 12,
-    labName: 'ETH Gold',
-    budgetLabel: '$10 / $30',
+    labName: 'ETH Portfolio',
+    budgetLabel: '$3 / $6',
+  },
+  'sol-gold-v1': {
+    backtestVersion: 13,
+    labName: 'SOL Portfolio',
+    budgetLabel: '$3 / $6',
+  },
+  'xrp-gold-v1': {
+    backtestVersion: 14,
+    labName: 'XRP Portfolio',
+    budgetLabel: '$3 / $6',
   },
 });
+
+/**
+ * Cap operacional live: preset.maxEntryBudget manda.
+ * Em portfolio ($3/$6), env stale $4/$30 não reabre Gold lab.
+ */
+export function resolveMidasPortfolioAccountExposure(preset = {}, envExposure) {
+  const presetCap = Number(preset.maxEntryBudget);
+  const env = Number(envExposure);
+  if (Number.isFinite(env) && env > 0) return env;
+  // 4 ativos × maxEntryBudget (portfolio $6 → $24; micro $4 → $16; gold lab $30 → $120)
+  if (Number.isFinite(presetCap) && presetCap > 0) {
+    if (presetCap <= PORTFOLIO_PRODUCTION.maxEntryBudget) {
+      return PORTFOLIO_MAX_ACCOUNT_EXPOSURE_USD;
+    }
+    return presetCap;
+  }
+  return PORTFOLIO_MAX_ACCOUNT_EXPOSURE_USD;
+}
 
 function formatBudgetLabel(entryBudget, maxEntryBudget) {
   const entry = Number(entryBudget);
@@ -451,7 +514,7 @@ export function describeMidasPreset(presetId, preset = {}) {
 /**
  * Cap operacional live: preset.maxEntryBudget manda.
  * Env é teto (min) só quando >= entryBudget — evita que ENGINE_CANARY_MAX_BUDGET=4
- * stale rebaixe Gold $10/$30. Em micro, env<=entry ainda permite throttle ($2).
+ * stale rebaixe portfolio $3/$6 ou Gold lab $10/$30. Em micro, env<=entry ainda permite throttle ($2).
  */
 export function resolveMidasCanaryCap(preset = {}, envCap) {
   const presetCap = Number(preset.maxEntryBudget);
@@ -461,7 +524,11 @@ export function resolveMidasCanaryCap(preset = {}, envCap) {
     if (Number.isFinite(env) && env > 0 && Number.isFinite(entry) && entry > 0) {
       // Throttle micro: env no chão do entry (ex. $2 com entry $2).
       if (env <= entry && presetCap <= MICRO_AGGRESSIVE.maxEntryBudget) return env;
-      // Teto explícito acima do entry (ex. Gold env=30).
+      // Env legado do micro-canário ($4) não rebaixa portfolio ($6) nem Gold lab ($30).
+      if (env <= MICRO_AGGRESSIVE.maxEntryBudget && presetCap > MICRO_AGGRESSIVE.maxEntryBudget) {
+        return presetCap;
+      }
+      // Teto explícito acima do entry (ex. portfolio env=6, Gold lab env=30).
       if (env >= entry) return Math.min(presetCap, env);
     }
     return presetCap;

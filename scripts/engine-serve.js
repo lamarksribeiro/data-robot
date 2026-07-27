@@ -22,10 +22,11 @@ import {
 } from '../src/composition/midasService.js';
 import { createApprovalStore } from '../src/catalog/approvalStore.js';
 import { createStrategyLibrary } from '../src/catalog/strategyLibrary.js';
-import { describeMidasPreset, resolveMidasCanaryCap, resolveMidasLivePreset } from '../src/tfc/preset-midas.js';
+import { describeMidasPreset, resolveMidasCanaryCap, resolveMidasLivePreset, resolveMidasPortfolioAccountExposure } from '../src/tfc/preset-midas.js';
 import { defaultPresetFor } from '../src/composition/presets.js';
 import { MIDAS_V1_PRESET_ID, MIDAS_V1_STRATEGY_ID } from '../src/strategy/midasV1.js';
 import { TFC_V7_STRATEGY_ID } from '../src/strategy/tfcV7.js';
+import { isCrypto5mSourceKind, resolveCrypto5mAsset } from '../src/markets/crypto5m.js';
 import config from '../src/config.js';
 
 const mode = process.env.ENGINE_MODE || 'shadow';
@@ -59,8 +60,10 @@ if (mode === 'live' && !liveEnabled) {
   process.exit(2);
 }
 
-if (mode === 'live' && sourceKind !== 'btc5m') {
-  console.error('[engine:serve] Recusa: ENGINE_MODE=live exige ENGINE_SNAPSHOT_SOURCE=btc5m');
+if (mode === 'live' && !isCrypto5mSourceKind(sourceKind)) {
+  console.error(
+    '[engine:serve] Recusa: ENGINE_MODE=live exige ENGINE_SNAPSHOT_SOURCE=btc5m|eth5m|sol5m|xrp5m',
+  );
   process.exit(2);
 }
 
@@ -111,7 +114,9 @@ const presetId =
 const strategyVersion = activeStrategy?.version || manifest.version;
 const marketScope =
   activeStrategy?.marketScope ||
-  (sourceKind === 'btc5m' ? 'btc-updown-5m' : 'fixture');
+  (isCrypto5mSourceKind(sourceKind)
+    ? resolveCrypto5mAsset(sourceKind).marketScope
+    : 'fixture');
 
 /** 0 = ilimitado na janela (1 ENTER/evento já vem de ONE_INTENT_PER_EVENT). */
 function resolveMaxEntriesPerControlWindow() {
@@ -212,18 +217,24 @@ if (activeStrategy?.params && Object.keys(activeStrategy.params).length) {
 }
 
 if (strategyId === MIDAS_V1_STRATEGY_ID) {
-  if (sourceKind !== 'btc5m') {
-    console.error('[engine:serve] Recusa: MIDAS P9 exige ENGINE_SNAPSHOT_SOURCE=btc5m');
+  if (!isCrypto5mSourceKind(sourceKind)) {
+    console.error(
+      '[engine:serve] Recusa: MIDAS P9 exige ENGINE_SNAPSHOT_SOURCE=btc5m|eth5m|sol5m|xrp5m',
+    );
     process.exit(2);
   }
-  // Live MIDAS: respeita preset ativo (Gold $10/$30 ou micro $2/$4).
+  // Live MIDAS: portfolio $3/$6 (Gold IDs) ou micro $2/$4.
   preset = resolveMidasLivePreset(presetId, preset);
   const maxCanaryBudget = resolveMidasCanaryCap(
     preset,
     process.env.ENGINE_CANARY_MAX_BUDGET,
   );
+  const maxAccountExposure = resolveMidasPortfolioAccountExposure(
+    preset,
+    process.env.ENGINE_MAX_ACCOUNT_EXPOSURE,
+  );
   console.log(
-    `[engine:serve] midas-live-preset ${presetId} · entry=$${Number(preset.entryBudget)} · cap=$${maxCanaryBudget}`,
+    `[engine:serve] midas-live-preset ${presetId} · entry=$${Number(preset.entryBudget)} · cap=$${maxCanaryBudget} · accountExposure=$${maxAccountExposure}`,
   );
   const controlWindowMs = Number(
     process.env.ENGINE_CONTROL_WINDOW_MS || 24 * 60 * 60 * 1000,
@@ -233,6 +244,8 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
     try {
       runtime = await prepareMidasCanaryRuntime({
         maxCanaryBudget,
+        maxAccountExposure,
+        maxDailyLoss: maxAccountExposure,
         maxEntriesPerControlWindow,
         controlWindowMs,
         allowLiveReverse: true,
@@ -250,6 +263,7 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
       maxCanaryBudget,
       maxNotionalPerOrder: maxCanaryBudget,
       maxNotionalPerEvent: maxCanaryBudget,
+      maxAccountExposure,
       maxEntriesPerControlWindow,
       controlWindowMs,
       allowLiveReverse: true,
@@ -268,7 +282,7 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
       }
     }
   }
-} else if (strategyId === TFC_V7_STRATEGY_ID && sourceKind === 'btc5m') {
+} else if (strategyId === TFC_V7_STRATEGY_ID && isCrypto5mSourceKind(sourceKind)) {
   riskOpts = {
     canaryMode: true,
     maxCanaryBudget: Number(process.env.ENGINE_CANARY_MAX_BUDGET || 2),
