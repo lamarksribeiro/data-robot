@@ -115,11 +115,23 @@ export {
   canaryMidasPreset,
   canaryMidasGoldPreset,
   midasGoldPreset,
+  resolveMidasLivePreset,
+  resolveMidasCanaryCap,
   resolveMidasEntryBudget,
   resolveMidasScoopBudget,
   resolveMidasEquityUsd,
   resolveMidasEquityRawBudget,
 } from './tfc/preset-midas.js';
+export {
+  fetchPolymarketActivity,
+  aggregateActivityCashflows,
+} from './clob/polymarketActivity.js';
+export {
+  buildTradeJournal,
+  reconcileTradesWithPolymarketCashflows,
+  summarizeTradePnl,
+  buildEquityCurveFromTrades,
+} from './oms/tradeJournal.js';
 export { defaultPresetFor } from './composition/presets.js';
 export { bootstrapTfcCanaryEngine } from './composition/tfcCanary.js';
 export { bootstrapMidasCanaryEngine } from './composition/midasCanary.js';

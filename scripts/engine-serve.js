@@ -22,7 +22,7 @@ import {
 } from '../src/composition/midasService.js';
 import { createApprovalStore } from '../src/catalog/approvalStore.js';
 import { createStrategyLibrary } from '../src/catalog/strategyLibrary.js';
-import { canaryMidasPreset, describeMidasPreset, resolveMidasCanaryCap } from '../src/tfc/preset-midas.js';
+import { describeMidasPreset, resolveMidasCanaryCap, resolveMidasLivePreset } from '../src/tfc/preset-midas.js';
 import { defaultPresetFor } from '../src/composition/presets.js';
 import { MIDAS_V1_PRESET_ID, MIDAS_V1_STRATEGY_ID } from '../src/strategy/midasV1.js';
 import { TFC_V7_STRATEGY_ID } from '../src/strategy/tfcV7.js';
@@ -186,7 +186,7 @@ let catalogEntry;
 try {
   const catalogPreset =
     strategyId === MIDAS_V1_STRATEGY_ID
-      ? canaryMidasPreset(activeStrategy?.params || {})
+      ? resolveMidasLivePreset(presetId, activeStrategy?.params || {})
       : defaultPresetFor(strategyId, activeStrategy?.params || {});
   ensureCatalogEntry(catalogPreset);
   catalogEntry = catalogStore.assertApproved({
@@ -216,11 +216,14 @@ if (strategyId === MIDAS_V1_STRATEGY_ID) {
     console.error('[engine:serve] Recusa: MIDAS P9 exige ENGINE_SNAPSHOT_SOURCE=btc5m');
     process.exit(2);
   }
-  // Live/canário MIDAS sempre força micro $2/$4 (mesmo com params de lab/UI).
-  preset = canaryMidasPreset(preset);
+  // Live MIDAS: respeita preset ativo (Gold $10/$30 ou micro $2/$4).
+  preset = resolveMidasLivePreset(presetId, preset);
   const maxCanaryBudget = resolveMidasCanaryCap(
     preset,
     process.env.ENGINE_CANARY_MAX_BUDGET,
+  );
+  console.log(
+    `[engine:serve] midas-live-preset ${presetId} · entry=$${Number(preset.entryBudget)} · cap=$${maxCanaryBudget}`,
   );
   const controlWindowMs = Number(
     process.env.ENGINE_CONTROL_WINDOW_MS || 24 * 60 * 60 * 1000,

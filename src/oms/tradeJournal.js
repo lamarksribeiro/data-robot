@@ -1,14 +1,24 @@
 /**
  * Monta journal de trades a partir do execution-audit + OMS.
+ * PnL preferencial: cashflow real da Data API Polymarket (BUY/SELL/REDEEM).
  */
 
-function filledEnterOrder(orders, marketId) {
+/**
+ * @param {object[]} orders
+ * @param {string} marketId
+ * @param {'ENTER'|'EXIT'|'REVERSE'} kind
+ */
+function filledOrder(orders, marketId, kind) {
   const hits = orders.filter((o) => {
-    if (o.marketId !== marketId || o.kind !== 'ENTER') return false;
+    if (o.marketId !== marketId || o.kind !== kind) return false;
     if (Number(o.qtyFilled) > 0) return true;
     return o.state === 'MATCHED';
   });
   return hits.at(-1) ?? null;
+}
+
+function filledEnterOrder(orders, marketId) {
+  return filledOrder(orders, marketId, 'ENTER');
 }
 
 function pushLeg(trade, leg) {
@@ -25,12 +35,86 @@ function pushLeg(trade, leg) {
   trade.legs.push(leg);
 }
 
+function addPnl(trade, delta) {
+  if (!Number.isFinite(delta)) return;
+  trade.pnl = (Number.isFinite(trade.pnl) ? trade.pnl : 0) + delta;
+}
+
 function computeExitPnl(trade) {
   const entry = Number(trade.entryPrice);
   const exit = Number(trade.exitPrice);
   const qty = Number(trade.qty);
   if (![entry, exit, qty].every(Number.isFinite) || qty <= 0) return null;
   return (exit - entry) * qty;
+}
+
+/**
+ * PnL a partir das pernas quando possível (ENTER/EXIT/SETTLEMENT).
+ * @param {{ legs?: object[], entryPrice?: number|null }} trade
+ */
+export function computePnlFromLegs(trade) {
+  const legs = trade?.legs ?? [];
+  const entryLeg = [...legs].reverse().find((l) => l.kind === 'ENTER') ?? null;
+  const entryPrice = Number(entryLeg?.price ?? trade?.entryPrice);
+  if (!Number.isFinite(entryPrice)) return null;
+  let pnl = 0;
+  let sawClose = false;
+  for (const leg of legs) {
+    if (leg.kind !== 'EXIT' && leg.kind !== 'REVERSE' && leg.kind !== 'SETTLEMENT') continue;
+    const price = Number(leg.price);
+    const qty = Number(leg.qty);
+    if (![price, qty].every(Number.isFinite) || qty <= 0) continue;
+    pnl += (price - entryPrice) * qty;
+    sawClose = true;
+  }
+  return sawClose ? pnl : null;
+}
+
+/**
+ * Sobrescreve PnL/qty/entry com cashflow real da Polymarket quando houver BUY.
+ * @param {object[]} trades
+ * @param {Map<string, object>|Iterable<[string, object]>} cashflowsByMarket
+ */
+export function reconcileTradesWithPolymarketCashflows(trades = [], cashflowsByMarket) {
+  const map =
+    cashflowsByMarket instanceof Map
+      ? cashflowsByMarket
+      : new Map(cashflowsByMarket ?? []);
+  return (trades || []).map((trade) => {
+    const cf = map.get(trade.marketId);
+    if (!cf || !(cf.buyUsd > 0)) return trade;
+    const next = { ...trade };
+    next.pnlSource = 'polymarket';
+    next.pnl = Number(cf.pnl);
+    if (cf.avgBuyPrice != null && Number.isFinite(cf.avgBuyPrice)) {
+      next.entryPrice = cf.avgBuyPrice;
+    }
+    if (cf.buyQty > 0) next.qty = cf.buyQty;
+    if (cf.sellUsd > 0 || cf.redeemUsd > 0) {
+      next.status = 'closed';
+      if (cf.lastTsSec != null) {
+        const closedMs = Number(cf.lastTsSec) * 1000;
+        if (Number.isFinite(closedMs)) next.closedAtMs = closedMs;
+      }
+      if (cf.redeemUsd > 0) {
+        next.exitKind = 'SETTLEMENT';
+        next.exitPrice = 1;
+      } else if (cf.sellUsd > 0 && cf.sellQty > 0) {
+        next.exitKind = next.exitKind === 'SETTLEMENT' ? 'SETTLEMENT' : 'EXIT';
+        next.exitPrice = cf.sellUsd / cf.sellQty;
+      }
+    }
+    if (next.openedAtMs && next.closedAtMs) {
+      next.durationMs = Math.max(0, next.closedAtMs - next.openedAtMs);
+    }
+    next.polymarket = {
+      buyUsd: cf.buyUsd,
+      sellUsd: cf.sellUsd,
+      redeemUsd: cf.redeemUsd,
+      pnl: cf.pnl,
+    };
+    return next;
+  });
 }
 
 /**
@@ -127,10 +211,12 @@ export function buildTradeJournal(opts = {}) {
         side: null,
         entryPrice: null,
         qty: null,
+        entryQty: null,
         legs: [],
         exitKind: null,
         exitPrice: null,
         pnl: null,
+        pnlSource: 'engine',
         winner: null,
         openedAtMs: null,
         closedAtMs: null,
@@ -143,6 +229,57 @@ export function buildTradeJournal(opts = {}) {
 
   for (const row of rows) {
     const ts = row.tsMs ?? null;
+    if (row.type === 'order_terminal' && row.filled === true) {
+      const marketId = row.marketId;
+      if (!marketId) continue;
+      const kind = String(row.kind || '').toUpperCase();
+      const price = Number(row.price);
+      const qty = Number(row.qty);
+      if (!Number.isFinite(price) || !Number.isFinite(qty) || qty <= 0) continue;
+      const trade = ensureTrade(marketId);
+      if (kind === 'ENTER') {
+        trade.side = row.side ?? trade.side;
+        trade.entryPrice = price;
+        trade.qty = qty;
+        trade.entryQty = qty;
+        if (!trade.openedAtMs) trade.openedAtMs = ts;
+        pushLeg(trade, {
+          kind: 'ENTER',
+          price,
+          qty,
+          tsMs: ts,
+          reason: row.reason ?? null,
+        });
+        if (trade.status !== 'settlement_pending' && trade.status !== 'closed') {
+          trade.status = 'open';
+        }
+      } else if (kind === 'EXIT' || kind === 'REVERSE') {
+        const entryQty = Number(trade.entryQty ?? trade.qty);
+        const entryPrice = Number(trade.entryPrice);
+        trade.exitKind = kind;
+        trade.exitPrice = price;
+        pushLeg(trade, {
+          kind,
+          price,
+          qty,
+          tsMs: ts,
+          reason: row.reason ?? null,
+        });
+        if (Number.isFinite(entryPrice)) addPnl(trade, (price - entryPrice) * qty);
+        const remaining =
+          Number.isFinite(entryQty) && entryQty > 0 ? Math.max(0, entryQty - qty) : 0;
+        if (remaining <= 1e-9) {
+          trade.closedAtMs = ts ?? trade.closedAtMs;
+          trade.status = 'closed';
+          trade.qty = entryQty;
+        } else {
+          trade.qty = entryQty;
+          trade.status = 'open';
+        }
+      }
+      continue;
+    }
+
     if (row.type === 'decision') {
       const marketId = row.marketId;
       if (!marketId) continue;
@@ -154,59 +291,97 @@ export function buildTradeJournal(opts = {}) {
           if (!order && posQty <= 0) continue;
           const trade = ensureTrade(marketId);
           trade.side = acc.side ?? order?.tokenSide ?? trade.side;
-          trade.entryPrice = order?.price ?? row.position?.avgPrice ?? trade.entryPrice;
-          trade.qty =
+          const fillPrice =
+            order?.price ?? row.position?.avgPrice ?? trade.entryPrice;
+          const fillQty =
             (order?.qtyFilled > 0 ? order.qtyFilled : null) ||
             order?.qty ||
             row.position?.qty ||
             trade.qty;
+          // Não sobrescrever fill real de order_terminal com maxPrice de intent.
+          if (trade.entryPrice == null && fillPrice != null) trade.entryPrice = fillPrice;
+          if (trade.qty == null && fillQty != null) {
+            trade.qty = fillQty;
+            trade.entryQty = fillQty;
+          } else if (trade.entryQty == null && fillQty != null) {
+            trade.entryQty = fillQty;
+          }
           if (!trade.openedAtMs) trade.openedAtMs = ts;
-          pushLeg(trade, {
-            kind: 'ENTER',
-            price: trade.entryPrice,
-            qty: trade.qty,
-            tsMs: ts,
-            reason: acc.reason ?? acc.reasonCode ?? null,
-          });
-          if (trade.status !== 'settlement_pending') trade.status = 'open';
+          if (!trade.legs.some((l) => l.kind === 'ENTER')) {
+            pushLeg(trade, {
+              kind: 'ENTER',
+              price: trade.entryPrice,
+              qty: trade.entryQty ?? trade.qty,
+              tsMs: ts,
+              reason: acc.reason ?? acc.reasonCode ?? null,
+            });
+          }
+          if (trade.status !== 'settlement_pending' && trade.status !== 'closed') {
+            trade.status = 'open';
+          }
         } else if (acc.kind === 'EXIT') {
           const trade = ensureTrade(marketId);
-          const exitOrder =
-            orders
-              .filter((o) => o.marketId === marketId && o.kind === 'EXIT' && o.state === 'MATCHED')
-              .at(-1) ?? null;
+          // Fill real já veio em order_terminal — não duplicar PnL.
+          if (trade.legs.some((l) => l.kind === 'EXIT')) continue;
+          const exitOrder = filledOrder(orders, marketId, 'EXIT');
+          const exitPrice = exitOrder?.price ?? trade.exitPrice;
+          const exitQty =
+            (exitOrder?.qtyFilled > 0 ? exitOrder.qtyFilled : null) ||
+            Number(acc.quantity) ||
+            null;
+          if (trade.legs.some((l) => l.kind === 'EXIT' && l.tsMs === ts)) continue;
           trade.exitKind = 'EXIT';
-          trade.exitPrice = exitOrder?.price ?? trade.exitPrice;
-          trade.qty =
-            (exitOrder?.qtyFilled > 0 ? exitOrder.qtyFilled : null) || trade.qty;
-          if (trade.pnl == null) trade.pnl = computeExitPnl(trade);
+          if (exitPrice != null) trade.exitPrice = exitPrice;
+          const qty = Number(exitQty);
+          const entryPrice = Number(trade.entryPrice);
+          const entryQty = Number(trade.entryQty ?? trade.qty);
           pushLeg(trade, {
             kind: 'EXIT',
             price: trade.exitPrice,
-            qty: exitOrder?.qtyFilled || trade.qty,
+            qty: Number.isFinite(qty) ? qty : trade.qty,
             tsMs: ts,
             reason: acc.reason ?? acc.reasonCode ?? null,
           });
-          trade.closedAtMs = ts ?? trade.closedAtMs;
-          trade.status = 'closed';
+          if (Number.isFinite(entryPrice) && Number.isFinite(qty) && qty > 0) {
+            addPnl(trade, (Number(trade.exitPrice) - entryPrice) * qty);
+          } else if (trade.pnl == null) {
+            trade.pnl = computeExitPnl(trade);
+          }
+          if (Number.isFinite(entryQty) && Number.isFinite(qty) && qty + 1e-9 < entryQty) {
+            trade.qty = entryQty;
+            trade.status = 'open';
+          } else {
+            trade.qty = entryQty || trade.qty;
+            trade.closedAtMs = ts ?? trade.closedAtMs;
+            trade.status = 'closed';
+          }
         } else if (acc.kind === 'REVERSE') {
           const trade = ensureTrade(marketId);
-          const reverseOrder =
-            orders
-              .filter((o) => o.marketId === marketId && o.kind === 'REVERSE' && o.state === 'MATCHED')
-              .at(-1) ?? null;
+          if (trade.legs.some((l) => l.kind === 'REVERSE' && l.price != null)) continue;
+          const reverseOrder = filledOrder(orders, marketId, 'REVERSE');
+          // REVERSE rejeitado / sem fill: não fecha nem inventa preço.
+          if (!reverseOrder || !(Number(reverseOrder.qtyFilled) > 0)) {
+            pushLeg(trade, {
+              kind: 'REVERSE',
+              price: null,
+              qty: trade.qty,
+              tsMs: ts,
+              reason: acc.reason ?? acc.reasonCode ?? 'REVERSE_FAILED',
+            });
+            continue;
+          }
           trade.exitKind = 'REVERSE';
           trade.exitPrice = reverseOrder?.price ?? trade.exitPrice;
-          trade.qty =
+          const qty =
             (reverseOrder?.qtyFilled > 0 ? reverseOrder.qtyFilled : null) || trade.qty;
-          if (trade.pnl == null) trade.pnl = computeExitPnl(trade);
           pushLeg(trade, {
             kind: 'REVERSE',
             price: trade.exitPrice,
-            qty: reverseOrder?.qtyFilled || trade.qty,
+            qty,
             tsMs: ts,
             reason: acc.reason ?? acc.reasonCode ?? null,
           });
+          if (trade.pnl == null) trade.pnl = computeExitPnl(trade);
           trade.closedAtMs = ts ?? trade.closedAtMs;
           trade.status = 'closed';
         }
@@ -217,11 +392,20 @@ export function buildTradeJournal(opts = {}) {
       const trade = ensureTrade(marketId);
       trade.side = trade.side ?? row.side ?? null;
       trade.entryPrice = trade.entryPrice ?? row.avgPrice ?? null;
-      trade.qty = trade.qty ?? row.qty ?? null;
+      const settleQty = Number(row.qty);
+      if (trade.entryQty == null && Number.isFinite(settleQty)) {
+        trade.entryQty = settleQty;
+      }
+      if (trade.qty == null && Number.isFinite(settleQty)) trade.qty = settleQty;
       trade.exitKind = 'SETTLEMENT';
       trade.exitPrice = row.settlementPrice ?? trade.exitPrice;
-      trade.pnl = row.pnlDelta ?? trade.pnl;
-      if (trade.pnl == null) trade.pnl = computeExitPnl(trade);
+      const delta = Number(row.pnlDelta);
+      if (Number.isFinite(delta)) {
+        // Soma à saída parcial; não sobrescreve.
+        addPnl(trade, delta);
+      } else if (trade.pnl == null) {
+        trade.pnl = computeExitPnl(trade);
+      }
       trade.winner = row.winner ?? trade.winner;
       trade.closedAtMs = ts ?? trade.closedAtMs;
       trade.status = 'closed';
@@ -239,6 +423,7 @@ export function buildTradeJournal(opts = {}) {
       trade.side = trade.side ?? row.side ?? null;
       trade.entryPrice = trade.entryPrice ?? row.avgPrice ?? null;
       trade.qty = trade.qty ?? row.qty ?? null;
+      if (trade.entryQty == null) trade.entryQty = trade.qty;
       if (!trade.openedAtMs) trade.openedAtMs = row.releasedAtMs ?? ts;
       if (trade.status !== 'closed') trade.status = 'settlement_pending';
     }
@@ -249,6 +434,7 @@ export function buildTradeJournal(opts = {}) {
     trade.side = trade.side ?? pending.side ?? null;
     trade.entryPrice = trade.entryPrice ?? pending.avgPrice ?? null;
     trade.qty = trade.qty ?? pending.qty ?? null;
+    if (trade.entryQty == null) trade.entryQty = trade.qty;
     if (!trade.openedAtMs) trade.openedAtMs = pending.releasedAtMs ?? pending.queuedAtMs ?? null;
     if (trade.status !== 'closed') trade.status = 'settlement_pending';
   }
@@ -265,7 +451,7 @@ export function buildTradeJournal(opts = {}) {
         t.durationMs = Math.max(0, t.closedAtMs - t.openedAtMs);
       }
       if (t.status === 'closed' && t.pnl == null) {
-        t.pnl = computeExitPnl(t);
+        t.pnl = computePnlFromLegs(t) ?? computeExitPnl(t);
       }
       return t;
     })

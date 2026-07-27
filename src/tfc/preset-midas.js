@@ -166,6 +166,7 @@ export const MICRO_AGGRESSIVE = Object.freeze({
  * Sizing produção MIDAS-GOLD ($10/$30) + política de ordem validada no live:
  * entrada FAK (sem resting adversa) · saída GTC (proteção no book fino 3–8s).
  * Guardian-v3 (minSec9 + tierMinZ 2) incluso — paridade lab `btc-gold-v1` / `eth-gold-v1`.
+ * tierAskBudgetFactor 1.5: high-ask ~$15 (lab tier-cap: −5.6% PnL / −18% DD vs 2.0).
  * Teto de liquidez medido ~$40/evento; $10/$30 é o sweet spot (PF estável, PnL ~linear).
  */
 export const GOLD_PRODUCTION = Object.freeze({
@@ -176,6 +177,7 @@ export const GOLD_PRODUCTION = Object.freeze({
   exitOrderType: 'GTC',
   minSecondsLeft: 9,
   tierMinZ: 2.0,
+  tierAskBudgetFactor: 1.5,
 });
 
 /** @deprecated Prefer MICRO_AGGRESSIVE */
@@ -331,6 +333,32 @@ export function midasGoldPreset(override = {}) {
   };
 }
 
+/** Presets de produção Gold ($10/$30). */
+export function isMidasGoldPresetId(presetId) {
+  const id = String(presetId || '');
+  return id === 'btc-gold-v1' || id === 'eth-gold-v1';
+}
+
+/** Micro-gold / canário g3-os ($2/$4). */
+export function isMidasMicroGoldPresetId(presetId) {
+  const id = String(presetId || '');
+  return (
+    id === 'btc-micro-guardian-v3-os' ||
+    id === 'eth-micro-gold-v1' ||
+    id === 'btc-micro-gold-v1'
+  );
+}
+
+/**
+ * Resolve preset live pelo presetId ativo na UI.
+ * Gold → $10/$30; micro-gold → $2/$4 + odds-shock; demais → canário micro seguro.
+ */
+export function resolveMidasLivePreset(presetId, override = {}) {
+  if (isMidasGoldPresetId(presetId)) return midasGoldPreset(override);
+  if (isMidasMicroGoldPresetId(presetId)) return canaryMidasGoldPreset(override);
+  return canaryMidasPreset(override);
+}
+
 /**
  * Metadados de paridade com o Estúdio do data-backtest (presets midas-carry-v1).
  * `backtestVersion` = coluna "v1..v12" no Estúdio; `pluginVersion` no robot é sempre 1.0.0.
@@ -420,20 +448,21 @@ export function describeMidasPreset(presetId, preset = {}) {
   };
 }
 
-/** Cap operacional do canário: preset.maxEntryBudget manda; env só restringe até entryBudget (ex. micro $2). */
+/**
+ * Cap operacional live: preset.maxEntryBudget manda.
+ * Env é teto (min) só quando >= entryBudget — evita que ENGINE_CANARY_MAX_BUDGET=4
+ * stale rebaixe Gold $10/$30. Em micro, env<=entry ainda permite throttle ($2).
+ */
 export function resolveMidasCanaryCap(preset = {}, envCap) {
   const presetCap = Number(preset.maxEntryBudget);
   const entry = Number(preset.entryBudget);
   const env = Number(envCap);
   if (Number.isFinite(presetCap) && presetCap > 0) {
-    if (
-      Number.isFinite(env) &&
-      env > 0 &&
-      Number.isFinite(entry) &&
-      entry > 0 &&
-      env <= entry
-    ) {
-      return env;
+    if (Number.isFinite(env) && env > 0 && Number.isFinite(entry) && entry > 0) {
+      // Throttle micro: env no chão do entry (ex. $2 com entry $2).
+      if (env <= entry && presetCap <= MICRO_AGGRESSIVE.maxEntryBudget) return env;
+      // Teto explícito acima do entry (ex. Gold env=30).
+      if (env >= entry) return Math.min(presetCap, env);
     }
     return presetCap;
   }

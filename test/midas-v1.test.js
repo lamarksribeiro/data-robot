@@ -17,6 +17,7 @@ import {
   canaryMidasPreset,
   canaryMidasGoldPreset,
   midasGoldPreset,
+  resolveMidasLivePreset,
   GOLD_PRODUCTION,
 } from '../src/tfc/preset-midas.js';
 import {
@@ -120,14 +121,30 @@ describe('MIDAS preset metadata (paridade backtest)', () => {
     assert.equal(p.tierMinZ, 2.0);
     assert.equal(p.oddsShockEnabled, true);
     assert.equal(p.oddsShockPartialPct, 0.5);
-    assert.equal(p.tierAskBudgetFactor, 2.0);
+    assert.equal(p.tierAskBudgetFactor, 1.5);
   });
 
-  it('resolveMidasCanaryCap prioriza maxEntryBudget do preset sobre env menor', () => {
+  it('resolveMidasCanaryCap: micro usa env como throttle/teto', () => {
     const p = canaryMidasPreset();
-    assert.equal(resolveMidasCanaryCap(p, 3), 4);
-    assert.equal(resolveMidasCanaryCap(p, 5), 4);
-    assert.equal(resolveMidasCanaryCap(p, 2), 2);
+    assert.equal(resolveMidasCanaryCap(p, 2), 2); // throttle no entry
+    assert.equal(resolveMidasCanaryCap(p, 3), 3); // teto abaixo do max
+    assert.equal(resolveMidasCanaryCap(p, 5), 4); // não passa do maxEntryBudget
+  });
+
+  it('resolveMidasCanaryCap não rebaixa Gold com env canário stale ($4)', () => {
+    const p = midasGoldPreset();
+    assert.equal(resolveMidasCanaryCap(p, 4), 30);
+    assert.equal(resolveMidasCanaryCap(p, 30), 30);
+    assert.equal(resolveMidasCanaryCap(p, 20), 20);
+  });
+
+  it('resolveMidasLivePreset escolhe Gold vs micro pelo presetId', () => {
+    const gold = resolveMidasLivePreset('btc-gold-v1', { entryBudget: 2 });
+    assert.equal(gold.entryBudget, 10);
+    assert.equal(gold.maxEntryBudget, 30);
+    const micro = resolveMidasLivePreset('btc-micro-aggressive-v1');
+    assert.equal(micro.entryBudget, 2);
+    assert.equal(micro.maxEntryBudget, 4);
   });
 
   it('canaryMidasPreset ignora override de sizing campeão ($10/$30)', () => {

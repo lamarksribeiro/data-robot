@@ -130,14 +130,14 @@ export function builtInLibrary() {
                 editableKeys: EDITABLE_MIDAS,
               }),
               midasPreset('btc-gold-v1', {
-                name: 'BTC Gold ($10–$30) · produção · FAK/GTC',
+                name: 'BTC Gold ($10–$30 · tier 1.5×) · produção · FAK/GTC',
                 role: 'champion',
                 source: 'runtime',
                 params: { ...midasGoldPreset() },
                 editableKeys: EDITABLE_MIDAS,
               }),
               midasPreset('eth-gold-v1', {
-                name: 'ETH Gold ($10–$30) · produção · FAK/GTC',
+                name: 'ETH Gold ($10–$30 · tier 1.5×) · produção · FAK/GTC',
                 role: 'candidate',
                 source: 'runtime',
                 params: { ...midasGoldPreset() },

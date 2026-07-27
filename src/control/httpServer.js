@@ -124,7 +124,8 @@ export function createControlServer(opts) {
         const pageSize = Number(
           url.searchParams.get('pageSize') ?? url.searchParams.get('limit') ?? 25,
         );
-        return send(res, 200, opts.getTrades?.({ page, pageSize }) ?? { trades: [], total: 0 });
+        const payload = await opts.getTrades?.({ page, pageSize });
+        return send(res, 200, payload ?? { trades: [], total: 0 });
       }
       if (req.method === 'GET' && pathName === '/wallet') {
         if (typeof opts.getWallet !== 'function') {

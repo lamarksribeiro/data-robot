@@ -3,8 +3,10 @@ import { describe, it } from 'node:test';
 import {
   buildEquityCurveFromTrades,
   buildTradeJournal,
+  reconcileTradesWithPolymarketCashflows,
   summarizeTradePnl,
 } from '../src/oms/tradeJournal.js';
+import { aggregateActivityCashflows } from '../src/clob/polymarketActivity.js';
 
 describe('tradeJournal', () => {
   it('monta trade fechado por settlement', () => {
@@ -170,5 +172,86 @@ describe('tradeJournal', () => {
       { ts: 2000, pnl: 1.6 },
       { ts: 3000, pnl: 1.1 },
     ]);
+  });
+
+  it('partial EXIT + settlement soma PnL das duas pernas', () => {
+    const trades = buildTradeJournal({
+      auditRows: [
+        {
+          type: 'position_settled',
+          tsMs: 3000,
+          fromMarketId: 'm-partial',
+          side: 'UP',
+          qty: 2,
+          avgPrice: 0.85,
+          settlementPrice: 0.995,
+          pnlDelta: 0.29,
+          winner: 'Up',
+        },
+        {
+          type: 'order_terminal',
+          tsMs: 2000,
+          marketId: 'm-partial',
+          kind: 'EXIT',
+          filled: true,
+          qty: 2,
+          price: 0.76,
+          side: 'UP',
+        },
+        {
+          type: 'order_terminal',
+          tsMs: 1000,
+          marketId: 'm-partial',
+          kind: 'ENTER',
+          filled: true,
+          qty: 4,
+          price: 0.85,
+          side: 'UP',
+        },
+      ],
+      limit: 10,
+    });
+    assert.equal(trades.length, 1);
+    assert.equal(trades[0].status, 'closed');
+    // (0.76-0.85)*2 + 0.29 = -0.18 + 0.29 = 0.11
+    assert.ok(Math.abs(trades[0].pnl - 0.11) < 1e-9);
+  });
+
+  it('reconcileTradesWithPolymarketCashflows usa REDEEM−BUY da Data API', () => {
+    const cashflows = aggregateActivityCashflows([
+      {
+        type: 'TRADE',
+        side: 'BUY',
+        eventSlug: 'btc-updown-5m-1',
+        usdcSize: 3.4357,
+        size: 4,
+        price: 0.85,
+        timestamp: 100,
+      },
+      {
+        type: 'REDEEM',
+        eventSlug: 'btc-updown-5m-1',
+        usdcSize: 4,
+        size: 4,
+        timestamp: 200,
+      },
+    ]);
+    const [trade] = reconcileTradesWithPolymarketCashflows(
+      [
+        {
+          marketId: 'btc-updown-5m-1',
+          status: 'closed',
+          entryPrice: 0.85,
+          qty: 4,
+          pnl: 0.58,
+          pnlSource: 'engine',
+        },
+      ],
+      cashflows,
+    );
+    assert.equal(trade.pnlSource, 'polymarket');
+    assert.ok(Math.abs(trade.pnl - (4 - 3.4357)) < 1e-9);
+    assert.equal(trade.polymarket.redeemUsd, 4);
+    assert.equal(trade.polymarket.buyUsd, 3.4357);
   });
 });

@@ -9,8 +9,14 @@ import { createOmsSink } from '../oms/omsSink.js';
 import {
   buildEquityCurveFromTrades,
   buildTradeJournal,
+  reconcileTradesWithPolymarketCashflows,
   summarizeTradePnl,
 } from '../oms/tradeJournal.js';
+import {
+  aggregateActivityCashflows,
+  fetchPolymarketActivity,
+} from '../clob/polymarketActivity.js';
+import config from '../config.js';
 import { createMetrics } from '../observability/metrics.js';
 import { createLogger } from '../observability/logger.js';
 import { createAlertHub } from '../observability/alerts.js';
@@ -977,7 +983,7 @@ export function createEngineApp(opts = {}) {
       },
     ],
     getAudit: (limitOrOpts) => executionAudit.listRecent(limitOrOpts),
-    getTrades: (query = {}) => {
+    getTrades: async (query = {}) => {
       const pageSize = Math.max(
         5,
         Math.min(100, Number(query.pageSize ?? query.limit ?? 25) || 25),
@@ -985,14 +991,34 @@ export function createEngineApp(opts = {}) {
       const page = Math.max(1, Number(query.page ?? 1) || 1);
       const auditRows = executionAudit.listRecent({
         limit: 5000,
-        types: 'decision,position_settled,settlement_queued',
+        types: 'decision,position_settled,settlement_queued,order_terminal',
       });
-      const all = buildTradeJournal({
+      let all = buildTradeJournal({
         auditRows,
         orders: sink.oms?.listOrders?.() ?? [],
         settlementPending: pendingSettlements,
         limit: 1000,
       });
+
+      const funder = String(
+        config.polymarketFunderAddress || opts.funderAddress || '',
+      ).trim();
+      if (/^0x[a-fA-F0-9]{40}$/.test(funder)) {
+        try {
+          const activity = await fetchPolymarketActivity({
+            funderAddress: funder,
+            dataApiBase: config.dataApiBase,
+            limit: 300,
+          });
+          const cashflows = aggregateActivityCashflows(activity);
+          all = reconcileTradesWithPolymarketCashflows(all, cashflows);
+        } catch (err) {
+          logger.warn('polymarket_activity_reconcile_failed', {
+            reason: err?.message ?? String(err),
+          });
+        }
+      }
+
       const visible = all.filter(
         (t) => t.status === 'closed' || t.status === 'settlement_pending',
       );
@@ -1011,6 +1037,7 @@ export function createEngineApp(opts = {}) {
         pageSize,
         totalPages,
         scope: 'robot',
+        pnlSource: 'polymarket+engine',
       };
     },
     getWallet: opts.getWallet,

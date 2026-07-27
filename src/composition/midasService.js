@@ -11,9 +11,16 @@ import { createUserChannel } from '../executor/userChannel.js';
 import { createOmsSink } from '../oms/omsSink.js';
 import { createLogger } from '../observability/logger.js';
 import { preflightChecksFromResult, runLivePreflight } from '../risk/livePreflight.js';
-import { CANARY_LIMITS, canaryMidasPreset } from '../tfc/preset-midas.js';
+import {
+  CANARY_LIMITS,
+  GOLD_PRODUCTION,
+  canaryMidasPreset,
+} from '../tfc/preset-midas.js';
 
+/** Hard cap legado do micro-canário ($4). */
 export const MIDAS_CANARY_HARD_CAP_USD = CANARY_LIMITS.maxCanaryBudget;
+/** Teto live (Gold $30). prepareMidasCanaryRuntime usa este. */
+export const MIDAS_LIVE_HARD_CAP_USD = GOLD_PRODUCTION.maxEntryBudget;
 
 function positive(value, fallback) {
   const n = Number(value);
@@ -89,11 +96,10 @@ export async function fetchWalletSnapshot(opts = {}) {
 }
 
 export async function prepareMidasCanaryRuntime(opts = {}) {
+  const hardCap = positive(opts.liveHardCapUsd, MIDAS_LIVE_HARD_CAP_USD);
   const requestedCap = positive(opts.maxCanaryBudget, MIDAS_CANARY_HARD_CAP_USD);
-  if (requestedCap > MIDAS_CANARY_HARD_CAP_USD) {
-    throw new Error(
-      `cap solicitado $${requestedCap} excede hard cap $${MIDAS_CANARY_HARD_CAP_USD}`,
-    );
+  if (requestedCap > hardCap) {
+    throw new Error(`cap solicitado $${requestedCap} excede hard cap $${hardCap}`);
   }
 
   const wallet = opts.wallet ?? createSigner(config.polymarketPrivateKey);
@@ -163,7 +169,8 @@ export async function prepareMidasCanaryRuntime(opts = {}) {
 
   return {
     sink,
-    preset: canaryMidasPreset({ ...(opts.preset ?? {}) }),
+    // Preset já resolvido pelo engine-serve (Gold vs micro); não rebaixar aqui.
+    preset: opts.preset ?? canaryMidasPreset(),
     riskOpts: {
       preflightChecks: preflightChecksFromResult(preflight),
       canaryMode: true,
