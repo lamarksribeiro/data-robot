@@ -1,0 +1,2495 @@
+{
+  "totals": {
+    "lines": 12765,
+    "settlements": 184,
+    "wins": 148,
+    "losses": 36,
+    "pnlSum": 24.052114600000003,
+    "rejects": 99,
+    "denyReverse": 2338,
+    "evidence": {
+      "minSizeRejects": 5,
+      "partialExitSubmits": 13,
+      "partialExitWithQtyLt5": 13,
+      "deniedReverseMaxNotional": 48,
+      "deniedReverseCircuitOpen": 2290,
+      "deniedReverseOther": 0,
+      "losersWhereReverseWouldHelp": 7,
+      "losersWhereExitWouldHelp": 6,
+      "losersWithMinSizeReject": 0
+    },
+    "denyReasons": {
+      "MAX_NOTIONAL_EVENT": 48,
+      "CIRCUIT_OPEN": 2290
+    },
+    "rejectBuckets": {
+      "minSize5": 5,
+      "fakMiss": 85,
+      "cancelFailed": 1,
+      "other": 8
+    }
+  },
+  "verdict": {
+    "keep_minSize_fix": true,
+    "keep_oddsShock_noPartialBelow5": true,
+    "keep_policy_denials_out_of_circuit": true,
+    "keep_notional_headroom_for_reverse": true,
+    "keep_oddsShock_retry_or_reverse": true
+  },
+  "byFile": [
+    {
+      "file": "btc-2026-07-25.jsonl",
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "lines": 4207,
+      "settlements": 75,
+      "wins": 61,
+      "losses": 14,
+      "pnlSum": 3.7655645999999976,
+      "rejects": 31,
+      "rejectBuckets": {
+        "minSize5": 0,
+        "fakMiss": 29,
+        "cancelFailed": 1,
+        "other": 1
+      },
+      "denyReverse": 200,
+      "denyReasons": {
+        "MAX_NOTIONAL_EVENT": 4,
+        "CIRCUIT_OPEN": 196
+      },
+      "evidence": {
+        "minSizeRejects": 0,
+        "partialExitSubmits": 0,
+        "partialExitWithQtyLt5": 0,
+        "deniedReverseMaxNotional": 4,
+        "deniedReverseCircuitOpen": 196,
+        "deniedReverseOther": 0,
+        "losersWhereReverseWouldHelp": 0,
+        "losersWhereExitWouldHelp": 0,
+        "losersWithMinSizeReject": 0
+      },
+      "decisionActions": {
+        "ENTER": 82,
+        "REVERSE": 2,
+        "denied:REVERSE": 200
+      }
+    },
+    {
+      "file": "btc-2026-07-26.jsonl",
+      "asset": "BTC",
+      "day": "2026-07-26",
+      "lines": 4295,
+      "settlements": 53,
+      "wins": 44,
+      "losses": 9,
+      "pnlSum": 8.718500000000002,
+      "rejects": 30,
+      "rejectBuckets": {
+        "minSize5": 0,
+        "fakMiss": 26,
+        "cancelFailed": 0,
+        "other": 4
+      },
+      "denyReverse": 1052,
+      "denyReasons": {
+        "MAX_NOTIONAL_EVENT": 17,
+        "CIRCUIT_OPEN": 1035
+      },
+      "evidence": {
+        "minSizeRejects": 0,
+        "partialExitSubmits": 0,
+        "partialExitWithQtyLt5": 0,
+        "deniedReverseMaxNotional": 17,
+        "deniedReverseCircuitOpen": 1035,
+        "deniedReverseOther": 0,
+        "losersWhereReverseWouldHelp": 2,
+        "losersWhereExitWouldHelp": 0,
+        "losersWithMinSizeReject": 0
+      },
+      "decisionActions": {
+        "ENTER": 75,
+        "denied:REVERSE": 1052,
+        "REVERSE": 4,
+        "denied:EXIT": 1
+      }
+    },
+    {
+      "file": "btc-2026-07-27.jsonl",
+      "asset": "BTC",
+      "day": "2026-07-27",
+      "lines": 1058,
+      "settlements": 36,
+      "wins": 29,
+      "losses": 7,
+      "pnlSum": 11.178500000000001,
+      "rejects": 21,
+      "rejectBuckets": {
+        "minSize5": 2,
+        "fakMiss": 18,
+        "cancelFailed": 0,
+        "other": 1
+      },
+      "denyReverse": 435,
+      "denyReasons": {
+        "MAX_NOTIONAL_EVENT": 9,
+        "CIRCUIT_OPEN": 426
+      },
+      "evidence": {
+        "minSizeRejects": 2,
+        "partialExitSubmits": 5,
+        "partialExitWithQtyLt5": 5,
+        "deniedReverseMaxNotional": 9,
+        "deniedReverseCircuitOpen": 426,
+        "deniedReverseOther": 0,
+        "losersWhereReverseWouldHelp": 2,
+        "losersWhereExitWouldHelp": 3,
+        "losersWithMinSizeReject": 0
+      },
+      "decisionActions": {
+        "ENTER": 52,
+        "REVERSE": 1,
+        "denied:REVERSE": 435,
+        "EXIT": 5,
+        "denied:EXIT": 1
+      }
+    },
+    {
+      "file": "doge-2026-07-27.jsonl",
+      "asset": "DOGE",
+      "day": "2026-07-27",
+      "lines": 160,
+      "settlements": 2,
+      "wins": 1,
+      "losses": 1,
+      "pnlSum": -1.1994000000000002,
+      "rejects": 3,
+      "rejectBuckets": {
+        "minSize5": 0,
+        "fakMiss": 3,
+        "cancelFailed": 0,
+        "other": 0
+      },
+      "denyReverse": 0,
+      "denyReasons": {},
+      "evidence": {
+        "minSizeRejects": 0,
+        "partialExitSubmits": 0,
+        "partialExitWithQtyLt5": 0,
+        "deniedReverseMaxNotional": 0,
+        "deniedReverseCircuitOpen": 0,
+        "deniedReverseOther": 0,
+        "losersWhereReverseWouldHelp": 0,
+        "losersWhereExitWouldHelp": 0,
+        "losersWithMinSizeReject": 0
+      },
+      "decisionActions": {
+        "ENTER": 5,
+        "denied:ENTER": 7
+      }
+    },
+    {
+      "file": "eth-2026-07-27.jsonl",
+      "asset": "ETH",
+      "day": "2026-07-27",
+      "lines": 2342,
+      "settlements": 4,
+      "wins": 2,
+      "losses": 2,
+      "pnlSum": -3.0502,
+      "rejects": 4,
+      "rejectBuckets": {
+        "minSize5": 0,
+        "fakMiss": 4,
+        "cancelFailed": 0,
+        "other": 0
+      },
+      "denyReverse": 208,
+      "denyReasons": {
+        "MAX_NOTIONAL_EVENT": 5,
+        "CIRCUIT_OPEN": 203
+      },
+      "evidence": {
+        "minSizeRejects": 0,
+        "partialExitSubmits": 2,
+        "partialExitWithQtyLt5": 2,
+        "deniedReverseMaxNotional": 5,
+        "deniedReverseCircuitOpen": 203,
+        "deniedReverseOther": 0,
+        "losersWhereReverseWouldHelp": 1,
+        "losersWhereExitWouldHelp": 1,
+        "losersWithMinSizeReject": 0
+      },
+      "decisionActions": {
+        "ENTER": 8,
+        "denied:REVERSE": 208,
+        "denied:EXIT": 1,
+        "EXIT": 2,
+        "denied:ENTER": 966
+      }
+    },
+    {
+      "file": "sol-2026-07-27.jsonl",
+      "asset": "SOL",
+      "day": "2026-07-27",
+      "lines": 636,
+      "settlements": 12,
+      "wins": 10,
+      "losses": 2,
+      "pnlSum": 4.5979,
+      "rejects": 7,
+      "rejectBuckets": {
+        "minSize5": 3,
+        "fakMiss": 2,
+        "cancelFailed": 0,
+        "other": 2
+      },
+      "denyReverse": 443,
+      "denyReasons": {
+        "MAX_NOTIONAL_EVENT": 13,
+        "CIRCUIT_OPEN": 430
+      },
+      "evidence": {
+        "minSizeRejects": 3,
+        "partialExitSubmits": 6,
+        "partialExitWithQtyLt5": 6,
+        "deniedReverseMaxNotional": 13,
+        "deniedReverseCircuitOpen": 430,
+        "deniedReverseOther": 0,
+        "losersWhereReverseWouldHelp": 2,
+        "losersWhereExitWouldHelp": 2,
+        "losersWithMinSizeReject": 0
+      },
+      "decisionActions": {
+        "ENTER": 14,
+        "EXIT": 6,
+        "denied:REVERSE": 443,
+        "denied:EXIT": 21
+      }
+    },
+    {
+      "file": "xrp-2026-07-27.jsonl",
+      "asset": "XRP",
+      "day": "2026-07-27",
+      "lines": 67,
+      "settlements": 2,
+      "wins": 1,
+      "losses": 1,
+      "pnlSum": 0.04124999999999984,
+      "rejects": 3,
+      "rejectBuckets": {
+        "minSize5": 0,
+        "fakMiss": 3,
+        "cancelFailed": 0,
+        "other": 0
+      },
+      "denyReverse": 0,
+      "denyReasons": {},
+      "evidence": {
+        "minSizeRejects": 0,
+        "partialExitSubmits": 0,
+        "partialExitWithQtyLt5": 0,
+        "deniedReverseMaxNotional": 0,
+        "deniedReverseCircuitOpen": 0,
+        "deniedReverseOther": 0,
+        "losersWhereReverseWouldHelp": 0,
+        "losersWhereExitWouldHelp": 0,
+        "losersWithMinSizeReject": 0
+      },
+      "decisionActions": {
+        "ENTER": 5,
+        "denied:EXIT": 1,
+        "denied:ENTER": 3
+      }
+    }
+  ],
+  "losers": [
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784949000",
+      "side": "UP",
+      "qty": 3,
+      "avgPrice": 0.6,
+      "winner": "Down",
+      "settlementPrice": 0,
+      "pnlDelta": -1.7999999999999998,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 11.826
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784951400",
+      "side": "DOWN",
+      "qty": 3,
+      "avgPrice": 0.54,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.605,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.982
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.322
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 26.592
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "rest_reconcile"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784955300",
+      "side": "DOWN",
+      "qty": 2,
+      "avgPrice": 0.74,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.47,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 29.974
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784963700",
+      "side": "DOWN",
+      "qty": 2,
+      "avgPrice": 0.68,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.35,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 27.478
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 24.218
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 23.813
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 23.41
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784963700",
+      "side": "DOWN",
+      "qty": 2,
+      "avgPrice": 0.68,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.35,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 27.478
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 24.218
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 23.813
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 23.41
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784963700",
+      "side": "DOWN",
+      "qty": 2,
+      "avgPrice": 0.68,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.35,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 27.478
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 24.218
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 23.813
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 23.41
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784963700",
+      "side": "DOWN",
+      "qty": 2,
+      "avgPrice": 0.68,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.35,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 27.478
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 24.218
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 23.813
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 23.41
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784966100",
+      "side": "UP",
+      "qty": 3,
+      "avgPrice": 0.86,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -2.565,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 20.484
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 18.821
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "rest_reconcile"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784971800",
+      "side": "UP",
+      "qty": 2,
+      "avgPrice": 0.69,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.3699999999999999,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 10.29
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 8.969
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 7.819
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784971800",
+      "side": "UP",
+      "qty": 2,
+      "avgPrice": 0.69,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.3699999999999999,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 10.29
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 8.969
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 7.819
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784971800",
+      "side": "UP",
+      "qty": 2,
+      "avgPrice": 0.69,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.3699999999999999,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 10.29
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 8.969
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 7.819
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784971800",
+      "side": "UP",
+      "qty": 2,
+      "avgPrice": 0.69,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.3699999999999999,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 10.29
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 8.969
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 7.819
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1784990400",
+      "side": "DOWN",
+      "qty": 3,
+      "avgPrice": 0.88,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -2.625,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.626
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-25",
+      "marketId": "btc-updown-5m-1785008400",
+      "side": "UP",
+      "qty": 3,
+      "avgPrice": 0.87,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -2.5949999999999998,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 29.999
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.417
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-26",
+      "marketId": "btc-updown-5m-1785035100",
+      "side": "DOWN",
+      "qty": 3,
+      "avgPrice": 0.92,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -2.745,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.106
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-26",
+      "marketId": "btc-updown-5m-1785036300",
+      "side": "DOWN",
+      "qty": 3,
+      "avgPrice": 0.59,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.755,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.308
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-26",
+      "marketId": "btc-updown-5m-1785045600",
+      "side": "UP",
+      "qty": 2,
+      "avgPrice": 0.74,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.47,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.936
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 27.68
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 27.236
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-26",
+      "marketId": "btc-updown-5m-1785052500",
+      "side": "DOWN",
+      "qty": 3,
+      "avgPrice": 0.57,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.6949999999999998,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 12.775
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-26",
+      "marketId": "btc-updown-5m-1785080400",
+      "side": "DOWN",
+      "qty": 3,
+      "avgPrice": 0.55,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.6350000000000002,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.629
+        },
+        {
+          "kind": "REVERSE",
+          "reason": "late_flip_reverse",
+          "qty": null,
+          "minPrice": 0.36,
+          "secsLeft": 7.999
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "rest_reconcile"
+        },
+        {
+          "kind": "REVERSE",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "REVERSE_EXIT_INCOMPLETE"
+        }
+      ],
+      "deniedReverseCount": 383,
+      "deniedReverseReasons": {
+        "MAX_NOTIONAL_EVENT": 4,
+        "CIRCUIT_OPEN": 379
+      },
+      "rejects": [
+        {
+          "kind": "REVERSE",
+          "reason": "REVERSE_EXIT_INCOMPLETE",
+          "qty": 0
+        }
+      ],
+      "reverseCf": {
+        "secsLeft": 7.8,
+        "exitBid": 0.19,
+        "oppAsk": 0.81,
+        "reversePnL": -0.5250000000000002,
+        "holdPnL": -1.6350000000000002,
+        "improvement": 1.1099999999999999,
+        "firstDenyReason": "MAX_NOTIONAL_EVENT"
+      },
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-26",
+      "marketId": "btc-updown-5m-1785084000",
+      "side": "DOWN",
+      "qty": 3,
+      "avgPrice": 0.63,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.875,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.834
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 28.559
+        },
+        {
+          "kind": "REVERSE",
+          "reason": "late_flip_reverse",
+          "qty": null,
+          "minPrice": 0.07,
+          "secsLeft": 7.806
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        },
+        {
+          "kind": "REVERSE",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "REVERSE_EXIT_INCOMPLETE"
+        }
+      ],
+      "deniedReverseCount": 16,
+      "deniedReverseReasons": {
+        "MAX_NOTIONAL_EVENT": 4,
+        "CIRCUIT_OPEN": 12
+      },
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "REVERSE",
+          "reason": "REVERSE_EXIT_INCOMPLETE",
+          "qty": 0
+        }
+      ],
+      "reverseCf": {
+        "secsLeft": 7.419,
+        "exitBid": 0.08,
+        "oppAsk": 0.92,
+        "reversePnL": -1.4250000000000003,
+        "holdPnL": -1.875,
+        "improvement": 0.44999999999999973,
+        "firstDenyReason": "MAX_NOTIONAL_EVENT"
+      },
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-26",
+      "marketId": "btc-updown-5m-1785084300",
+      "side": "UP",
+      "qty": 3,
+      "avgPrice": 0.56,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.665,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 24.066
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-26",
+      "marketId": "btc-updown-5m-1785087600",
+      "side": "DOWN",
+      "qty": 3,
+      "avgPrice": 0.62,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.845,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.803
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "rest_reconcile"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-26",
+      "marketId": "btc-updown-5m-1785108000",
+      "side": "UP",
+      "qty": 2,
+      "avgPrice": 0.66,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.31,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 29.797
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-27",
+      "marketId": "btc-updown-5m-1785111600",
+      "side": "DOWN",
+      "qty": 2,
+      "avgPrice": 0.72,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.43,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 2,
+          "minPrice": null,
+          "secsLeft": 29.867
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "rest_reconcile"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-27",
+      "marketId": "btc-updown-5m-1785112200",
+      "side": "UP",
+      "qty": 3,
+      "avgPrice": 0.55,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.6350000000000002,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 22.841
+        },
+        {
+          "kind": "REVERSE",
+          "reason": "late_flip_reverse",
+          "qty": null,
+          "minPrice": 0.24000000000000002,
+          "secsLeft": 7.995
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        },
+        {
+          "kind": "REVERSE",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "REVERSE_ENTER_FAILED"
+        }
+      ],
+      "deniedReverseCount": 135,
+      "deniedReverseReasons": {
+        "MAX_NOTIONAL_EVENT": 4,
+        "CIRCUIT_OPEN": 131
+      },
+      "rejects": [
+        {
+          "kind": "REVERSE",
+          "reason": "REVERSE_ENTER_FAILED",
+          "qty": 0
+        }
+      ],
+      "reverseCf": {
+        "secsLeft": 5.644,
+        "exitBid": 0.22,
+        "oppAsk": 0.78,
+        "reversePnL": -0.3450000000000003,
+        "holdPnL": -1.6350000000000002,
+        "improvement": 1.29,
+        "firstDenyReason": "MAX_NOTIONAL_EVENT"
+      },
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-27",
+      "marketId": "btc-updown-5m-1785145500",
+      "side": "DOWN",
+      "qty": 2,
+      "avgPrice": 0.64,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.27,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 4,
+          "minPrice": null,
+          "secsLeft": 29.937
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 4,
+          "minPrice": null,
+          "secsLeft": 29.453
+        },
+        {
+          "kind": "EXIT",
+          "reason": "odds_shock_partial",
+          "qty": 2,
+          "minPrice": 0.43,
+          "secsLeft": 12.32
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 4,
+          "reason": "rest_reconcile"
+        },
+        {
+          "kind": "EXIT",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 2,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": {
+        "secsLeft": 12.32,
+        "bid": 0.45,
+        "qtyRequested": 2,
+        "fullExitPnL": -0.38,
+        "holdPnL": -1.27,
+        "improvement": 0.89
+      }
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-27",
+      "marketId": "btc-updown-5m-1785150900",
+      "side": "UP",
+      "qty": 4,
+      "avgPrice": 0.41,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.6199999999999999,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 4,
+          "minPrice": null,
+          "secsLeft": 28.221
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 4,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 300,
+      "deniedReverseReasons": {
+        "MAX_NOTIONAL_EVENT": 5,
+        "CIRCUIT_OPEN": 295
+      },
+      "rejects": [],
+      "reverseCf": {
+        "secsLeft": 7.964,
+        "exitBid": 0.37,
+        "oppAsk": 0.63,
+        "reversePnL": 1.3,
+        "holdPnL": -1.6199999999999999,
+        "improvement": 2.92,
+        "firstDenyReason": "MAX_NOTIONAL_EVENT"
+      },
+      "exitCf": null
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-27",
+      "marketId": "btc-updown-5m-1785154500",
+      "side": "UP",
+      "qty": 3,
+      "avgPrice": 0.6999999999999998,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -2.0849999999999995,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.969
+        },
+        {
+          "kind": "EXIT",
+          "reason": "odds_shock_partial",
+          "qty": 1.5,
+          "minPrice": 0.38,
+          "secsLeft": 18.939
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        },
+        {
+          "kind": "EXIT",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "order 0xf7be820de387f1ec2a8cbd7ee0146245c6d151f8bde1c79640adbf26974ebb69 is invalid. Size (1) lower "
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "EXIT",
+          "reason": "order 0xf7be820de387f1ec2a8cbd7ee0146245c6d151f8bde1c79640adbf26974ebb69 is invalid. Size (1) lower ",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": {
+        "secsLeft": 18.939,
+        "bid": 0.4,
+        "qtyRequested": 1.5,
+        "fullExitPnL": -0.8999999999999995,
+        "holdPnL": -2.0849999999999995,
+        "improvement": 1.185
+      }
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-27",
+      "marketId": "btc-updown-5m-1785154500",
+      "side": "UP",
+      "qty": 3,
+      "avgPrice": 0.6999999999999998,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -2.0849999999999995,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.969
+        },
+        {
+          "kind": "EXIT",
+          "reason": "odds_shock_partial",
+          "qty": 1.5,
+          "minPrice": 0.38,
+          "secsLeft": 18.939
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        },
+        {
+          "kind": "EXIT",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "order 0xf7be820de387f1ec2a8cbd7ee0146245c6d151f8bde1c79640adbf26974ebb69 is invalid. Size (1) lower "
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "EXIT",
+          "reason": "order 0xf7be820de387f1ec2a8cbd7ee0146245c6d151f8bde1c79640adbf26974ebb69 is invalid. Size (1) lower ",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": {
+        "secsLeft": 18.939,
+        "bid": 0.4,
+        "qtyRequested": 1.5,
+        "fullExitPnL": -0.8999999999999995,
+        "holdPnL": -2.0849999999999995,
+        "improvement": 1.185
+      }
+    },
+    {
+      "asset": "BTC",
+      "day": "2026-07-27",
+      "marketId": "btc-updown-5m-1785162900",
+      "side": "DOWN",
+      "qty": 3,
+      "avgPrice": 0.6999999999999998,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -2.0849999999999995,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 4,
+          "minPrice": null,
+          "secsLeft": 28.513
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 27.989
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 27.584
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "DOGE",
+      "day": "2026-07-27",
+      "marketId": "doge-updown-5m-1785165300",
+      "side": "DOWN",
+      "qty": 2.12,
+      "avgPrice": 0.75,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.5794000000000001,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 25.157
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "PARTIAL",
+          "filled": true,
+          "qty": 2.12,
+          "reason": "user_ws_trade_matched"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "CANCEL",
+          "filled": true,
+          "qty": 2.12,
+          "reason": "fak_timeout_killed"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [],
+      "reverseCf": null,
+      "exitCf": null
+    },
+    {
+      "asset": "ETH",
+      "day": "2026-07-27",
+      "marketId": "eth-updown-5m-1785151500",
+      "side": "UP",
+      "qty": 4,
+      "avgPrice": 0.61,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -2.42,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 4,
+          "minPrice": null,
+          "secsLeft": 29.811
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 4,
+          "reason": "rest_reconcile"
+        }
+      ],
+      "deniedReverseCount": 208,
+      "deniedReverseReasons": {
+        "MAX_NOTIONAL_EVENT": 5,
+        "CIRCUIT_OPEN": 203
+      },
+      "rejects": [],
+      "reverseCf": {
+        "secsLeft": 7.966,
+        "exitBid": 0.52,
+        "oppAsk": 0.48,
+        "reversePnL": 1.7000000000000002,
+        "holdPnL": -2.42,
+        "improvement": 4.12,
+        "firstDenyReason": "MAX_NOTIONAL_EVENT"
+      },
+      "exitCf": null
+    },
+    {
+      "asset": "ETH",
+      "day": "2026-07-27",
+      "marketId": "eth-updown-5m-1785151800",
+      "side": "DOWN",
+      "qty": 2,
+      "avgPrice": 0.7799999999999999,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.5499999999999998,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 12.466
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 11.949
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 11.434
+        },
+        {
+          "kind": "EXIT",
+          "reason": "odds_shock_partial",
+          "qty": 1.5,
+          "minPrice": 0.48,
+          "secsLeft": 9.357
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        },
+        {
+          "kind": "EXIT",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 1,
+          "reason": "user_ws_trade_matched"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": {
+        "secsLeft": 9.357,
+        "bid": 0.5,
+        "qtyRequested": 1.5,
+        "fullExitPnL": -0.5599999999999998,
+        "holdPnL": -1.5499999999999998,
+        "improvement": 0.99
+      }
+    },
+    {
+      "asset": "SOL",
+      "day": "2026-07-27",
+      "marketId": "sol-updown-5m-1785156600",
+      "side": "DOWN",
+      "qty": 3,
+      "avgPrice": 0.6600000000000001,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -1.9650000000000003,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 29.984
+        },
+        {
+          "kind": "EXIT",
+          "reason": "odds_shock_partial",
+          "qty": 1.5,
+          "minPrice": 0.38999999999999996,
+          "secsLeft": 9.796
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "rest_reconcile"
+        },
+        {
+          "kind": "EXIT",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "order 0xdf370770d227f15ba95decfe8e96282625fb12e2af1a129bf327d2b4a9909b4e is invalid. Size (1) lower "
+        }
+      ],
+      "deniedReverseCount": 407,
+      "deniedReverseReasons": {
+        "MAX_NOTIONAL_EVENT": 4,
+        "CIRCUIT_OPEN": 403
+      },
+      "rejects": [
+        {
+          "kind": "EXIT",
+          "reason": "order 0xdf370770d227f15ba95decfe8e96282625fb12e2af1a129bf327d2b4a9909b4e is invalid. Size (1) lower ",
+          "qty": 0
+        }
+      ],
+      "reverseCf": {
+        "secsLeft": 7.298,
+        "exitBid": 0.34,
+        "oppAsk": 0.66,
+        "reversePnL": 0.044999999999999485,
+        "holdPnL": -1.9650000000000003,
+        "improvement": 2.01,
+        "firstDenyReason": "MAX_NOTIONAL_EVENT"
+      },
+      "exitCf": {
+        "secsLeft": 9.796,
+        "bid": 0.41,
+        "qtyRequested": 1.5,
+        "fullExitPnL": -0.7500000000000004,
+        "holdPnL": -1.9650000000000003,
+        "improvement": 1.2149999999999999
+      }
+    },
+    {
+      "asset": "SOL",
+      "day": "2026-07-27",
+      "marketId": "sol-updown-5m-1785165900",
+      "side": "DOWN",
+      "qty": 3,
+      "avgPrice": 0.6999999999999998,
+      "winner": "Up",
+      "settlementPrice": 0.005,
+      "pnlDelta": -2.0849999999999995,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 4,
+          "minPrice": null,
+          "secsLeft": 27.014
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 3,
+          "minPrice": null,
+          "secsLeft": 23.732
+        },
+        {
+          "kind": "EXIT",
+          "reason": "odds_shock_partial",
+          "qty": 1.5,
+          "minPrice": 0.47,
+          "secsLeft": 8.862
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "FILL",
+          "filled": true,
+          "qty": 3,
+          "reason": "user_ws_trade_matched"
+        },
+        {
+          "kind": "EXIT",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "order 0xeafbd42cc945008116489be43fcd2702654627a47be68fd2d7993b3d5da3e4e5 is invalid. Size (1) lower "
+        }
+      ],
+      "deniedReverseCount": 15,
+      "deniedReverseReasons": {
+        "MAX_NOTIONAL_EVENT": 4,
+        "CIRCUIT_OPEN": 11
+      },
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        },
+        {
+          "kind": "EXIT",
+          "reason": "order 0xeafbd42cc945008116489be43fcd2702654627a47be68fd2d7993b3d5da3e4e5 is invalid. Size (1) lower ",
+          "qty": 0
+        }
+      ],
+      "reverseCf": {
+        "secsLeft": 5.264,
+        "exitBid": 0.23,
+        "oppAsk": 0.77,
+        "reversePnL": -0.7349999999999998,
+        "holdPnL": -2.0849999999999995,
+        "improvement": 1.3499999999999996,
+        "firstDenyReason": "MAX_NOTIONAL_EVENT"
+      },
+      "exitCf": {
+        "secsLeft": 8.862,
+        "bid": 0.49,
+        "qtyRequested": 1.5,
+        "fullExitPnL": -0.6299999999999996,
+        "holdPnL": -2.0849999999999995,
+        "improvement": 1.455
+      }
+    },
+    {
+      "asset": "XRP",
+      "day": "2026-07-27",
+      "marketId": "xrp-updown-5m-1785159900",
+      "side": "UP",
+      "qty": 0.45,
+      "avgPrice": 0.58,
+      "winner": "Down",
+      "settlementPrice": 0.005,
+      "pnlDelta": -0.25875,
+      "submits": [
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 4,
+          "minPrice": null,
+          "secsLeft": 28.551
+        },
+        {
+          "kind": "ENTER",
+          "reason": "midas_core_entry",
+          "qty": 4,
+          "minPrice": null,
+          "secsLeft": 21.021
+        }
+      ],
+      "terminals": [
+        {
+          "kind": "ENTER",
+          "eventType": "REJECT",
+          "filled": false,
+          "qty": 0,
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "PARTIAL",
+          "filled": true,
+          "qty": 0.45,
+          "reason": "user_ws_trade_matched"
+        },
+        {
+          "kind": "ENTER",
+          "eventType": "CANCEL",
+          "filled": true,
+          "qty": 0.45,
+          "reason": "fak_timeout_killed"
+        }
+      ],
+      "deniedReverseCount": 0,
+      "deniedReverseReasons": {},
+      "rejects": [
+        {
+          "kind": "ENTER",
+          "reason": "no orders found to match with FAK order. FAK orders are partially filled or killed if no match is fo",
+          "qty": 0
+        }
+      ],
+      "reverseCf": null,
+      "exitCf": null
+    }
+  ]
+}
