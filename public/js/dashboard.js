@@ -42,15 +42,18 @@ function renderEngineTabs() {
     const mode = String(eng.status?.mode ?? eng.health?.mode ?? 'shadow').toLowerCase();
     const state = eng.status?.state ?? (eng.health?.ready === true ? 'READY' : 'OFFLINE');
     const reachable = eng.reachable !== false;
+    const selected = String(eng.id) === String(selectedEngineId);
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = reachable
-      ? `btn btn--sm ${String(eng.id) === String(selectedEngineId) ? 'btn--primary' : 'btn--ghost'}`
-      : 'btn btn--sm btn--ghost';
-    btn.disabled = !reachable;
+    // Offline engines continuam clicáveis (permite inspecionar / ver erro sem travar a frota).
+    btn.className = selected ? 'btn btn--sm btn--primary' : 'btn btn--sm btn--ghost';
+    if (!reachable) btn.classList.add('is-offline');
+    btn.disabled = false;
     btn.textContent = eng.asset || eng.label || eng.id;
-    btn.title = `${eng.label} · ${mode} · ${state}`;
-    btn.setAttribute('aria-pressed', String(eng.id) === String(selectedEngineId));
+    btn.title = reachable
+      ? `${eng.label} · ${mode} · ${state}`
+      : `${eng.label} · ${mode} · OFFLINE${eng.lastError ? ` · ${eng.lastError}` : ''}`;
+    btn.setAttribute('aria-pressed', String(selected));
     btn.addEventListener('click', async () => {
       selectedEngineId = String(eng.id);
       renderEngineTabs();
@@ -3711,7 +3714,7 @@ function wireStrategyStudio() {
 
 async function refresh() {
   try {
-    await ensureEnginesSnapshot();
+    await ensureEnginesSnapshot({ force: true });
     const [status, health, instances, catalog] = await Promise.all([
       apiEngine('/status'),
       apiEngine('/health', { acceptError: true }),
@@ -3730,7 +3733,10 @@ async function refresh() {
     if (currentView === 'strategies') await loadStrategyStudio();
   } catch (error) {
     if (error.status === 401) return showLogin();
-    showAlert(`Engine indisponível: ${error.message}`);
+    // Poll a cada 5s: não reescreve o banner se a mensagem for a mesma.
+    const msg = `Engine indisponível: ${error.message}`;
+    if (alertBox && !alertBox.classList.contains('hidden') && alertBox.textContent === msg) return;
+    showAlert(msg);
   }
 }
 

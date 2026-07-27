@@ -56,6 +56,21 @@ Templates gerados em `runs/strategy-config/portfolio/{eth,sol,xrp}.json`.
 
 BTC usa `ENGINE_MAX_ACCOUNT_EXPOSURE=24` + file book. ETH/SOL/XRP usam teto **$6** por instância (`ENGINE_SHARE_ACCOUNT_BOOK=0`) até haver volume compartilhado.
 
+## Rede Docker (obrigatório para o dashboard)
+
+A UI resolve engines por alias DNS estável na rede `coolify` (não pelo nome do container, que muda a cada deploy):
+
+| Alias | App |
+|---|---|
+| `data-robot-engine` | BTC (`:3201`) |
+| `data-robot-engine-eth` | ETH (`:3202`) |
+| `data-robot-engine-sol` | SOL (`:3203`) |
+| `data-robot-engine-xrp` | XRP (`:3204`) |
+
+UI env: `ENGINE_REGISTRY=btc|BTC|http://data-robot-engine:3201,eth|ETH|http://data-robot-engine-eth:3202,...`
+
+No Coolify, campo **Custom Network Aliases** (coluna `custom_network_aliases`) de cada engine irmã deve ter o alias acima. Sem isso o dashboard marca ETH/SOL/XRP como OFFLINE mesmo com o app healthy.
+
 ## Monitor (48h)
 
 ```bash
