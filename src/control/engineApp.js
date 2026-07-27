@@ -1032,13 +1032,13 @@ export function createEngineApp(opts = {}) {
       if (/^0x[a-fA-F0-9]{40}$/.test(funder)) {
         try {
           // Cutover portfolio MIDAS (docs/operacao/midas-portfolio-monitor-baseline-2026-07-27.md).
-          // Sem isso a Data API devolve histórico inteiro da carteira (manual + canários antigos).
+          // A Data API não distingue robô vs UI na mesma carteira — usamos:
+          // 1) mercados do audit local (ordens da engine) como fonte de verdade;
+          // 2) ENGINE_PNL_SINCE para recovery quando o audit está vazio.
           const sinceSec =
             parseSinceToUnixSec(
               process.env.ENGINE_PNL_SINCE || opts.pnlSince || '2026-07-27T05:27:00Z',
             ) ?? null;
-          const buyUsdMin = Number(process.env.ENGINE_PNL_BUY_USD_MIN ?? '1.8');
-          const buyUsdMax = Number(process.env.ENGINE_PNL_BUY_USD_MAX ?? '6.5');
           const activity = await fetchPolymarketActivity({
             funderAddress: funder,
             dataApiBase: config.dataApiBase,
@@ -1065,8 +1065,9 @@ export function createEngineApp(opts = {}) {
           cashflows = filterCashflowsForRobotScope(cashflows, {
             alwaysKeepMarketIds: localMarketIds,
             sinceSec,
-            buyUsdMin: Number.isFinite(buyUsdMin) ? buyUsdMin : 1.8,
-            buyUsdMax: Number.isFinite(buyUsdMax) ? buyUsdMax : 6.5,
+            // Com audit local: não inventa trades manuais da carteira.
+            // Sem audit (volume apagado): sintetiza só pós-ENGINE_PNL_SINCE.
+            onlyKeepMarketIds: localMarketIds.length > 0,
           });
           all = mergeJournalWithPolymarketCashflows(all, cashflows, { limit: 1000 });
           pnlSource = 'polymarket';

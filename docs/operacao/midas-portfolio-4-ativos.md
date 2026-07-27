@@ -59,12 +59,12 @@ Templates gerados em `runs/strategy-config/portfolio/{eth,sol,xrp,doge}.json`.
 
 1. **Persistent storage** montado em `/usr/src/app/runs` — sem isso, redeploy apaga audit/trades/checkpoints e o painel zera P&L/ordens daquele ativo.
 2. **Custom network alias** igual ao hostname do `ENGINE_REGISTRY` do dashboard — sem isso o painel marca a engine offline.
-3. **PnL no painel** vem da Data API `/activity` da carteira compartilhada, filtrada por:
-   - `ENGINE_PNL_SINCE` (default `2026-07-27T05:27:00Z` — cutover portfolio)
-   - sizing típico do robô (`ENGINE_PNL_BUY_USD_MIN`/`MAX`, default 1.8–6.5)
-   - mercados já presentes no audit local da engine (sempre mantidos)
+3. **PnL no painel** — a Data API `/activity` não marca “veio do robô”. Regra:
+   - **com audit local:** só mercados que a engine registrou; Polymarket só corrige o cashflow/PnL
+   - **sem audit (recovery):** sintetiza activity desde `ENGINE_PNL_SINCE` (default `2026-07-27T05:27:00Z`)
+   - não filtrar por sizing (`entryBudget`) — muda com o tempo e gera falso positivo/negativo
 
-A API Polymarket **não** marca “veio do robô”; o filtro acima é a aproximação operacional.
+Volume em `/usr/src/app/runs` é o que mantém o audit após redeploy e permite PnL “só robô”.
 
 BTC usa `ENGINE_MAX_ACCOUNT_EXPOSURE=16` + file book. ETH/SOL/XRP/DOGE usam teto **$4** por instância (`ENGINE_SHARE_ACCOUNT_BOOK=0`) até haver volume compartilhado.
 

@@ -251,15 +251,15 @@ export function filterCashflowsBySlugPrefix(cashflowsByMarket, slugPrefix) {
 /**
  * Restringe cashflows ao escopo "robô":
  * - alwaysKeepMarketIds: mercados do audit/OMS local (ordens da engine)
- * - sinceSec: ignora markets cujo 1º fill é anterior (histórico manual/antigo)
- * - buyUsdMin/Max: fingerprint do sizing do robô (portfolio ~$2.5–$4)
+ * - sinceSec: ignora markets cujo 1º fill é anterior (histórico antigo da carteira)
+ * - onlyKeepMarketIds: se true e alwaysKeep não-vazio, não sintetiza markets
+ *   que a engine não registrou (evita misturar trades manuais da mesma carteira)
  *
  * @param {Map<string, object>|Iterable<[string, object]>} cashflowsByMarket
  * @param {{
  *   alwaysKeepMarketIds?: Iterable<string>,
  *   sinceSec?: number|null,
- *   buyUsdMin?: number|null,
- *   buyUsdMax?: number|null,
+ *   onlyKeepMarketIds?: boolean,
  * }} [opts]
  */
 export function filterCashflowsForRobotScope(cashflowsByMarket, opts = {}) {
@@ -274,14 +274,7 @@ export function filterCashflowsForRobotScope(cashflowsByMarket, opts = {}) {
     opts.sinceSec != null && Number.isFinite(Number(opts.sinceSec))
       ? Math.floor(Number(opts.sinceSec))
       : null;
-  const buyMin =
-    opts.buyUsdMin != null && Number.isFinite(Number(opts.buyUsdMin))
-      ? Number(opts.buyUsdMin)
-      : null;
-  const buyMax =
-    opts.buyUsdMax != null && Number.isFinite(Number(opts.buyUsdMax))
-      ? Number(opts.buyUsdMax)
-      : null;
+  const onlyKeep = opts.onlyKeepMarketIds === true && keep.size > 0;
 
   /** @type {Map<string, object>} */
   const out = new Map();
@@ -290,14 +283,12 @@ export function filterCashflowsForRobotScope(cashflowsByMarket, opts = {}) {
       out.set(marketId, cf);
       continue;
     }
+    if (onlyKeep) continue;
     if (!(cf?.buyUsd > 0)) continue;
     if (sinceSec != null) {
       const first = Number(cf.firstTsSec ?? cf.lastTsSec);
       if (Number.isFinite(first) && first < sinceSec) continue;
     }
-    const buy = Number(cf.buyUsd);
-    if (buyMin != null && !(buy >= buyMin)) continue;
-    if (buyMax != null && !(buy <= buyMax)) continue;
     out.set(marketId, cf);
   }
   return out;

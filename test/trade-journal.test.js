@@ -327,7 +327,7 @@ describe('tradeJournal', () => {
     assert.ok(Math.abs(summary.net - 2) < 1e-9);
   });
 
-  it('filterCashflowsForRobotScope mantém audit local e corta histórico antigo/fora do sizing', () => {
+  it('filterCashflowsForRobotScope prioriza audit local e não sintetiza extras', () => {
     const cashflows = aggregateActivityCashflows([
       {
         type: 'TRADE',
@@ -362,7 +362,7 @@ describe('tradeJournal', () => {
       {
         type: 'TRADE',
         side: 'BUY',
-        eventSlug: 'btc-updown-5m-manual-big',
+        eventSlug: 'btc-updown-5m-manual',
         usdcSize: 50,
         size: 100,
         price: 0.5,
@@ -370,7 +370,7 @@ describe('tradeJournal', () => {
       },
       {
         type: 'REDEEM',
-        eventSlug: 'btc-updown-5m-manual-big',
+        eventSlug: 'btc-updown-5m-manual',
         usdcSize: 40,
         timestamp: 1300,
       },
@@ -390,15 +390,23 @@ describe('tradeJournal', () => {
         timestamp: 60,
       },
     ]);
-    const scoped = filterCashflowsForRobotScope(cashflows, {
+    const withLocal = filterCashflowsForRobotScope(cashflows, {
       alwaysKeepMarketIds: ['btc-updown-5m-local'],
       sinceSec: 500,
-      buyUsdMin: 1.8,
-      buyUsdMax: 6.5,
+      onlyKeepMarketIds: true,
     });
-    assert.equal(scoped.has('btc-updown-5m-local'), true);
-    assert.equal(scoped.has('btc-updown-5m-robot'), true);
-    assert.equal(scoped.has('btc-updown-5m-old'), false);
-    assert.equal(scoped.has('btc-updown-5m-manual-big'), false);
+    assert.equal(withLocal.has('btc-updown-5m-local'), true);
+    assert.equal(withLocal.has('btc-updown-5m-robot'), false);
+    assert.equal(withLocal.has('btc-updown-5m-manual'), false);
+    assert.equal(withLocal.has('btc-updown-5m-old'), false);
+
+    const recovery = filterCashflowsForRobotScope(cashflows, {
+      alwaysKeepMarketIds: [],
+      sinceSec: 500,
+      onlyKeepMarketIds: false,
+    });
+    assert.equal(recovery.has('btc-updown-5m-robot'), true);
+    assert.equal(recovery.has('btc-updown-5m-manual'), true);
+    assert.equal(recovery.has('btc-updown-5m-old'), false);
   });
 });
