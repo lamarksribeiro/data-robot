@@ -706,6 +706,10 @@ function countCrosses(a, b) {
 
 function renderCharts() {
   if (!document.body.classList.contains('dashboard-active')) return;
+  if (currentView === 'fleet') {
+    if (fleetRows.length) renderFleetBoard(fleetRows);
+    return;
+  }
 
   const btc = lastFinite(series.btc);
   const ptb = lastFinite(series.ptb);
@@ -822,6 +826,7 @@ const MODE_COPY = {
 };
 
 const SECTION_TITLES = {
+  fleet: 'Frota',
   overview: 'Visão geral',
   market: 'Mercado & Gates',
   position: 'Posição & PnL',
@@ -831,6 +836,332 @@ const SECTION_TITLES = {
   audit: 'Auditoria',
   system: 'Sistema',
 };
+
+const FLEET_ASSET_ORDER = ['btc', 'eth', 'sol', 'xrp'];
+const FLEET_POLL_MS = 10_000;
+const FLEET_ICON = {
+  btc: 'i-asset-btc',
+  eth: 'i-asset-eth',
+  sol: 'i-asset-sol',
+  xrp: 'i-asset-xrp',
+};
+
+let fleetRows = [];
+let fleetWallet = null;
+let fleetFetchedAt = 0;
+let fleetInFlight = null;
+
+function engineAssetKey(eng) {
+  const raw = String(eng?.asset || eng?.label || eng?.id || '').toLowerCase();
+  if (FLEET_ASSET_ORDER.includes(raw)) return raw;
+  const id = String(eng?.id || '').toLowerCase();
+  if (FLEET_ASSET_ORDER.includes(id)) return id;
+  return id || 'btc';
+}
+
+function orderSideLabel(orders = []) {
+  const open = (orders || []).filter((o) => {
+    const st = String(o?.status || o?.orderStatus || '').toUpperCase();
+    return !TERMINAL_ORDER_STATES.has(st);
+  });
+  if (!open.length) return null;
+  const sides = [...new Set(open.map((o) => String(o.tokenSide || o.side || '').toUpperCase()).filter(Boolean))];
+  return { count: open.length, sides: sides.length ? sides.join('/') : 'ORD' };
+}
+
+function drawFleetPnlBars(canvas, rows) {
+  if (!canvas) return;
+  const emptyEl = $('chart-fleet-pnl-empty');
+  const items = (rows || []).map((r) => ({
+    label: String(r.asset || r.id || '?').toUpperCase(),
+    value: Number(r.pnlNet),
+  }));
+  if (!items.length || items.every((i) => !Number.isFinite(i.value) || i.value === 0)) {
+    if (emptyEl) emptyEl.classList.remove('hidden');
+    prepareCanvas(canvas);
+    return;
+  }
+  if (emptyEl) emptyEl.classList.add('hidden');
+  const prepared = prepareCanvas(canvas);
+  if (!prepared) return;
+  const { ctx, cssW, cssH, pad } = prepared;
+  const w = cssW - pad.l - pad.r;
+  const h = cssH - pad.t - pad.b;
+  let min = Math.min(0, ...items.map((i) => i.value));
+  let max = Math.max(0, ...items.map((i) => i.value));
+  if (min === max) {
+    min -= 1;
+    max += 1;
+  }
+  const range = max - min || 1;
+  const zeroY = pad.t + h - ((0 - min) / range) * h;
+  const barH = Math.max(14, (h / items.length) * 0.55);
+  const gap = h / items.length;
+
+  ctx.strokeStyle = 'rgba(148,163,184,0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, zeroY);
+  ctx.lineTo(pad.l + w, zeroY);
+  ctx.stroke();
+
+  items.forEach((item, idx) => {
+    const cy = pad.t + gap * idx + gap / 2;
+    const x0 = pad.l + ((0 - min) / range) * w;
+    const x1 = pad.l + ((item.value - min) / range) * w;
+    const left = Math.min(x0, x1);
+    const width = Math.max(2, Math.abs(x1 - x0));
+    ctx.fillStyle = item.value >= 0 ? 'rgba(52,211,153,0.85)' : 'rgba(248,113,113,0.85)';
+    ctx.fillRect(left, cy - barH / 2, width, barH);
+    ctx.fillStyle = 'rgba(226,232,240,0.9)';
+    ctx.font = '700 11px Plus Jakarta Sans, system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(item.label, pad.l + 4, cy - barH / 2 - 4);
+    ctx.font = '600 11px JetBrains Mono, ui-monospace, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(money(item.value), pad.l + w - 2, cy + 4);
+  });
+}
+
+function renderFleetBoard(rows) {
+  const board = $('fleet-board');
+  if (!board) return;
+  board.replaceChildren();
+
+  let totalPnl = 0;
+  let totalOrders = 0;
+  let online = 0;
+  let entriesOn = 0;
+
+  for (const row of rows) {
+    if (row.reachable) online += 1;
+    if (row.entryEnabled) entriesOn += 1;
+    if (Number.isFinite(row.pnlNet)) totalPnl += row.pnlNet;
+    totalOrders += row.openOrderCount || 0;
+
+    const asset = row.asset;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'fleet-card';
+    if (!row.reachable) btn.classList.add('is-offline');
+    if (row.openOrderCount > 0) btn.classList.add('is-live-order');
+    btn.dataset.engineId = row.id;
+
+    const mode = String(row.mode || '—').toLowerCase();
+    const state = row.state || (row.reachable ? '—' : 'OFFLINE');
+    const pnlCls =
+      Number.isFinite(row.pnlNet) && row.pnlNet > 0
+        ? 'is-pos'
+        : Number.isFinite(row.pnlNet) && row.pnlNet < 0
+          ? 'is-neg'
+          : '';
+    const orderInfo = row.orderLabel;
+    const spot =
+      row.spot != null && row.ptb != null
+        ? `${number(row.spot, 1)} / ${number(row.ptb, 1)}`
+        : '—';
+    const secs = row.secsLeft != null ? `${number(row.secsLeft, 0)}s` : '—';
+    const feed = row.feedsOk === true ? 'OK' : row.feedsOk === false ? 'atenção' : '—';
+    const iconId = FLEET_ICON[asset] || 'i-fleet';
+
+    btn.innerHTML = `
+      <div class="fleet-card__top">
+        <span class="fleet-card__icon" aria-hidden="true"><svg><use href="#${iconId}"/></svg></span>
+        <div class="fleet-card__title">
+          <strong>${String(asset).toUpperCase()}</strong>
+          <span>${row.presetId || row.strategyId || '—'}</span>
+        </div>
+      </div>
+      <div class="fleet-card__badges">
+        <span class="badge">${mode}</span>
+        <span class="badge ${row.reachable ? '' : 'badge--warn'}">${state}</span>
+        <span class="badge">${row.entryEnabled ? 'entradas ON' : 'entradas OFF'}</span>
+        <span class="badge ${row.feedsOk === false ? 'badge--warn' : 'badge--accent'}">feed ${feed}</span>
+      </div>
+      <div class="fleet-card__pnl ${pnlCls}">${money(row.pnlNet)}</div>
+      <dl class="fleet-card__meta">
+        <div><dt>Spot / PTB</dt><dd>${spot}</dd></div>
+        <div><dt>Tempo</dt><dd>${secs}</dd></div>
+        <div><dt>Posição</dt><dd>${row.positionLabel || 'FLAT'}</dd></div>
+        <div><dt>Trades</dt><dd>${row.closed ?? 0} fech. · ${row.pending ?? 0} pend.</dd></div>
+      </dl>
+      <span class="fleet-card__order ${orderInfo ? '' : 'is-flat'}">
+        <span class="fleet-card__order-dot" aria-hidden="true"></span>
+        ${
+          orderInfo
+            ? `${orderInfo.count} ordem${orderInfo.count === 1 ? '' : 'ens'} · ${orderInfo.sides}`
+            : 'Sem ordem aberta'
+        }
+      </span>
+    `;
+
+    btn.addEventListener('click', async () => {
+      selectedEngineId = String(row.id);
+      try {
+        localStorage.setItem(ENGINE_STORAGE_KEY, selectedEngineId);
+      } catch {
+        /* ignore */
+      }
+      renderEngineTabs();
+      clearSeries();
+      showView('market');
+      await refresh({ force: true });
+    });
+    board.append(btn);
+
+    text(`fleet-spark-${asset}-meta`, money(row.pnlNet));
+    drawTimedChart($(`chart-fleet-eq-${asset}`), row.equity || [], {
+      zeroLine: true,
+      digits: 2,
+    });
+  }
+
+  text('fleet-kpi-pnl', money(totalPnl));
+  text(
+    'fleet-kpi-pnl-meta',
+    rows.some((r) => (r.pending || 0) > 0)
+      ? `${rows.reduce((s, r) => s + (r.pending || 0), 0)} pendente(s)`
+      : 'soma dos 4 ativos',
+  );
+  text('fleet-kpi-orders', String(totalOrders));
+  text('fleet-kpi-orders-meta', totalOrders ? 'atenção: há exposição aberta' : 'em todas as engines');
+  text('fleet-kpi-online', `${online} / ${Math.max(rows.length, 4)}`);
+  text('fleet-kpi-online-meta', online === rows.length ? 'todas reachable' : 'alguma offline');
+  text('fleet-kpi-entries', String(entriesOn));
+  text('fleet-kpi-entries-meta', entriesOn ? 'armadas com entry' : 'todas OFF');
+  text('fleet-online-badge', `${online} online`);
+  if (fleetWallet?.portfolioUsd != null) {
+    text('fleet-wallet-badge', `Portfolio ${money(fleetWallet.portfolioUsd)}`);
+  } else if (fleetWallet?.balance != null) {
+    text('fleet-wallet-badge', `Portfolio ${money(fleetWallet.balance)}`);
+  }
+  text('fleet-pnl-chart-badge', money(totalPnl));
+  text('fleet-last-update', `Atualizado ${new Date().toLocaleTimeString('pt-BR')}`);
+  drawFleetPnlBars($('chart-fleet-pnl'), rows);
+}
+
+async function refreshFleet({ force = false } = {}) {
+  if (currentView !== 'fleet' && !force) return;
+  if (fleetInFlight) return fleetInFlight;
+  if (!force && fleetFetchedAt && Date.now() - fleetFetchedAt < FLEET_POLL_MS - 500) {
+    renderFleetBoard(fleetRows);
+    return;
+  }
+
+  fleetInFlight = (async () => {
+    await ensureEnginesSnapshot({ force: true });
+    const engines = Array.isArray(enginesSnapshot) ? enginesSnapshot : [];
+    const byAsset = new Map();
+    for (const eng of engines) {
+      byAsset.set(engineAssetKey(eng), eng);
+    }
+
+    const ordered = FLEET_ASSET_ORDER.map((asset) => {
+      const eng = byAsset.get(asset) || engines.find((e) => String(e.id).toLowerCase() === asset);
+      return eng ? { ...eng, asset } : { id: asset, asset, label: asset.toUpperCase(), reachable: false };
+    });
+
+    const settled = await Promise.allSettled(
+      ordered.map(async (eng) => {
+        const id = String(eng.id);
+        if (eng.reachable === false && !eng.status && !eng.health) {
+          // still try — registry may mark unreachable but status can work
+        }
+        const [statusRes, tradesRes] = await Promise.allSettled([
+          apiEngineById(id, '/status'),
+          apiEngineById(id, `/trades?page=1&pageSize=${TRADES_PAGE_SIZE}`),
+        ]);
+        const status = statusRes.status === 'fulfilled' ? statusRes.value : null;
+        let trades = [];
+        if (tradesRes.status === 'fulfilled') {
+          const payload = tradesRes.value;
+          trades = Array.isArray(payload) ? payload : Array.isArray(payload?.trades) ? payload.trades : [];
+        }
+        const summary =
+          tradesRes.status === 'fulfilled' && tradesRes.value?.summary
+            ? tradesRes.value.summary
+            : summarizeTradePnl(trades);
+        const equity =
+          tradesRes.status === 'fulfilled' && Array.isArray(tradesRes.value?.equity)
+            ? tradesRes.value.equity
+            : buildEquityCurveFromTrades(trades);
+        const openOrders = status?.openOrders ?? [];
+        const orderLabel = orderSideLabel(openOrders);
+        const pos = status?.position ?? {};
+        const market = status?.market ?? {};
+        const health = status?.health ?? eng.health ?? null;
+        return {
+          id,
+          asset: eng.asset,
+          reachable: eng.reachable !== false && status != null,
+          mode: status?.mode ?? eng.status?.mode ?? eng.health?.mode ?? '—',
+          state: status?.operatorState ?? status?.state ?? eng.status?.state ?? (status ? '—' : 'OFFLINE'),
+          entryEnabled: status?.entryEnabled === true,
+          feedsOk: health?.feedsOk ?? status?.health?.feedsOk,
+          presetId: status?.canary?.presetId || status?.catalog?.presetId || null,
+          strategyId: status?.strategyId || null,
+          pnlNet: Number(summary?.net),
+          closed: summary?.closed ?? 0,
+          pending: summary?.pending ?? 0,
+          equity,
+          openOrderCount: orderLabel?.count || 0,
+          orderLabel,
+          spot: market.btc ?? market.spot ?? null,
+          ptb: market.priceToBeat ?? null,
+          secsLeft: market.secsLeft ?? null,
+          positionLabel: pos?.qty
+            ? `${pos.side || '—'} · ${number(pos.qty)}`
+            : 'FLAT',
+          lastError: status == null ? eng.lastError || 'unreachable' : null,
+        };
+      }),
+    );
+
+    fleetRows = settled.map((s, i) => {
+      if (s.status === 'fulfilled') return s.value;
+      const eng = ordered[i];
+      return {
+        id: String(eng.id),
+        asset: eng.asset,
+        reachable: false,
+        mode: '—',
+        state: 'OFFLINE',
+        entryEnabled: false,
+        feedsOk: false,
+        pnlNet: null,
+        closed: 0,
+        pending: 0,
+        equity: [],
+        openOrderCount: 0,
+        orderLabel: null,
+        positionLabel: 'FLAT',
+        lastError: s.reason?.message || 'error',
+      };
+    });
+
+    // Wallet compartilhada: primeira engine reachable
+    const walletEngine = fleetRows.find((r) => r.reachable)?.id || ordered[0]?.id;
+    if (walletEngine) {
+      try {
+        const wallet = await apiEngineById(walletEngine, '/wallet');
+        fleetWallet = {
+          portfolioUsd: Number(wallet?.portfolioUsd ?? wallet?.balanceUsd),
+          balance: Number(wallet?.cashUsd ?? wallet?.balanceUsd),
+          raw: wallet,
+        };
+      } catch {
+        /* keep previous */
+      }
+    }
+
+    fleetFetchedAt = Date.now();
+    renderFleetBoard(fleetRows);
+  })().finally(() => {
+    fleetInFlight = null;
+  });
+
+  return fleetInFlight;
+}
 
 /** Metadados dos 10 gates de evaluateEntryGates (MIDAS/TFC). */
 const GATE_META = {
@@ -3727,7 +4058,7 @@ function viewNeedsTrades(view = currentView) {
 }
 
 function viewNeedsWallet(view = currentView) {
-  return view === 'overview' || view === 'position' || view === 'controls';
+  return view === 'overview' || view === 'position' || view === 'controls' || view === 'fleet';
 }
 
 function viewNeedsCatalog(view = currentView) {
@@ -3796,6 +4127,7 @@ async function refresh(opts = {}) {
 
       if (currentView === 'audit') await refreshAudit({ silent: true });
       if (currentView === 'strategies') await loadStrategyStudio();
+      if (currentView === 'fleet') await refreshFleet({ force: force || forceHeavy });
     } catch (error) {
       if (error.status === 401) return showLogin();
       // Poll periódico: não reescreve o banner se a mensagem for a mesma.
@@ -3862,7 +4194,8 @@ function showView(viewId, { pushHash = true } = {}) {
   }
   if (id === 'audit') refreshAudit({ silent: true });
   if (id === 'orders' || id === 'position' || id === 'overview') refreshTrades({ silent: true });
-  if (viewNeedsWallet(id)) refreshWalletLive({ silent: true });
+  if (id === 'fleet') refreshFleet({ force: true });
+  else if (viewNeedsWallet(id)) refreshWalletLive({ silent: true });
   if (id === 'system') {
     void (async () => {
       try {
@@ -3889,11 +4222,14 @@ function showDashboard() {
   dashboardView.classList.remove('hidden');
   document.body.classList.add('dashboard-active');
   document.title = 'Data Robot · Operações';
-  const hashView = (location.hash || '#overview').replace('#', '');
+  const hashView = (location.hash || '#fleet').replace('#', '');
   showView(hashView, { pushHash: false });
   refresh({ force: true });
   clearInterval(pollTimer);
-  pollTimer = setInterval(() => refresh(), POLL_LIGHT_MS);
+  pollTimer = setInterval(() => {
+    if (currentView === 'fleet') refreshFleet();
+    else refresh();
+  }, POLL_LIGHT_MS);
 }
 
 function showLogin() {
