@@ -13,9 +13,17 @@ Monitor `--days 2` ainda vê o ENTER Gold de **$14,96** (ask 0,88) — esperado;
 node scripts/midas/monitor-portfolio-sizing.js --days 2 --since 2026-07-27T05:27:00Z
 ```
 
-Critérios 48h:
+### T0 (~05:31Z, 1 ENTER pós-cutover)
+
+| Métrica | Valor |
+|---|---|
+| `cost_max` / `cost_avg` | **2.52** / 2.52 |
+| `overBudget6` | **0** |
+| `exposureBlocks` | **0** |
+| settle PnL | +1.46 |
+| `ok` | **true** |
+
+Critérios 48h (reavaliar **2026-07-29**):
 - `cost_max ≤ 6.05`
 - `overBudget6 = 0`
-- `exposureBlocks` monitorado (BTC file-book $24; irmãs teto $6)
-
-Reavaliar em **2026-07-29**.
+- `exposureBlocks` monitorado (BTC file-book $24; irmãs teto $6 isolado)
