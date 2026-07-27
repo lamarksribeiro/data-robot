@@ -11,6 +11,7 @@
 
 import 'dotenv/config';
 import '../src/net/httpBootstrap.js';
+import fs from 'node:fs';
 import path from 'node:path';
 import { createEngineApp } from '../src/control/engineApp.js';
 import { createSnapshotSource } from '../src/market/snapshotSources.js';
@@ -38,9 +39,21 @@ const stateDir = process.env.ENGINE_STATE_DIR || 'runs';
 // active-strategy + custom presets sob o volume persistente (runs/), não em config/ efêmero da imagem.
 const strategyConfigDir =
   process.env.STRATEGY_CONFIG_DIR || path.join(stateDir, 'strategy-config');
+const snapshotAssetKey = isCrypto5mSourceKind(sourceKind)
+  ? resolveCrypto5mAsset(sourceKind).assetKey
+  : null;
+const volumeActive = path.join(strategyConfigDir, 'active-strategy.json');
+const bundledActive = snapshotAssetKey
+  ? path.join('config', 'portfolio', `${snapshotAssetKey}.json`)
+  : volumeActive;
+const activeStrategyFile =
+  process.env.STRATEGY_ACTIVE_FILE ||
+  (fs.existsSync(volumeActive) ? volumeActive : bundledActive);
 const strategyLibrary = createStrategyLibrary({
   rootDir: strategyConfigDir,
+  activeFile: activeStrategyFile,
 });
+console.log(`[engine:serve] active-strategy-file ${activeStrategyFile}`);
 const activeStrategy = strategyLibrary.loadActive();
 // Prioridade: active-strategy.json (UI) → env → fixture.
 const strategyId =

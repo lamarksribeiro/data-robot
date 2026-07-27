@@ -177,12 +177,12 @@ export async function prepareMidasCanaryRuntime(opts = {}) {
   );
   const sharedBook =
     opts.accountBook ??
-    (opts.shareAccountBook !== false
-      ? createFileAccountRiskBook({
+    (opts.shareAccountBook === false || process.env.ENGINE_SHARE_ACCOUNT_BOOK === '0'
+      ? undefined
+      : createFileAccountRiskBook({
           maxAccountExposure: accountExposure,
           file: opts.accountBookFile,
-        })
-      : undefined);
+        }));
 
   return {
     sink,
