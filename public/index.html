@@ -14,7 +14,7 @@
 
   <link rel="stylesheet" href="/styles.css?v=1.16.19">
 
-  <script src="/js/dashboard.js?v=1.17.1" defer></script>
+  <script src="/js/dashboard.js?v=1.17.2" defer></script>
   <script src="/js/mascot.js?v=1.16.9" defer></script>
 </head>
 <body>
@@ -272,41 +272,6 @@
             <em class="kpi-card__meta" id="fleet-meta-xrp">—</em>
           </article>
         </section>
-
-        <div class="chart-grid chart-grid--2">
-          <article class="panel chart-panel chart-panel--hero">
-            <div class="panel__header">
-              <div>
-                <p class="panel__kicker">Cruzamento · spot × PTB</p>
-                <h2>BTC vs Price-to-Beat</h2>
-                <p class="panel__hint">Linha verde = BTC spot · amarela = PTB. Marcadores = cruzamento (flip do favorito).</p>
-              </div>
-              <div class="chart-legend">
-                <span class="chart-legend__item chart-legend__item--btc">BTC</span>
-                <span class="chart-legend__item chart-legend__item--ptb">PTB</span>
-                <span class="badge" id="chart-cross-badge">—</span>
-              </div>
-            </div>
-            <canvas id="chart-cross" class="chart-canvas chart-canvas--lg" width="960" height="220" aria-label="BTC vs PTB"></canvas>
-            <p class="chart-empty" id="chart-cross-empty">Coletando BTC e PTB…</p>
-          </article>
-          <article class="panel chart-panel">
-            <div class="panel__header">
-              <div>
-                <p class="panel__kicker">Edge da estratégia</p>
-                <h2>Z-score</h2>
-                <p class="panel__hint">|BTC−PTB| / (σ√τ). Acima do limiar = edge forte o bastante para minEntryZ.</p>
-              </div>
-              <div class="chart-legend">
-                <span class="chart-legend__item chart-legend__item--z">Z</span>
-                <span class="chart-legend__item chart-legend__item--minz">minEntryZ</span>
-                <span class="badge" id="chart-z-badge">—</span>
-              </div>
-            </div>
-            <canvas id="chart-z" class="chart-canvas chart-canvas--lg" width="640" height="220" aria-label="Z-score da estratégia"></canvas>
-            <p class="chart-empty" id="chart-z-empty">Coletando z-score…</p>
-          </article>
-        </div>
 
         <div class="panel-grid panel-grid--overview">
           <article class="panel">
