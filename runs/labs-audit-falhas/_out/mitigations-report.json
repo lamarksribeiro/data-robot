@@ -1,0 +1,570 @@
+{
+  "root": "../data-robot/runs/labs-audit-falhas",
+  "generatedAt": "2026-07-30T05:19:49.186Z",
+  "assets": {
+    "BTC": {
+      "files": [
+        "engine-2026-07-25.jsonl",
+        "engine-2026-07-26.jsonl",
+        "engine-2026-07-27.jsonl",
+        "engine-2026-07-28.jsonl"
+      ],
+      "settlements": 137,
+      "baselinePnl": 23.2976,
+      "rejects": 89,
+      "rejectBuckets": {
+        "fak_miss": 77,
+        "cancel_failed": 1,
+        "reverse_exit_incomplete": 4,
+        "reverse_enter_failed": 2,
+        "min_size": 5
+      },
+      "scenarioA_circuitBypassReverse": {
+        "deniedReverseCircuitEvents": 1657,
+        "withLateFlipUsable": 1657,
+        "changedMarkets": 7,
+        "baselinePnl": 23.2976,
+        "counterfactualPnl": 27.0776,
+        "deltaPnl": 3.78,
+        "helps": true,
+        "samples": [
+          {
+            "marketId": "btc-updown-5m-1785150900",
+            "delta": 2.6,
+            "baseline": -1.62,
+            "cf": 0.98,
+            "exitBid": 0.33,
+            "oppAsk": 0.67,
+            "secsLeft": 4
+          },
+          {
+            "marketId": "btc-updown-5m-1785112200",
+            "delta": 1.29,
+            "baseline": -1.635,
+            "cf": -0.345,
+            "exitBid": 0.22,
+            "oppAsk": 0.78,
+            "secsLeft": 4.001
+          },
+          {
+            "marketId": "btc-updown-5m-1785080400",
+            "delta": 0.75,
+            "baseline": -1.635,
+            "cf": -0.885,
+            "exitBid": 0.13,
+            "oppAsk": 0.87,
+            "secsLeft": 4.005
+          },
+          {
+            "marketId": "btc-updown-5m-1785105900",
+            "delta": -0.58,
+            "baseline": 0.53,
+            "cf": -0.05,
+            "exitBid": 0.85,
+            "oppAsk": 0.15,
+            "secsLeft": 4.005
+          },
+          {
+            "marketId": "btc-updown-5m-1785084000",
+            "delta": 0.45,
+            "baseline": -1.875,
+            "cf": -1.425,
+            "exitBid": 0.08,
+            "oppAsk": 0.92,
+            "secsLeft": 5.591
+          },
+          {
+            "marketId": "btc-updown-5m-1785034500",
+            "delta": -0.39,
+            "baseline": 0.495,
+            "cf": 0.105,
+            "exitBid": 0.93,
+            "oppAsk": 0.07,
+            "secsLeft": 4.48
+          },
+          {
+            "marketId": "btc-updown-5m-1784953500",
+            "delta": -0.34,
+            "baseline": 0.63,
+            "cf": 0.29,
+            "exitBid": 0.91,
+            "oppAsk": 0.09,
+            "secsLeft": 4.024
+          }
+        ],
+        "fakMissThenCircuitMarkets": 3,
+        "fakMissThenCircuitEvents": 3,
+        "deniedExitCircuit": 2
+      },
+      "scenarioB_partialFullExit": {
+        "submits": 9,
+        "belowMin": 9,
+        "rejectMin5": 5,
+        "fill": 4,
+        "fillBelowMin": 4,
+        "otherReject": 0,
+        "fullAlsoBelowMin": 5,
+        "fullExitWouldPostGeMin": 0,
+        "fullExitEstPnlVsHold": 0,
+        "fullExitSamples": [],
+        "skipKeepsHold": 5,
+        "tryFullAnywayEstPnlVsHold": -0.66,
+        "tryFullAnywaySamples": [
+          {
+            "marketId": "btc-updown-5m-1785154500",
+            "partialQty": 1.5,
+            "fullQty": 3,
+            "exitPrice": 0.38,
+            "settlePx": 0.005,
+            "holdPnl": -2.085,
+            "exitPnl": -0.96,
+            "deltaVsHold": 1.125,
+            "fullBelowMin": true
+          },
+          {
+            "marketId": "btc-updown-5m-1785158700",
+            "partialQty": 2,
+            "fullQty": 4,
+            "exitPrice": 0.48,
+            "settlePx": 0.995,
+            "holdPnl": 1.1,
+            "exitPnl": -0.96,
+            "deltaVsHold": -2.06,
+            "fullBelowMin": true
+          },
+          {
+            "marketId": "btc-updown-5m-1785167400",
+            "partialQty": 1.5,
+            "fullQty": 3,
+            "exitPrice": 0.48,
+            "settlePx": 0.995,
+            "holdPnl": 0.705,
+            "exitPnl": -0.84,
+            "deltaVsHold": -1.545,
+            "fullBelowMin": true
+          },
+          {
+            "marketId": "btc-updown-5m-1785169200",
+            "partialQty": 2,
+            "fullQty": 4,
+            "exitPrice": 0.45999999999999996,
+            "settlePx": 0.005,
+            "holdPnl": -2.42,
+            "exitPnl": -0.6,
+            "deltaVsHold": 1.82,
+            "fullBelowMin": true
+          }
+        ],
+        "helps": true,
+        "note": "Com entry~$2.5 a posição full (3–4) já é < min5. Partial piora. Preferir: skip partial se qty<min; danger/full exit pode postar mesmo <5 (4/9 filled). Evitar partial que só gera reject."
+      },
+      "scenarioC_partialSkip": {
+        "rejectMin5Avoided": 5,
+        "helps": true,
+        "note": "Skip partial < min evita reject + circuit; PnL = hold até expiry/danger"
+      },
+      "scenarioD_exitCapConditional": {
+        "rejects": 0,
+        "parseable": 0,
+        "wouldAcceptResized": 0,
+        "stillBelowMin": 0,
+        "samples": [],
+        "cascadeCircuitAfter": 0,
+        "exitMinSizeRejects": 5,
+        "helps": false,
+        "note": "Sem amostra parseável ou sem rejects balance"
+      },
+      "scenarioF_slipRetryEnter": {
+        "fakMissEnters": 77,
+        "laterFillSameMarket": 50,
+        "laterFillHigherSlip": 42,
+        "exhaustedNoFill": 9,
+        "samples": [
+          {
+            "marketId": "btc-updown-5m-1784947200",
+            "missMax": 0.85,
+            "fillMax": 0.77,
+            "fillPrice": 0.59,
+            "lagMs": 872
+          },
+          {
+            "marketId": "btc-updown-5m-1784949900",
+            "missMax": 0.79,
+            "fillMax": 0.8,
+            "fillPrice": 0.78,
+            "lagMs": 1119
+          },
+          {
+            "marketId": "btc-updown-5m-1784949900",
+            "missMax": 0.77,
+            "fillMax": 0.8,
+            "fillPrice": 0.78,
+            "lagMs": 485
+          },
+          {
+            "marketId": "btc-updown-5m-1784951400",
+            "missMax": 0.6,
+            "fillMax": 0.61,
+            "fillPrice": 0.54,
+            "lagMs": 3987
+          },
+          {
+            "marketId": "btc-updown-5m-1784951400",
+            "missMax": 0.64,
+            "fillMax": 0.61,
+            "fillPrice": 0.54,
+            "lagMs": 3601
+          },
+          {
+            "marketId": "btc-updown-5m-1784954700",
+            "missMax": 0.7000000000000001,
+            "fillMax": 0.78,
+            "fillPrice": 0.76,
+            "lagMs": 924
+          },
+          {
+            "marketId": "btc-updown-5m-1784954700",
+            "missMax": 0.75,
+            "fillMax": 0.78,
+            "fillPrice": 0.76,
+            "lagMs": 539
+          },
+          {
+            "marketId": "btc-updown-5m-1784963700",
+            "missMax": 0.62,
+            "fillMax": 0.6900000000000001,
+            "fillPrice": 0.68,
+            "lagMs": 3738
+          }
+        ],
+        "helps": true,
+        "retryHitRate": 0.6494,
+        "higherSlipShareOfHits": 0.84,
+        "note": "Já existe retry até 5; lab mede se miss → fill posterior (liquidez/tempo) e se maxPrice subiu"
+      }
+    },
+    "SOL": {
+      "files": [
+        "engine-2026-07-27.jsonl"
+      ],
+      "settlements": 3,
+      "baselinePnl": 4.198,
+      "rejects": 11,
+      "rejectBuckets": {
+        "balance": 5,
+        "circuit_open": 5,
+        "cancel_failed": 1
+      },
+      "scenarioA_circuitBypassReverse": {
+        "deniedReverseCircuitEvents": 95,
+        "withLateFlipUsable": 95,
+        "changedMarkets": 1,
+        "baselinePnl": 4.198,
+        "counterfactualPnl": 2.558,
+        "deltaPnl": -1.64,
+        "helps": false,
+        "samples": [
+          {
+            "marketId": "sol-updown-5m-1785195000",
+            "delta": -1.64,
+            "baseline": 1.78,
+            "cf": 0.14,
+            "exitBid": 0.79,
+            "oppAsk": 0.21,
+            "secsLeft": 4.016
+          }
+        ],
+        "fakMissThenCircuitMarkets": 0,
+        "fakMissThenCircuitEvents": 0,
+        "deniedExitCircuit": 0
+      },
+      "scenarioB_partialFullExit": {
+        "submits": 1,
+        "belowMin": 1,
+        "rejectMin5": 0,
+        "fill": 0,
+        "fillBelowMin": 0,
+        "otherReject": 1,
+        "fullAlsoBelowMin": 0,
+        "fullExitWouldPostGeMin": 0,
+        "fullExitEstPnlVsHold": 0,
+        "fullExitSamples": [],
+        "skipKeepsHold": 0,
+        "tryFullAnywayEstPnlVsHold": 0,
+        "tryFullAnywaySamples": [],
+        "helps": false,
+        "note": "Com entry~$2.5 a posição full (3–4) já é < min5. Partial piora. Preferir: skip partial se qty<min; danger/full exit pode postar mesmo <5 (4/9 filled). Evitar partial que só gera reject."
+      },
+      "scenarioC_partialSkip": {
+        "rejectMin5Avoided": 0,
+        "helps": false,
+        "note": "Skip partial < min evita reject + circuit; PnL = hold até expiry/danger"
+      },
+      "scenarioD_exitCapConditional": {
+        "rejects": 5,
+        "parseable": 5,
+        "wouldAcceptResized": 0,
+        "stillBelowMin": 5,
+        "samples": [
+          {
+            "marketId": "sol-updown-5m-1785193500",
+            "balanceShares": 2.142856,
+            "orderShares": 4,
+            "resized": 2.142856,
+            "wouldAcceptAtMin5": false,
+            "tryPostResidual": true,
+            "price": 0.57
+          },
+          {
+            "marketId": "sol-updown-5m-1785193500",
+            "balanceShares": 2.142856,
+            "orderShares": 4,
+            "resized": 2.142856,
+            "wouldAcceptAtMin5": false,
+            "tryPostResidual": true,
+            "price": 0.57
+          },
+          {
+            "marketId": "sol-updown-5m-1785193500",
+            "balanceShares": 2.142856,
+            "orderShares": 4,
+            "resized": 2.142856,
+            "wouldAcceptAtMin5": false,
+            "tryPostResidual": true,
+            "price": 0.57
+          },
+          {
+            "marketId": "sol-updown-5m-1785193500",
+            "balanceShares": 2.142856,
+            "orderShares": 4,
+            "resized": 2.142856,
+            "wouldAcceptAtMin5": false,
+            "tryPostResidual": true,
+            "price": 0.63
+          },
+          {
+            "marketId": "sol-updown-5m-1785193500",
+            "balanceShares": 2.142856,
+            "orderShares": 4,
+            "resized": 2.142856,
+            "wouldAcceptAtMin5": false,
+            "tryPostResidual": true,
+            "price": 0.64
+          }
+        ],
+        "cascadeCircuitAfter": 25,
+        "exitMinSizeRejects": 0,
+        "helps": true,
+        "note": "Bal residual < min5 — sync+try residual OU skip; NÃO retry qty OMS (abre circuit)"
+      },
+      "scenarioF_slipRetryEnter": {
+        "fakMissEnters": 0,
+        "laterFillSameMarket": 0,
+        "laterFillHigherSlip": 0,
+        "exhaustedNoFill": 0,
+        "samples": [],
+        "helps": false,
+        "retryHitRate": null,
+        "higherSlipShareOfHits": null,
+        "note": "Já existe retry até 5; lab mede se miss → fill posterior (liquidez/tempo) e se maxPrice subiu"
+      }
+    }
+  },
+  "simulationE_circuitPolicy": {
+    "threshold": 5,
+    "cooldownMs": 60000,
+    "baseline": {
+      "reverseBlocked": 2,
+      "reverseAllowed": 0,
+      "exitBlocked": 1,
+      "finalCircuit": "OPEN",
+      "log": [
+        {
+          "t": 1000000,
+          "kind": "ENTER",
+          "action": "reject",
+          "recorded": true,
+          "circuit": "CLOSED",
+          "consecutive": 1
+        },
+        {
+          "t": 1000100,
+          "kind": "ENTER",
+          "action": "reject",
+          "recorded": true,
+          "circuit": "CLOSED",
+          "consecutive": 2
+        },
+        {
+          "t": 1000200,
+          "kind": "ENTER",
+          "action": "reject",
+          "recorded": true,
+          "circuit": "CLOSED",
+          "consecutive": 3
+        },
+        {
+          "t": 1000300,
+          "kind": "ENTER",
+          "action": "reject",
+          "recorded": true,
+          "circuit": "CLOSED",
+          "consecutive": 4
+        },
+        {
+          "t": 1000400,
+          "kind": "ENTER",
+          "action": "reject",
+          "recorded": true,
+          "circuit": "OPEN",
+          "consecutive": 5
+        },
+        {
+          "t": 1000600,
+          "kind": "REVERSE",
+          "action": "evaluate",
+          "allow": false,
+          "circuit": "OPEN",
+          "reasonCode": "CIRCUIT_OPEN"
+        },
+        {
+          "t": 1000700,
+          "kind": "EXIT",
+          "action": "reject",
+          "recorded": true,
+          "circuit": "OPEN",
+          "consecutive": 6
+        },
+        {
+          "t": 1000800,
+          "kind": "REVERSE",
+          "action": "evaluate",
+          "allow": false,
+          "circuit": "OPEN",
+          "reasonCode": "CIRCUIT_OPEN"
+        },
+        {
+          "t": 1000900,
+          "kind": "EXIT",
+          "action": "reject",
+          "recorded": true,
+          "circuit": "OPEN",
+          "consecutive": 7
+        },
+        {
+          "t": 1001000,
+          "kind": "EXIT",
+          "action": "evaluate",
+          "allow": false,
+          "circuit": "OPEN",
+          "reasonCode": "CIRCUIT_OPEN"
+        }
+      ]
+    },
+    "proposed": {
+      "reverseBlocked": 0,
+      "reverseAllowed": 2,
+      "exitBlocked": 0,
+      "finalCircuit": "CLOSED",
+      "protectiveBypass": 2,
+      "log": [
+        {
+          "t": 1001000,
+          "kind": "ENTER",
+          "action": "reject",
+          "recorded": false,
+          "circuit": "CLOSED",
+          "consecutive": 0
+        },
+        {
+          "t": 1001100,
+          "kind": "ENTER",
+          "action": "reject",
+          "recorded": false,
+          "circuit": "CLOSED",
+          "consecutive": 0
+        },
+        {
+          "t": 1001200,
+          "kind": "ENTER",
+          "action": "reject",
+          "recorded": false,
+          "circuit": "CLOSED",
+          "consecutive": 0
+        },
+        {
+          "t": 1001300,
+          "kind": "ENTER",
+          "action": "reject",
+          "recorded": false,
+          "circuit": "CLOSED",
+          "consecutive": 0
+        },
+        {
+          "t": 1001400,
+          "kind": "ENTER",
+          "action": "reject",
+          "recorded": false,
+          "circuit": "CLOSED",
+          "consecutive": 0
+        },
+        {
+          "t": 1001600,
+          "kind": "REVERSE",
+          "action": "evaluate",
+          "allow": true,
+          "circuit": "CLOSED",
+          "reasonCode": null
+        },
+        {
+          "t": 1001700,
+          "kind": "EXIT",
+          "action": "reject_protective",
+          "allowSubmit": true,
+          "wouldRecordFailure": false,
+          "expected": true,
+          "circuit": "CLOSED"
+        },
+        {
+          "t": 1001800,
+          "kind": "REVERSE",
+          "action": "evaluate",
+          "allow": true,
+          "circuit": "CLOSED",
+          "reasonCode": null
+        },
+        {
+          "t": 1001900,
+          "kind": "EXIT",
+          "action": "reject_protective",
+          "allowSubmit": true,
+          "wouldRecordFailure": false,
+          "expected": false,
+          "circuit": "CLOSED"
+        },
+        {
+          "t": 1002000,
+          "kind": "EXIT",
+          "action": "evaluate",
+          "allow": true,
+          "circuit": "CLOSED",
+          "reasonCode": null
+        }
+      ]
+    },
+    "helps": true
+  },
+  "verdicts": {
+    "BTC": [
+      "A circuit-bypass REVERSE: +3.78 PnL em 7 markets — AJUDA",
+      "B/C partial: rejectMin5=5 fullAlso<min=5 fills<min=4 tryFullAnyway Δ=-0.66 — skip partial AJUDA; full≥5 raro no canário $2.5",
+      "F slip/retry ENTER: 50/77 miss→fill posterior (hit=0.6494); higherSlip=42 — retry já ajuda; slip escalonado às vezes",
+      "E sim circuit: baseline bloqueia REVERSE=2, proposed bloqueia=0 — AJUDA"
+    ],
+    "SOL": [
+      "A circuit-bypass REVERSE: -1.64 PnL — piora no contrafactual (fills teóricos ruins)",
+      "D cap CONDITIONAL: resize≥5 0/5; residual<5 5; circuitCascade=25 — parar de martelar AJUDA",
+      "E sim circuit: baseline bloqueia REVERSE=2, proposed bloqueia=0 — AJUDA"
+    ]
+  }
+}

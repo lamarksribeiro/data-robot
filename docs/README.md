@@ -34,6 +34,7 @@
 
 | Documento | Conteúdo |
 |-----------|----------|
+| [Falhas de envio de ordens — achados 27/07](./operacao/falhas-envio-ordens-achados-2026-07-27.md) | Motivos CLOB/ENTER/EXIT/proteção, circuit vs FAK miss, labs contrafactuais live (não backtest) e mitigações P0–P2 |
 | [Latência local vs servidor Giovanna](./operacao/latencia-local-vs-servidor.md) | F2a/F2b: medir no PC (VPN) e no Coolify Giovanna; comparar com `tfc:latency:compare` |
 | [Maker vs taker fee (Hopper 3)](./operacao/teste-maker-vs-taker-fee.md) | Taker confirmado; fill maker ainda pendente para concluir a validação local |
 
