@@ -13,3 +13,7 @@ runs/**/*.db-*
 config/custom-presets/
 config/active-strategy.json
 config/*.tmp
+
+# dry/lab run dumps (não strategy-config)
+runs/pair-path-micro/
+
