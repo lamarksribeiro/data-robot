@@ -1,0 +1,70 @@
+{
+  "generatedAt": "2026-07-30T06:33:02.531Z",
+  "live": false,
+  "params": {
+    "openShares": 10,
+    "openAskLo": 0.52,
+    "openAskHi": 0.62,
+    "openTrigger": 0.55,
+    "openCap": 0.02,
+    "hedgeAskMax": 0.4,
+    "avgSumMax": 0.95,
+    "tauOpenMin": 40,
+    "tauOpenMax": 240,
+    "tauHedgeMin": 15,
+    "maxEventNotional": 8,
+    "maxOpenAttempts": 3,
+    "maxHedgeAttempts": 8,
+    "maxEvents": 1,
+    "pollMs": 50,
+    "maxBookAgeMs": 2500,
+    "orderType": "GTC",
+    "settleMs": 1200,
+    "settlePollMs": 150,
+    "hedgeLevels": [
+      {
+        "askMax": 0.4,
+        "frac": 0.5
+      },
+      {
+        "askMax": 0.36,
+        "frac": 0.5
+      }
+    ],
+    "tauHedgeEscape": null,
+    "hedgeEscapeAskMax": null,
+    "openRequireHedgeReady": false,
+    "openHedgeSlackCents": 8,
+    "openPairSumMaxAtOpen": null,
+    "escapeAvgSumMax": 0.98,
+    "stopOnResidual": true,
+    "stopOnAvgSum": 1,
+    "openLeaveUsd": 30,
+    "hedgeMode": "asap",
+    "ptbLeaveUsd": 40,
+    "ptbApproachUsd": 25,
+    "timeoutSec": 180,
+    "tauHedgeEscape2": null,
+    "hedgeEscapeAskMax2": null,
+    "escapeAvgSumMax2": null,
+    "clip": "ptb"
+  },
+  "staleReconnects": 0,
+  "killReason": null,
+  "reports": [
+    {
+      "slug": "btc-updown-5m-1785393000",
+      "mode": "idle",
+      "fills": 0,
+      "clips": 0,
+      "avgSum": null,
+      "pnl": 0,
+      "invested": 0,
+      "residual": 0,
+      "staleBlocks": 0,
+      "blockCounts": {
+        "OPEN_PTB_LEAVE": 2344
+      }
+    }
+  ]
+}

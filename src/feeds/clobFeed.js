@@ -5,8 +5,13 @@ const DEPTH = 10;
 const RECONNECT_BASE_MS = 400;
 const RECONNECT_MAX_MS = 8_000;
 const PING_MS = 10_000;
-const RESEED_MS = 5_000;
-const STALE_RESEED_MS = 8_000;
+const RESEED_MS = 2_500;
+/** REST top-of-book se o last tick estiver velho (mesmo com ws=true — evita socket zumbi). */
+const STALE_RESEED_MS = 4_000;
+/** Force-reconnect do Market WS se lag persistir (alinha com rtdsFeed + resilientWs). */
+const FORCE_RECONNECT_MS = 12_000;
+const FORCE_RECONNECT_COOLDOWN_MS = 5_000;
+const CONNECT_GRACE_MS = 5_000;
 
 /**
  * Normaliza o evento oficial de resolução do Market WebSocket.
@@ -38,6 +43,7 @@ export function normalizeMarketResolvedMessage(data) {
  * @param {object} [opts]
  * @param {() => void} [opts.onUpdate]
  * @param {(resolution:object) => void|Promise<void>} [opts.onResolution]
+ * @param {(info:{reason:string,lagMs:number}) => void} [opts.onStaleReconnect]
  * @param {() => number} [opts.clock]
  */
 export function createClobFeed(state, opts = {}) {
@@ -51,9 +57,13 @@ export function createClobFeed(state, opts = {}) {
   let stopped = false;
   let reconnectAttempt = 0;
   let connectedAtMs = null;
+  let lastForceReconnectAtMs = 0;
+  let lastReseedAtMs = 0;
   const onUpdate = typeof opts.onUpdate === 'function' ? opts.onUpdate : () => {};
   const onResolution =
     typeof opts.onResolution === 'function' ? opts.onResolution : () => {};
+  const onStaleReconnect =
+    typeof opts.onStaleReconnect === 'function' ? opts.onStaleReconnect : () => {};
   const seenResolutions = new Map();
 
   const rawBids = { up: new Map(), down: new Map() };
@@ -62,6 +72,44 @@ export function createClobFeed(state, opts = {}) {
   function backoffMs() {
     const exp = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** Math.min(reconnectAttempt, 5));
     return exp + Math.floor(Math.random() * 250);
+  }
+
+  function dropSocket({ terminate = false } = {}) {
+    if (pingTimer) {
+      clearInterval(pingTimer);
+      pingTimer = null;
+    }
+    if (!ws) {
+      state.wsClobConnected = false;
+      state.clobConnectedAt = null;
+      connectedAtMs = null;
+      return;
+    }
+    const s = ws;
+    ws = null;
+    state.wsClobConnected = false;
+    state.clobConnectedAt = null;
+    connectedAtMs = null;
+    try {
+      if (terminate && typeof s.terminate === 'function') s.terminate();
+      else if (s.readyState === WebSocket.OPEN || s.readyState === WebSocket.CONNECTING) s.close();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function forceReconnect(reason, lagMs) {
+    if (stopped) return;
+    const now = clock();
+    if (now - lastForceReconnectAtMs < FORCE_RECONNECT_COOLDOWN_MS) return;
+    lastForceReconnectAtMs = now;
+    dropSocket({ terminate: true });
+    try {
+      onStaleReconnect({ reason, lagMs });
+    } catch {
+      /* ignore */
+    }
+    scheduleReconnect();
   }
 
   function syncBest(side) {
@@ -177,6 +225,7 @@ export function createClobFeed(state, opts = {}) {
   }
 
   async function seedBooksFromRest() {
+    lastReseedAtMs = clock();
     await Promise.all([
       seedSideFromRest('up', state.upTokenId),
       seedSideFromRest('down', state.downTokenId),
@@ -195,18 +244,35 @@ export function createClobFeed(state, opts = {}) {
     }, 750);
   }
 
+  function sampleLagMs() {
+    if (state.clobLastAt == null) {
+      if (connectedAtMs == null) return Infinity;
+      return clock() - connectedAtMs;
+    }
+    return clock() - state.clobLastAt;
+  }
+
+  /**
+   * Bug clássico: ws=true + zero ticks → book congelado para sempre.
+   * Antes: early-return se connected (nunca REST). Agora: REST se stale + force-reconnect.
+   */
   function maybeReseedIfStale() {
     if (stopped || !subscribedTokens.length) return;
-    const lag = state.clobLastAt == null ? Infinity : clock() - state.clobLastAt;
+    const lag = sampleLagMs();
     const empty =
       (state.up.bestAsk == null && state.up.bestBid == null) ||
       (state.down.bestAsk == null && state.down.bestBid == null);
-    if (empty) {
-      void seedBooksFromRest();
-      return;
+
+    if (empty || lag >= STALE_RESEED_MS) {
+      // Anti-spam REST: no máximo 1 seed a cada ~2s.
+      if (clock() - lastReseedAtMs >= 2_000) void seedBooksFromRest();
     }
-    if (state.wsClobConnected) return;
-    if (lag >= STALE_RESEED_MS) void seedBooksFromRest();
+
+    if (!ws || ws.readyState !== WebSocket.OPEN || state.wsClobConnected !== true) return;
+    if (connectedAtMs != null && clock() - connectedAtMs < CONNECT_GRACE_MS) return;
+    if (lag >= FORCE_RECONNECT_MS) {
+      forceReconnect('CLOB_WS_STALE', lag);
+    }
   }
 
   function sendSubscribe() {
@@ -291,15 +357,19 @@ export function createClobFeed(state, opts = {}) {
       sendSubscribe();
       scheduleSeed();
     },
+    /** REST refresh sob demanda (micro-live / shadow). */
+    refreshBooks() {
+      return seedBooksFromRest();
+    },
+    /** Lag ms desde último tick (Infinity se nunca). */
+    lagMs() {
+      return sampleLagMs();
+    },
     stop() {
       stopped = true;
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
-      }
-      if (pingTimer) {
-        clearInterval(pingTimer);
-        pingTimer = null;
       }
       if (seedTimer) {
         clearTimeout(seedTimer);
@@ -309,13 +379,7 @@ export function createClobFeed(state, opts = {}) {
         clearInterval(reseedTimer);
         reseedTimer = null;
       }
-      if (ws) {
-        const s = ws;
-        ws = null;
-        if (s.readyState === WebSocket.OPEN || s.readyState === WebSocket.CONNECTING) s.close();
-      }
-      state.wsClobConnected = false;
-      state.clobConnectedAt = null;
+      dropSocket({ terminate: false });
     },
   };
 }

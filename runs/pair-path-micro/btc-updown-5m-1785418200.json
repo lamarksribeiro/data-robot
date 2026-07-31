@@ -1,0 +1,273 @@
+{
+  "generatedAt": "2026-07-30T13:32:41.983Z",
+  "live": false,
+  "event": {
+    "slug": "btc-updown-5m-1785418200",
+    "title": "Bitcoin Up or Down - July 30, 9:30AM-9:35AM ET",
+    "upTokenId": "89595288919909395477189823739778298604687743512141642702200204683890931583268",
+    "downTokenId": "28608750652435612238034691940085126054949256509041898357584461287053432736201"
+  },
+  "params": {
+    "openShares": 10,
+    "openAskLo": 0.52,
+    "openAskHi": 0.62,
+    "openTrigger": 0.55,
+    "openCap": 0.02,
+    "hedgeAskMax": 0.4,
+    "avgSumMax": 0.95,
+    "tauOpenMin": 40,
+    "tauOpenMax": 240,
+    "tauHedgeMin": 15,
+    "maxEventNotional": 8,
+    "maxOpenAttempts": 3,
+    "maxHedgeAttempts": 8,
+    "maxEvents": 2,
+    "pollMs": 50,
+    "maxBookAgeMs": 2500,
+    "orderType": "GTC",
+    "settleMs": 1200,
+    "settlePollMs": 150,
+    "hedgeLevels": [
+      {
+        "askMax": 0.4,
+        "frac": 0.5
+      },
+      {
+        "askMax": 0.36,
+        "frac": 0.5
+      }
+    ],
+    "tauHedgeEscape": null,
+    "hedgeEscapeAskMax": null,
+    "openRequireHedgeReady": false,
+    "openHedgeSlackCents": 8,
+    "openPairSumMaxAtOpen": null,
+    "escapeAvgSumMax": 0.98,
+    "stopOnResidual": true,
+    "stopOnAvgSum": 1,
+    "openLeaveUsd": 30,
+    "hedgeMode": "asap",
+    "ptbLeaveUsd": 40,
+    "ptbApproachUsd": 25,
+    "timeoutSec": 300,
+    "tauHedgeEscape2": null,
+    "hedgeEscapeAskMax2": null,
+    "escapeAvgSumMax2": null,
+    "clip": "ptb"
+  },
+  "mode": "done",
+  "sideOpen": "DOWN",
+  "inv": {
+    "UP": {
+      "shares": 10,
+      "cost": 2.4,
+      "fees": 0.11396
+    },
+    "DOWN": {
+      "shares": 10,
+      "cost": 5.6000000000000005,
+      "fees": 0.17248
+    }
+  },
+  "invested": 8,
+  "fees": 0.286,
+  "avgSum": 0.8,
+  "residual": 0,
+  "winner": "DOWN",
+  "pnl": 1.71,
+  "fills": [
+    {
+      "side": "DOWN",
+      "px": 0.56,
+      "sh": 10,
+      "kind": "open",
+      "fee": 0.17248,
+      "ts": "2026-07-30T13:30:59.006Z",
+      "orderId": null,
+      "dry": true,
+      "ms": 0,
+      "orderType": "GTC",
+      "partial": false
+    },
+    {
+      "side": "UP",
+      "px": 0.38,
+      "sh": 5,
+      "kind": "hedge_clip",
+      "fee": 0.08246,
+      "ts": "2026-07-30T13:31:01.648Z",
+      "orderId": null,
+      "dry": true,
+      "ms": 0,
+      "orderType": "GTC",
+      "askMax": 0.4,
+      "partial": false
+    },
+    {
+      "side": "UP",
+      "px": 0.1,
+      "sh": 5,
+      "kind": "hedge_clip",
+      "fee": 0.03150000000000001,
+      "ts": "2026-07-30T13:32:41.983Z",
+      "orderId": null,
+      "dry": true,
+      "ms": 0,
+      "orderType": "GTC",
+      "askMax": 0.36,
+      "partial": false
+    }
+  ],
+  "hedgePlan": [
+    {
+      "askMax": 0.4,
+      "targetSh": 5,
+      "filled": 5
+    },
+    {
+      "askMax": 0.36,
+      "targetSh": 5,
+      "filled": 5
+    }
+  ],
+  "nHedgeClips": 2,
+  "orders": [
+    {
+      "kind": "open",
+      "ok": true,
+      "filled": true,
+      "dry": true,
+      "ms": 0,
+      "price": 0.56,
+      "size": 10,
+      "raw": {
+        "dry": true,
+        "label": "open"
+      }
+    },
+    {
+      "kind": "hedge_clip",
+      "ok": true,
+      "filled": true,
+      "dry": true,
+      "ms": 0,
+      "price": 0.38,
+      "size": 5,
+      "raw": {
+        "dry": true,
+        "label": "hedge_clip"
+      }
+    },
+    {
+      "kind": "hedge_clip",
+      "ok": true,
+      "filled": true,
+      "dry": true,
+      "ms": 0,
+      "price": 0.1,
+      "size": 5,
+      "raw": {
+        "dry": true,
+        "label": "hedge_clip"
+      }
+    }
+  ],
+  "openAttempts": 1,
+  "hedgeAttempts": 2,
+  "staleBlocks": 0,
+  "blockCounts": {
+    "HEDGE_REFUSE_AVGSUM": 18,
+    "TETO_HEDGE": 1835
+  },
+  "log": [
+    {
+      "t": "2026-07-30T13:30:59.006Z",
+      "phase": "open",
+      "intent": {
+        "action": "open",
+        "side": "DOWN",
+        "ask": 0.56,
+        "limitPx": 0.56,
+        "sh": 10
+      },
+      "res": {
+        "ok": true,
+        "dry": true,
+        "filled": true,
+        "price": 0.56,
+        "size": 10,
+        "filledSize": 10,
+        "ms": 0,
+        "orderId": null,
+        "raw": {
+          "dry": true,
+          "label": "open"
+        }
+      }
+    },
+    {
+      "t": "2026-07-30T13:31:01.648Z",
+      "phase": "hedge",
+      "intent": {
+        "action": "hedge",
+        "kind": "hedge_clip",
+        "side": "UP",
+        "ask": 0.38,
+        "limitPx": 0.38,
+        "sh": 5,
+        "askMax": 0.4,
+        "clip": {
+          "askMax": 0.4,
+          "targetSh": 5,
+          "filled": 5
+        }
+      },
+      "res": {
+        "ok": true,
+        "dry": true,
+        "filled": true,
+        "price": 0.38,
+        "size": 5,
+        "filledSize": 5,
+        "ms": 0,
+        "orderId": null,
+        "raw": {
+          "dry": true,
+          "label": "hedge_clip"
+        }
+      }
+    },
+    {
+      "t": "2026-07-30T13:32:41.983Z",
+      "phase": "hedge",
+      "intent": {
+        "action": "hedge",
+        "kind": "hedge_clip",
+        "side": "UP",
+        "ask": 0.1,
+        "limitPx": 0.1,
+        "sh": 5,
+        "askMax": 0.36,
+        "clip": {
+          "askMax": 0.36,
+          "targetSh": 5,
+          "filled": 5
+        }
+      },
+      "res": {
+        "ok": true,
+        "dry": true,
+        "filled": true,
+        "price": 0.1,
+        "size": 5,
+        "filledSize": 5,
+        "ms": 0,
+        "orderId": null,
+        "raw": {
+          "dry": true,
+          "label": "hedge_clip"
+        }
+      }
+    }
+  ]
+}

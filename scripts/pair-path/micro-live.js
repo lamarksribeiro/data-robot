@@ -7,6 +7,7 @@
  *
  *   node scripts/pair-path/micro-live.js
  *   node scripts/pair-path/micro-live.js --clip=tight --open-shares=10 --max-events=2
+ *   node scripts/pair-path/micro-live.js --clip=ptb --open-leave-usd=30 --hedge-mode=asap --max-events=3
  *   node scripts/pair-path/micro-live.js --live --clip=tight --open-shares=10 --max-events=1
  */
 import 'dotenv/config';
@@ -17,8 +18,14 @@ import { hasLiveFlag, requireLiveFlag } from '../../src/cli/liveGate.js';
 import { buildClobClient } from '../../src/clob/buildClient.js';
 import { createSigner } from '../../src/clob/wallet.js';
 import { createMarketState } from '../../src/feeds/marketState.js';
+import { startRtdsFeed } from '../../src/feeds/rtdsFeed.js';
 import { createClobFeed } from '../../src/feeds/clobFeed.js';
 import { findActiveBtc5mEvent } from '../../src/markets/btc5m.js';
+import { fetchPriceToBeat } from '../../src/markets/priceToBeat.js';
+import {
+  chooseProtection,
+  parseProtectMode,
+} from './protect-policy.js';
 
 const DEFAULTS = {
   openShares: 5,
@@ -31,7 +38,7 @@ const DEFAULTS = {
   tauOpenMin: 40,
   tauOpenMax: 240,
   tauHedgeMin: 15,
-  maxEventNotional: 8,
+  maxEventNotional: 16,
   maxOpenAttempts: 3,
   maxHedgeAttempts: 2,
   maxEvents: 1,
@@ -57,6 +64,22 @@ const DEFAULTS = {
   stopOnResidual: true,
   /** Stop if equalized avgSum >= this (structural loss). */
   stopOnAvgSum: 1.0,
+  /** PTB-Path: min signed distance (USD) from PTB before open on chase side. 0 = off. */
+  openLeaveUsd: 0,
+  /** asap | ptb | never — ptb delays hedge until price returns within ptbApproachUsd. */
+  hedgeMode: 'asap',
+  ptbLeaveUsd: 40,
+  ptbApproachUsd: 25,
+  /** off | sell | hedge | min — residual protection after cheap hedge misses. */
+  protectMode: 'off',
+  /** At/below this tau, protection is marked mandatory. */
+  tauForceProtect: 20,
+  /** Flatten only after this many seconds without cheap hedge. */
+  protectTimeoutSec: 45,
+  /** Adverse: favorite bid dropped at least this many cents from open. */
+  protectAdverseCents: 4,
+  /** Adverse: opposite ask rose above hedgeAskMax since open (true | cents margin). */
+  protectOppBeyondHedge: true,
 };
 
 /** Named Clip-Path presets (lab clip-levels-ab). */
@@ -103,6 +126,19 @@ const CLIP_PRESETS = {
     tauHedgeEscape2: 12,
     hedgeEscapeAskMax2: 0.45,
     escapeAvgSumMax2: 1.0,
+  },
+  /** Lab PTB-Path + clip tight2 (no escape — matches ptb-protect-ab tight2). */
+  ptb: {
+    hedgeLevels: [
+      { askMax: 0.4, frac: 0.5 },
+      { askMax: 0.36, frac: 0.5 },
+    ],
+    tauHedgeEscape: null,
+    hedgeEscapeAskMax: null,
+    hedgeAskMax: 0.4,
+    avgSumMax: 0.95,
+    maxHedgeAttempts: 8,
+    openRequireHedgeReady: false,
   },
   /** Prior tight — still GO in sweep (~pnl 11.9 sh25). */
   tight: {
@@ -183,7 +219,7 @@ function parseArgs(argv) {
   };
   const clipName = String(valueOf('--clip') ?? 'off').toLowerCase();
   if (clipName !== 'off' && !CLIP_PRESETS[clipName]) {
-    throw new Error(`unknown --clip=${clipName} (use off|2|3|tight|deep3|deep4)`);
+    throw new Error(`unknown --clip=${clipName} (use off|2|3|tight|deep3|deep4|ptb)`);
   }
   const clip = CLIP_PRESETS[clipName] || CLIP_PRESETS.off;
   const hedgeLevelsRaw = valueOf('--hedge-levels');
@@ -265,6 +301,62 @@ function parseArgs(argv) {
     })(),
     stopOnResidual: !args.includes('--no-stop-on-residual'),
     stopOnAvgSum: parseFloat(valueOf('--stop-on-avg-sum') ?? String(DEFAULTS.stopOnAvgSum)),
+    openLeaveUsd: Math.max(
+      0,
+      parseFloat(valueOf('--open-leave-usd') ?? String(DEFAULTS.openLeaveUsd)) || 0,
+    ),
+    hedgeMode: String(valueOf('--hedge-mode') ?? DEFAULTS.hedgeMode).toLowerCase(),
+    protectMode: parseProtectMode(valueOf('--protect') ?? DEFAULTS.protectMode),
+    tauForceProtect: Math.max(
+      1,
+      parseInt(
+        valueOf('--tau-force-protect') ?? String(DEFAULTS.tauForceProtect),
+        10,
+      ) || DEFAULTS.tauForceProtect,
+    ),
+    protectTimeoutSec: Math.max(
+      0,
+      parseInt(
+        valueOf('--protect-timeout') ?? String(DEFAULTS.protectTimeoutSec),
+        10,
+      ) ?? DEFAULTS.protectTimeoutSec,
+    ),
+    protectAdverseCents: Math.max(
+      0,
+      parseInt(
+        valueOf('--protect-adverse-cents') ??
+          String(DEFAULTS.protectAdverseCents),
+        10,
+      ) ?? DEFAULTS.protectAdverseCents,
+    ),
+    protectOppBeyondHedge: (() => {
+      const raw = valueOf('--protect-opp-beyond-hedge');
+      if (raw == null || raw === '') return DEFAULTS.protectOppBeyondHedge;
+      if (raw === 'false' || raw === '0' || raw === 'off') return false;
+      if (raw === 'true' || raw === '1' || raw === 'on') return true;
+      const n = Number(raw);
+      if (Number.isFinite(n)) return n;
+      throw new Error(
+        '--protect-opp-beyond-hedge must be true|false|off|on|<cents>',
+      );
+    })(),
+    ptbLeaveUsd: Math.max(
+      0,
+      parseFloat(valueOf('--ptb-leave-usd') ?? String(DEFAULTS.ptbLeaveUsd)) || DEFAULTS.ptbLeaveUsd,
+    ),
+    ptbApproachUsd: Math.max(
+      0,
+      parseFloat(valueOf('--ptb-approach-usd') ?? String(DEFAULTS.ptbApproachUsd)) ||
+        DEFAULTS.ptbApproachUsd,
+    ),
+    openAskLo: (() => {
+      const v = valueOf('--open-ask-lo');
+      return v != null ? parseFloat(v) : DEFAULTS.openAskLo;
+    })(),
+    openAskHi: (() => {
+      const v = valueOf('--open-ask-hi');
+      return v != null ? parseFloat(v) : DEFAULTS.openAskHi;
+    })(),
   };
 }
 
@@ -281,6 +373,18 @@ function feeEst(price, shares, rate = 0.07) {
   return rate * p * (1 - p) * shares;
 }
 
+function tallyBlock(st, reason) {
+  st.blockCounts[reason] = (st.blockCounts[reason] || 0) + 1;
+}
+
+function mergeBlockCounts(st) {
+  const merged = { ...st.blockCounts };
+  for (const b of st.blocks) {
+    merged[b.reason] = (merged[b.reason] || 0) + 1;
+  }
+  return merged;
+}
+
 function createPairState(params) {
   return {
     mode: 'idle', // idle | opened | hedged | done
@@ -292,11 +396,35 @@ function createPairState(params) {
     openAttempts: 0,
     hedgeAttempts: 0,
     hedgePlan: null,
+    maxFavorableDist: 0,
+    ptbArmed: false,
     fills: [],
     orders: [],
     blocks: [],
+    blockCounts: {},
+    realizedPnl: 0,
+    protectAttempts: 0,
+    openedAtLoop: null,
+    openedAtMs: null,
+    openOppAsk: null,
     params,
   };
+}
+
+function signedFavorableDist(btc, priceToBeat, sideOpen) {
+  if (!Number.isFinite(btc) || !Number.isFinite(priceToBeat) || !sideOpen) return null;
+  const raw = btc - priceToBeat;
+  return sideOpen === 'UP' ? raw : -raw;
+}
+
+function updatePtbTracker(st, btc, priceToBeat) {
+  if (st.mode !== 'opened' || !st.sideOpen) return;
+  const dist = signedFavorableDist(btc, priceToBeat, st.sideOpen);
+  if (dist == null) return;
+  if (dist > st.maxFavorableDist) st.maxFavorableDist = dist;
+  if (!st.ptbArmed && st.maxFavorableDist >= st.params.ptbLeaveUsd - 1e-9) {
+    st.ptbArmed = true;
+  }
 }
 
 function buildHedgePlan(levels, openSh) {
@@ -363,6 +491,34 @@ function recordBuy(st, side, px, sh, kind, fee, orderMeta = {}) {
   return fill;
 }
 
+function recordSell(st, side, px, sh, kind, fee, orderMeta = {}) {
+  const leg = st.inv[side];
+  const sold = Math.min(Number(sh), leg.shares);
+  if (!(sold > 0)) return null;
+  const avgPx = leg.shares > 0 ? leg.cost / leg.shares : 0;
+  const entryFee = leg.shares > 0 ? (leg.fees * sold) / leg.shares : 0;
+  const costReleased = avgPx * sold;
+  leg.shares -= sold;
+  leg.cost = Math.max(0, leg.cost - costReleased);
+  leg.fees = Math.max(0, leg.fees - entryFee);
+  const realized = px * sold - costReleased - entryFee - fee;
+  st.realizedPnl += realized;
+  const fill = {
+    side,
+    px,
+    sh: sold,
+    kind,
+    fee,
+    entryFee,
+    realized,
+    action: 'sell',
+    ts: nowIso(),
+    ...orderMeta,
+  };
+  st.fills.push(fill);
+  return fill;
+}
+
 function resolveOrderType(name) {
   if (name === 'FOK') return OrderType.FOK;
   if (name === 'FAK') return OrderType.FAK;
@@ -398,7 +554,16 @@ async function waitMatched(client, orderId, { settleMs, settlePollMs }) {
   return { filled: matched > 0, partial: matched > 0 && matched + 1e-9 < original, matched, original, order: last, terminal: false };
 }
 
-async function placeBuy(client, live, tokenId, price, size, label, execOpts = {}) {
+async function placeOrder(
+  client,
+  live,
+  tokenId,
+  price,
+  size,
+  label,
+  orderSide,
+  execOpts = {},
+) {
   const t0 = performance.now();
   if (!live) {
     return {
@@ -420,7 +585,7 @@ async function placeBuy(client, live, tokenId, price, size, label, execOpts = {}
   try {
     // GTC marketable + short settle: FOK no nível frequentemente kill por liquidez fina (live #2).
     const resp = await client.createAndPostOrder(
-      { tokenID: tokenId, price, side: Side.BUY, size },
+      { tokenID: tokenId, price, side: orderSide, size },
       undefined,
       orderType,
       false,
@@ -508,12 +673,38 @@ async function placeBuy(client, live, tokenId, price, size, label, execOpts = {}
   }
 }
 
+function placeBuy(client, live, tokenId, price, size, label, execOpts = {}) {
+  return placeOrder(
+    client,
+    live,
+    tokenId,
+    price,
+    size,
+    label,
+    Side.BUY,
+    execOpts,
+  );
+}
+
+function placeSell(client, live, tokenId, price, size, label, execOpts = {}) {
+  return placeOrder(
+    client,
+    live,
+    tokenId,
+    price,
+    size,
+    label,
+    Side.SELL,
+    execOpts,
+  );
+}
+
 function pickChaseSide(upAsk, dnAsk) {
   if (upAsk == null || dnAsk == null) return null;
   return upAsk >= dnAsk ? 'UP' : 'DOWN';
 }
 
-function tryOpenLogic(st, upAsk, dnAsk, tau) {
+function tryOpenLogic(st, upAsk, dnAsk, tau, spot = {}) {
   const p = st.params;
   if (st.mode !== 'idle') return null;
   if (tau == null || tau < p.tauOpenMin || tau > p.tauOpenMax) return null;
@@ -525,13 +716,27 @@ function tryOpenLogic(st, upAsk, dnAsk, tau) {
   const other = side === 'UP' ? dnAsk : upAsk;
   if (ask == null || other == null) return null;
 
+  if (p.openLeaveUsd > 0) {
+    const dist = signedFavorableDist(spot.btc, spot.priceToBeat, side);
+    if (dist == null || dist < p.openLeaveUsd - 1e-9) {
+      tallyBlock(st, 'OPEN_PTB_LEAVE');
+      return null;
+    }
+  }
+
   const sum = ask + other;
   if (sum < 0.95 || sum > 1.05) {
     st.blocks.push({ reason: 'BOOK_SUM', sum, tau });
     return null;
   }
-  if (ask < p.openAskLo || ask > p.openAskHi) return null;
-  if (ask + 1e-12 < p.openTrigger) return null;
+  if (ask < p.openAskLo || ask > p.openAskHi) {
+    tallyBlock(st, 'OPEN_ASK_BAND');
+    return null;
+  }
+  if (ask + 1e-12 < p.openTrigger) {
+    tallyBlock(st, 'OPEN_BELOW_TRIGGER');
+    return null;
+  }
 
   // Hedge-ready: don't open if opposite is already too expensive to clip/escape.
   if (p.openRequireHedgeReady) {
@@ -563,10 +768,19 @@ function tryOpenLogic(st, upAsk, dnAsk, tau) {
   return { action: 'open', side, ask, limitPx, sh };
 }
 
-function tryHedgeLogic(st, upAsk, dnAsk, tau) {
+function tryHedgeLogic(st, upAsk, dnAsk, tau, spot = {}) {
   const p = st.params;
   if (st.mode !== 'opened') return null;
   if (tau == null) return null;
+  if (p.hedgeMode === 'never') return null;
+
+  const hedgeMode = p.hedgeMode || 'asap';
+  if (hedgeMode === 'ptb') {
+    if (!st.ptbArmed) return null;
+    const dist = signedFavorableDist(spot.btc, spot.priceToBeat, st.sideOpen);
+    if (dist == null || dist > p.ptbApproachUsd + 1e-9) return null;
+  }
+
   const escapeWindowOpen =
     (p.tauHedgeEscape != null && tau <= p.tauHedgeEscape + 1e-12) ||
     (p.tauHedgeEscape2 != null && tau <= p.tauHedgeEscape2 + 1e-12);
@@ -697,6 +911,75 @@ function tryHedgeLogic(st, upAsk, dnAsk, tau) {
   return { action: 'hedge', kind: 'hedge', side, ask, limitPx: ask, sh: remaining };
 }
 
+function tryProtectLogic(st, upAsk, dnAsk, upBid, dnBid, tau, loops = 0) {
+  const p = st.params;
+  if (p.protectMode === 'off' || st.mode !== 'opened') return null;
+
+  const openSide = st.sideOpen;
+  const oppositeSide = openSide === 'UP' ? 'DOWN' : 'UP';
+  const residual = Math.max(
+    0,
+    st.inv[openSide].shares - st.inv[oppositeSide].shares,
+  );
+  if (!(residual > 1e-9)) return null;
+
+  const openAvg = avg(st, openSide);
+  const bidOpen = openSide === 'UP' ? upBid : dnBid;
+  const askOpp = oppositeSide === 'UP' ? upAsk : dnAsk;
+  const cheapHedgeAvailable =
+    Number.isFinite(Number(askOpp)) &&
+    Number(askOpp) <= p.hedgeAskMax + 1e-12 &&
+    (() => {
+      const proj = projectedAvgSum(st, oppositeSide, askOpp, residual);
+      return proj == null || proj <= p.avgSumMax + 1e-12;
+    })();
+  const elapsedSinceOpenSec =
+    st.openedAtMs != null
+      ? Math.max(0, (Date.now() - st.openedAtMs) / 1000)
+      : st.openedAtLoop != null
+        ? Math.max(0, ((loops ?? 0) - st.openedAtLoop) * (p.pollMs / 1000))
+        : 0;
+  const intent = chooseProtection({
+    mode: p.protectMode,
+    tau,
+    tauForceProtect: p.tauForceProtect,
+    elapsedSinceOpenSec,
+    protectTimeoutSec: p.protectTimeoutSec,
+    protectAdverseCents: p.protectAdverseCents,
+    protectOppBeyondHedge: p.protectOppBeyondHedge,
+    hedgeAskMax: p.hedgeAskMax,
+    openSide,
+    openAvg,
+    openOppAsk: st.openOppAsk,
+    residual,
+    bidOpen,
+    askOpp,
+    cheapHedgeAvailable,
+  });
+  if (!intent) return null;
+
+  // Hard account budget remains binding, even in the forced window.
+  if (
+    intent.action === 'hedge' &&
+    invested(st) + intent.shares * intent.price >
+      p.maxEventNotional + 1e-9
+  ) {
+    if (p.protectMode === 'min' && Number.isFinite(Number(bidOpen))) {
+      return {
+        ...intent,
+        action: 'sell',
+        side: openSide,
+        price: Number(bidOpen),
+        fallback: 'TETO_PROTECT_HEDGE',
+      };
+    }
+    st.blocks.push({ reason: 'TETO_PROTECT_HEDGE', tau });
+    return null;
+  }
+
+  return intent;
+}
+
 async function runOneEvent({ client, live, params, outDir, feedCtx }) {
   const event = await findActiveBtc5mEvent();
   if (!event?.upTokenId || !event?.downTokenId) throw new Error('no active BTC 5m event');
@@ -718,6 +1001,17 @@ async function runOneEvent({ client, live, params, outDir, feedCtx }) {
   clobFeed.subscribe(event.upTokenId, event.downTokenId);
   await clobFeed.refreshBooks();
 
+  const eventStart =
+    event.eventStart instanceof Date ? event.eventStart : new Date(startMs);
+  const eventEnd = event.eventEnd instanceof Date ? event.eventEnd : new Date(endMs);
+  // Always refresh PTB per event — reusing a prior event's openPrice breaks openLeave.
+  state.priceToBeat = await fetchPriceToBeat(eventStart, eventEnd);
+  if (state.priceToBeat == null) {
+    console.log('⚠ priceToBeat unavailable — OPEN_PTB_LEAVE will block until set');
+  } else {
+    console.log(`priceToBeat=${state.priceToBeat}`);
+  }
+
   // Wait for a fresh book (WS tick or REST seed), not just any non-null ask.
   for (let i = 0; i < 80; i++) {
     const lag = clobFeed.lagMs();
@@ -738,6 +1032,7 @@ async function runOneEvent({ client, live, params, outDir, feedCtx }) {
   const deadline = Date.now() + Math.min(params.timeoutSec || 320, Math.max(30, tau0 + 5)) * 1000;
   let lastHb = 0;
   let lastStaleRefresh = 0;
+  let lastPtbRetryMs = 0;
   let loops = 0;
   let staleBlocks = 0;
 
@@ -759,14 +1054,32 @@ async function runOneEvent({ client, live, params, outDir, feedCtx }) {
       await clobFeed.refreshBooks();
     }
 
+    // Retry PTB fetch — API often lags a few seconds after event start.
+    if (
+      state.priceToBeat == null &&
+      params.openLeaveUsd > 0 &&
+      now - lastPtbRetryMs > 2000
+    ) {
+      lastPtbRetryMs = now;
+      const ptb = await fetchPriceToBeat(eventStart, eventEnd);
+      if (ptb != null) {
+        state.priceToBeat = ptb;
+        console.log(`[ptb] ${ptb}`);
+      }
+    }
+
     const upAsk = state.up.bestAsk;
     const dnAsk = state.down.bestAsk;
+    const upBid = state.up.bestBid;
+    const dnBid = state.down.bestBid;
+    const spot = { btc: state.btc, priceToBeat: state.priceToBeat };
     loops += 1;
 
     if (now - lastHb >= 5_000) {
       lastHb = now;
       console.log(
-        `… hb tau=${tau} up=${upAsk} dn=${dnAsk} mode=${st.mode} fills=${st.fills.length}` +
+        `… hb tau=${tau} up=${upAsk} dn=${dnAsk} btc=${spot.btc} ptb=${spot.priceToBeat}` +
+          ` mode=${st.mode} fills=${st.fills.length}` +
           ` ws=${state.wsClobConnected} ageMs=${Number.isFinite(lag) ? Math.round(lag) : null}` +
           ` fresh=${bookFresh} loops=${loops}`,
       );
@@ -779,7 +1092,7 @@ async function runOneEvent({ client, live, params, outDir, feedCtx }) {
     }
 
     if (st.mode === 'idle') {
-      const intent = tryOpenLogic(st, upAsk, dnAsk, tau);
+      const intent = tryOpenLogic(st, upAsk, dnAsk, tau, spot);
       if (intent?.action === 'open') {
         const tokenId = intent.side === 'UP' ? event.upTokenId : event.downTokenId;
         console.log(`OPEN intent ${intent.side} @${intent.limitPx} sh=${intent.sh} ask=${intent.ask} type=${params.orderType}`);
@@ -803,6 +1116,16 @@ async function runOneEvent({ client, live, params, outDir, feedCtx }) {
           });
           st.sideOpen = intent.side;
           st.mode = 'opened';
+          st.openedAtLoop = loops;
+          st.openedAtMs = Date.now();
+          st.openOppAsk = intent.side === 'UP' ? dnAsk : upAsk;
+          const dist = signedFavorableDist(spot.btc, spot.priceToBeat, intent.side);
+          if (dist != null) {
+            st.maxFavorableDist = Math.max(0, dist);
+            if (st.maxFavorableDist >= st.params.ptbLeaveUsd - 1e-9) {
+              st.ptbArmed = true;
+            }
+          }
           console.log(
             `OPEN fill ${intent.side} @${intent.limitPx} sh=${fillSh}` +
               `${fillSh + 1e-9 < intent.sh ? ` (partial/${intent.sh})` : ''} ms=${res.ms} dry=${res.dry}`,
@@ -812,7 +1135,8 @@ async function runOneEvent({ client, live, params, outDir, feedCtx }) {
         }
       }
     } else if (st.mode === 'opened') {
-      const intent = tryHedgeLogic(st, upAsk, dnAsk, tau);
+      updatePtbTracker(st, spot.btc, spot.priceToBeat);
+      const intent = tryHedgeLogic(st, upAsk, dnAsk, tau, spot);
       if (intent?.action === 'hedge') {
         const tokenId = intent.side === 'UP' ? event.upTokenId : event.downTokenId;
         const kind = intent.kind || 'hedge';
@@ -861,6 +1185,109 @@ async function runOneEvent({ client, live, params, outDir, feedCtx }) {
         } else {
           console.log(`HEDGE fail`, res.raw);
         }
+      } else if (loops > st.openedAtLoop) {
+        const protect = tryProtectLogic(
+          st,
+          upAsk,
+          dnAsk,
+          upBid,
+          dnBid,
+          tau,
+          loops,
+        );
+        if (protect) {
+          st.protectAttempts += 1;
+          const kind = `protect_${protect.action}`;
+          const tokenId =
+            protect.side === 'UP' ? event.upTokenId : event.downTokenId;
+          console.log(
+            `PROTECT ${protect.action.toUpperCase()} ${protect.side}` +
+              ` @${protect.price} sh=${protect.shares}` +
+              ` force=${protect.force}` +
+              `${protect.trigger ? ` trigger=${protect.trigger}` : ''}` +
+              ` sellLoss=${protect.costs.sellLossPerShare.toFixed(4)}` +
+              ` hedgeLoss=${protect.costs.hedgeLossPerShare.toFixed(4)}` +
+              (protect.fallback ? ` fallback=${protect.fallback}` : ''),
+          );
+          const execOpts = {
+            orderType: 'FAK',
+            settleMs: Math.min(params.settleMs, 600),
+            settlePollMs: params.settlePollMs,
+          };
+          const res =
+            protect.action === 'sell'
+              ? await placeSell(
+                  client,
+                  live,
+                  tokenId,
+                  protect.price,
+                  protect.shares,
+                  kind,
+                  execOpts,
+                )
+              : await placeBuy(
+                  client,
+                  live,
+                  tokenId,
+                  protect.price,
+                  protect.shares,
+                  kind,
+                  execOpts,
+                );
+          st.orders.push({ kind, ...res });
+          log.push({ t: nowIso(), phase: 'protect', intent: protect, res });
+          const fillSh = res.dry
+            ? protect.shares
+            : Number(res.filledSize || 0);
+          if (res.ok && fillSh > 0) {
+            const fee = feeEst(protect.price, fillSh);
+            if (protect.action === 'sell') {
+              recordSell(
+                st,
+                protect.side,
+                protect.price,
+                fillSh,
+                kind,
+                fee,
+                {
+                  orderId: res.orderId,
+                  dry: res.dry,
+                  ms: res.ms,
+                  orderType: 'FAK',
+                  partial: fillSh + 1e-9 < protect.shares * 0.99,
+                  force: protect.force,
+                },
+              );
+            } else {
+              recordBuy(
+                st,
+                protect.side,
+                protect.price,
+                fillSh,
+                kind,
+                fee,
+                {
+                  orderId: res.orderId,
+                  dry: res.dry,
+                  ms: res.ms,
+                  orderType: 'FAK',
+                  partial: fillSh + 1e-9 < protect.shares * 0.99,
+                  force: protect.force,
+                },
+              );
+            }
+            const residual = Math.abs(
+              st.inv.UP.shares - st.inv.DOWN.shares,
+            );
+            st.mode = residual < 1e-6 ? 'done' : 'opened';
+            console.log(
+              `PROTECT fill action=${protect.action} sh=${fillSh}` +
+                ` residual=${residual} realized=${st.realizedPnl.toFixed(4)}`,
+            );
+          } else {
+            console.log('PROTECT fail', res.raw);
+          }
+        }
       }
     }
 
@@ -875,7 +1302,10 @@ async function runOneEvent({ client, live, params, outDir, feedCtx }) {
   if (upAsk != null && dnAsk != null) winner = upAsk >= dnAsk ? 'UP' : 'DOWN';
   const cost = invested(st);
   const fees = st.inv.UP.fees + st.inv.DOWN.fees;
-  const pnl = winner != null ? st.inv[winner].shares - cost - fees : null;
+  const pnl =
+    winner != null
+      ? st.realizedPnl + st.inv[winner].shares - cost - fees
+      : null;
 
   const report = {
     generatedAt: nowIso(),
@@ -896,6 +1326,7 @@ async function runOneEvent({ client, live, params, outDir, feedCtx }) {
     residual: Math.abs(st.inv.UP.shares - st.inv.DOWN.shares),
     winner,
     pnl: pnl != null ? Math.round(pnl * 100) / 100 : null,
+    realizedPnl: Math.round(st.realizedPnl * 10_000) / 10_000,
     fills: st.fills,
     hedgePlan: st.hedgePlan,
     nHedgeClips: st.fills.filter((f) =>
@@ -913,11 +1344,11 @@ async function runOneEvent({ client, live, params, outDir, feedCtx }) {
     })),
     openAttempts: st.openAttempts,
     hedgeAttempts: st.hedgeAttempts,
+    protectAttempts: st.protectAttempts,
+    nProtectSell: st.fills.filter((f) => f.kind === 'protect_sell').length,
+    nProtectHedge: st.fills.filter((f) => f.kind === 'protect_hedge').length,
     staleBlocks,
-    blockCounts: st.blocks.reduce((m, b) => {
-      m[b.reason] = (m[b.reason] || 0) + 1;
-      return m;
-    }, {}),
+    blockCounts: mergeBlockCounts(st),
     log,
   };
 
@@ -1015,15 +1446,33 @@ async function main() {
     escapeAvgSumMax2: opts.escapeAvgSumMax2,
     stopOnResidual: opts.stopOnResidual,
     stopOnAvgSum: opts.stopOnAvgSum,
+    openLeaveUsd: opts.openLeaveUsd,
+    openAskLo: opts.openAskLo,
+    openAskHi: opts.openAskHi,
+    hedgeMode: opts.hedgeMode,
+    ptbLeaveUsd: opts.ptbLeaveUsd,
+    ptbApproachUsd: opts.ptbApproachUsd,
+    protectMode: opts.protectMode,
+    tauForceProtect: opts.tauForceProtect,
+    protectTimeoutSec: opts.protectTimeoutSec,
+    protectAdverseCents: opts.protectAdverseCents,
+    protectOppBeyondHedge: opts.protectOppBeyondHedge,
     clip: opts.clip,
   };
 
-  console.log('=== Pair-Path / Clip-Path micro-live ===');
+  console.log('=== Pair-Path / Clip-Path / PTB-Path micro-live ===');
   console.log(
     `mode=${opts.live ? 'LIVE' : 'DRY'} clip=${opts.clip} openShares=${params.openShares} maxEvents=${params.maxEvents}`,
   );
+  if (params.openLeaveUsd > 0) {
+    console.log(
+      `PTB-Path openLeaveUsd=${params.openLeaveUsd} hedgeMode=${params.hedgeMode}` +
+        ` ptbArm=${params.ptbLeaveUsd} approach=${params.ptbApproachUsd}`,
+    );
+  }
   console.log(
     `maxNotional=${params.maxEventNotional} avgSumMax=${params.avgSumMax} hedgeMax=${params.hedgeAskMax}` +
+      ` openBand=${params.openAskLo}..${params.openAskHi} trigger=${params.openTrigger}` +
       ` openCap=${opts.openCapCents}¢ orderType=${params.orderType} settleMs=${params.settleMs}` +
       ` maxHedgeAttempts=${params.maxHedgeAttempts}`,
   );
@@ -1042,6 +1491,8 @@ async function main() {
   console.log(
     `protections: hedgeReady=${params.openRequireHedgeReady}` +
       `${params.openRequireHedgeReady ? `(slack+${params.openHedgeSlackCents}¢ pair≤${params.openPairSumMaxAtOpen})` : ''}` +
+      ` protect=${params.protectMode}` +
+      `${params.protectMode !== 'off' ? `(timeout=${params.protectTimeoutSec}s adverse=${params.protectAdverseCents}¢ forceτ≤${params.tauForceProtect})` : ''}` +
       ` stopOnResidual=${params.stopOnResidual} stopOnAvgSum=${params.stopOnAvgSum}`,
   );
   console.log(`feed pollMs=${params.pollMs} maxBookAgeMs=${params.maxBookAgeMs} (WS+REST stale heal)`);
@@ -1088,8 +1539,9 @@ async function main() {
     }
   }
 
-  // Um único Market WS para a série — resubscribe por evento (evita tear-down/zombie).
+  // Um único Market WS + RTDS BTC para a série.
   const state = createMarketState();
+  const stopRtds = startRtdsFeed(state);
   let staleReconnects = 0;
   const clobFeed = createClobFeed(state, {
     onStaleReconnect: ({ reason, lagMs }) => {
@@ -1152,6 +1604,11 @@ async function main() {
     } catch {
       /* ignore */
     }
+    try {
+      stopRtds?.();
+    } catch {
+      /* ignore */
+    }
     if (opts.live && client) {
       await cancelAllOpenOrders(client, 'series-end');
     }
@@ -1175,6 +1632,9 @@ async function main() {
             pnl: r.pnl,
             invested: r.invested,
             residual: r.residual,
+            realizedPnl: r.realizedPnl,
+            protectSell: r.nProtectSell,
+            protectHedge: r.nProtectHedge,
             staleBlocks: r.staleBlocks,
             blockCounts: r.blockCounts,
           },

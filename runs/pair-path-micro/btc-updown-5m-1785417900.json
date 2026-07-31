@@ -1,0 +1,89 @@
+{
+  "generatedAt": "2026-07-30T13:29:59.002Z",
+  "live": false,
+  "event": {
+    "slug": "btc-updown-5m-1785417900",
+    "title": "Bitcoin Up or Down - July 30, 9:25AM-9:30AM ET",
+    "upTokenId": "50584164583694894762123109994185014615009365770206974240266073077466239992756",
+    "downTokenId": "59277984320695192491922777554232400797186405541525318381010309489949386201806"
+  },
+  "params": {
+    "openShares": 10,
+    "openAskLo": 0.52,
+    "openAskHi": 0.62,
+    "openTrigger": 0.55,
+    "openCap": 0.02,
+    "hedgeAskMax": 0.4,
+    "avgSumMax": 0.95,
+    "tauOpenMin": 40,
+    "tauOpenMax": 240,
+    "tauHedgeMin": 15,
+    "maxEventNotional": 8,
+    "maxOpenAttempts": 3,
+    "maxHedgeAttempts": 8,
+    "maxEvents": 2,
+    "pollMs": 50,
+    "maxBookAgeMs": 2500,
+    "orderType": "GTC",
+    "settleMs": 1200,
+    "settlePollMs": 150,
+    "hedgeLevels": [
+      {
+        "askMax": 0.4,
+        "frac": 0.5
+      },
+      {
+        "askMax": 0.36,
+        "frac": 0.5
+      }
+    ],
+    "tauHedgeEscape": null,
+    "hedgeEscapeAskMax": null,
+    "openRequireHedgeReady": false,
+    "openHedgeSlackCents": 8,
+    "openPairSumMaxAtOpen": null,
+    "escapeAvgSumMax": 0.98,
+    "stopOnResidual": true,
+    "stopOnAvgSum": 1,
+    "openLeaveUsd": 30,
+    "hedgeMode": "asap",
+    "ptbLeaveUsd": 40,
+    "ptbApproachUsd": 25,
+    "timeoutSec": 300,
+    "tauHedgeEscape2": null,
+    "hedgeEscapeAskMax2": null,
+    "escapeAvgSumMax2": null,
+    "clip": "ptb"
+  },
+  "mode": "idle",
+  "sideOpen": null,
+  "inv": {
+    "UP": {
+      "shares": 0,
+      "cost": 0,
+      "fees": 0
+    },
+    "DOWN": {
+      "shares": 0,
+      "cost": 0,
+      "fees": 0
+    }
+  },
+  "invested": 0,
+  "fees": 0,
+  "avgSum": null,
+  "residual": 0,
+  "winner": null,
+  "pnl": null,
+  "fills": [],
+  "hedgePlan": null,
+  "nHedgeClips": 0,
+  "orders": [],
+  "openAttempts": 0,
+  "hedgeAttempts": 0,
+  "staleBlocks": 0,
+  "blockCounts": {
+    "OPEN_PTB_LEAVE": 145
+  },
+  "log": []
+}
