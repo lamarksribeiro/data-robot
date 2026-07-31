@@ -418,6 +418,132 @@ export function evaluateEarlyWarnExit(snapshot, params, positionSide, signedDist
 }
 
 /**
+ * Cushion Decay (hold-world): colchão físico sumiu (signedDistance <= floor)
+ * com bid ainda salvável (≥ ratio × avgEntry) — EXIT antes do late-flip em book fino.
+ * Paridade strategy.gls cushionDecay* / btc-gold-cushion-v1.
+ */
+export function evaluateCushionDecayExit(
+  snapshot,
+  params,
+  positionSide,
+  signedDist = null,
+  avgEntry = null,
+) {
+  const on = params.cushionDecayEnabled === true || params.cushionDecayEnabled === 1;
+  const empty = { active: false, bid: null, signedDistance: null, reason: null };
+  if (!on || !positionSide) return empty;
+
+  const secsLeft = snapshot.secsLeft;
+  const start = Number(params.cushionDecayStartSec ?? 20);
+  const end = Number(params.cushionDecayEndSec ?? 4);
+  if (!(Number.isFinite(secsLeft) && secsLeft <= start && secsLeft >= end)) {
+    return { ...empty, reason: 'out_of_window' };
+  }
+
+  const bid = snapshot.book?.[positionSide.toLowerCase()]?.bestBid ?? null;
+  const stopMin = Number(params.stopMinBid ?? 0.05);
+  if (!(bid != null && bid >= stopMin)) {
+    return { ...empty, bid, reason: 'bid_floor_stop' };
+  }
+
+  const dist =
+    signedDist != null
+      ? signedDist
+      : signedDistance(positionSide, snapshot.btc, snapshot.priceToBeat);
+  const minDist = Number(params.cushionDecayMinDist ?? 0);
+  if (!(dist != null && dist <= minDist)) {
+    return { ...empty, bid, signedDistance: dist, reason: 'still_cushioned' };
+  }
+
+  const minBidRatio = Number(params.cushionDecayMinBidRatio ?? 0.55);
+  const entry = Number(avgEntry);
+  if (minBidRatio > 0 && !(Number.isFinite(entry) && entry > 0 && bid >= entry * minBidRatio)) {
+    return { ...empty, bid, signedDistance: dist, reason: 'bid_ratio_floor' };
+  }
+
+  return {
+    active: true,
+    bid,
+    signedDistance: dist,
+    avgEntry: entry,
+    secsLeft,
+    reason: 'cushion_decay_exit',
+  };
+}
+
+/**
+ * Odds-velocity entry gate: book já virando (Δ ask oposto sobe / próprio cai).
+ * Default: blockOnHit. Paridade strategy.gls oddsVelGate*.
+ */
+export function evaluateOddsVelGate(snapshot, params, favSide, history = []) {
+  const on = params.oddsVelGateEnabled === true || params.oddsVelGateEnabled === 1;
+  const empty = { hit: false, blocked: false, sizeMul: 1, reason: null };
+  if (!on || !favSide) return empty;
+
+  const lookback = Number(params.oddsVelLookbackSec ?? 2);
+  const maxDelta = Number(params.oddsVelMaxDelta ?? 0.12);
+  const upNow = snapshot.book?.up?.bestAsk ?? null;
+  const downNow = snapshot.book?.down?.bestAsk ?? null;
+  const upPast = askAgo(history, 'UP', lookback, snapshot.nowMs);
+  const downPast = askAgo(history, 'DOWN', lookback, snapshot.nowMs);
+  if (!(upPast > 0 && downPast > 0 && upNow > 0 && downNow > 0)) {
+    return { ...empty, reason: 'no_ask_history' };
+  }
+
+  let hit = false;
+  if (favSide === 'UP') {
+    const oppRise = downNow - downPast;
+    const ownFall = upPast - upNow;
+    hit = oppRise >= maxDelta || ownFall >= maxDelta;
+  } else if (favSide === 'DOWN') {
+    const oppRise = upNow - upPast;
+    const ownFall = downPast - downNow;
+    hit = oppRise >= maxDelta || ownFall >= maxDelta;
+  }
+  if (!hit) return { ...empty, reason: 'ok' };
+
+  const condMode = Number(params.oddsVelCondMode ?? 0);
+  const ask = snapshot.book?.[favSide.toLowerCase()]?.bestAsk ?? null;
+  const distAbs = Math.abs(
+    Number.isFinite(snapshot.btc) && Number.isFinite(snapshot.priceToBeat)
+      ? snapshot.btc - snapshot.priceToBeat
+      : NaN,
+  );
+  const secsLeft = snapshot.secsLeft;
+  let condMatched = condMode <= 0;
+  if (condMode === 1) {
+    const askOk =
+      !(Number(params.oddsVelCondAskMax) > 0) ||
+      (ask != null && ask <= Number(params.oddsVelCondAskMax));
+    const distOk =
+      !(Number(params.oddsVelCondDistMin) > 0) ||
+      (Number.isFinite(distAbs) && distAbs >= Number(params.oddsVelCondDistMin));
+    const secsOk =
+      !(Number(params.oddsVelCondMinSecs) > 0) ||
+      (Number.isFinite(secsLeft) && secsLeft >= Number(params.oddsVelCondMinSecs));
+    condMatched = askOk && distOk && secsOk;
+  } else if (condMode === 2) {
+    const askHit =
+      Number(params.oddsVelCondAskMax) > 0 && ask != null && ask <= Number(params.oddsVelCondAskMax);
+    const distHit =
+      Number(params.oddsVelCondDistMin) > 0 &&
+      Number.isFinite(distAbs) &&
+      distAbs >= Number(params.oddsVelCondDistMin);
+    condMatched = askHit || distHit;
+  }
+  if (!condMatched) return { hit: true, blocked: false, sizeMul: 1, reason: 'cond_not_matched' };
+
+  const blockOnHit = params.oddsVelBlockOnHit !== false && params.oddsVelBlockOnHit !== 0;
+  if (blockOnHit) {
+    return { hit: true, blocked: true, sizeMul: 1, reason: 'odds_vel_block' };
+  }
+  const sizeFactor = Number(params.oddsVelSizeFactor ?? 1);
+  const sizeMul =
+    Number.isFinite(sizeFactor) && sizeFactor > 0 && sizeFactor < 1 ? sizeFactor : 1;
+  return { hit: true, blocked: false, sizeMul, reason: 'odds_vel_size' };
+}
+
+/**
  * Scoop: entrada complementar (favorito barato, z alto) fora do envelope core.
  */
 export function evaluateScoopEntry(snapshot, params, history = []) {

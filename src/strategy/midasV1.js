@@ -4,8 +4,8 @@
  * Sem SDK, process.env, rede ou filesystem.
  *
  * Ordem de decisão (paridade strategy.gls midas-carry-v1):
- * Em posição: danger contínuo → early-warn → odds-shock → danger V7 → late flip reverse/exit
- * Flat: core entry (gates + minEntryZ + tierMinZ + sigma/tier budget) → scoop entry
+ * Em posição: danger contínuo → early-warn → cushionDecay → odds-shock → danger V7 → late flip
+ * Flat: core entry (gates + oddsVelGate + minEntryZ + tierMinZ + sigma/tier budget) → scoop
  */
 
 import { makeIntentId } from '../engine/schemas.js';
@@ -15,12 +15,14 @@ import {
   resolveMidasScoopBudget,
 } from '../tfc/preset-midas.js';
 import {
+  evaluateCushionDecayExit,
   evaluateDangerExit,
   evaluateDangerExitContinuous,
   evaluateEarlyWarnExit,
   evaluateEntryGates,
   evaluateLateFlipAction,
   evaluateOddsShockExit,
+  evaluateOddsVelGate,
   evaluateScoopEntry,
   physicalZScore,
   signedDistance,
@@ -447,6 +449,30 @@ export function createMidasV1Strategy(opts = {}) {
           return { state: next, intents, diagnostics };
         }
 
+        // 2b) Cushion decay — sai cedo se colchão sumiu e bid ainda salvável
+        const cushion = evaluateCushionDecayExit(
+          snapshot,
+          params,
+          ctx.position.side,
+          signedDist,
+          ctx.position.avgPrice,
+        );
+        diagnostics.cushionDecay = cushion;
+        if (cushion.active && !next.reversed) {
+          intents.push(
+            pushExitIntent(
+              next,
+              ctx,
+              snapshot,
+              params,
+              ctx.position.side,
+              cushion.bid,
+              'cushion_decay_exit',
+            ),
+          );
+          return { state: next, intents, diagnostics };
+        }
+
         // 3) Odds-shock (MIDAS-GOLD): book lidera spot — partial/exit/reverse
         const oddsShock = evaluateOddsShockExit(
           snapshot,
@@ -621,38 +647,47 @@ export function createMidasV1Strategy(opts = {}) {
         // Core entry
         const entry = diagnostics.entry;
         if (entry?.ok && entry.fav && entry.ask != null) {
-          const entryBudgetUsed = resolveMidasEntryBudget(
-            params,
-            entry.ask,
-            budgetOpts(ctx, params, { z: entry.z ?? z }),
-          );
-          diagnostics.budget = {
-            mode: 'core',
-            entryBudgetUsed,
-            z: entry.z ?? z,
-            sigmaSizing: params.sigmaSizingEnabled === true || params.sigmaSizingEnabled === 1,
-            equityScale: params.equityScaleEnabled === true || params.equityScaleEnabled === 1,
-            tierMinZ: params.tierMinZ,
-          };
-          const entered = tryEnter({
-            next,
-            ctx,
-            snapshot,
-            params,
-            side: entry.fav,
-            ask: entry.ask,
-            entryBudgetUsed,
-            reason: 'midas_core_entry',
-            diagnostics,
-            mode: 'core',
-          });
-          if (entered.ok) {
-            intents.push(entered.intent);
-            return { state: next, intents, diagnostics };
-          }
-          // core falhou sizing/liq — não bloqueia scoop (paridade lab !entered)
-          if (entered.skip) {
-            diagnostics.coreSkip = entered.skip;
+          const oddsVel = evaluateOddsVelGate(snapshot, params, entry.fav, history);
+          diagnostics.oddsVelGate = oddsVel;
+          if (oddsVel.blocked) {
+            diagnostics.coreSkip = oddsVel.reason ?? 'odds_vel_block';
+          } else {
+            const sizeMul = Number(oddsVel.sizeMul) > 0 ? Number(oddsVel.sizeMul) : 1;
+            const entryBudgetUsed =
+              resolveMidasEntryBudget(
+                params,
+                entry.ask,
+                budgetOpts(ctx, params, { z: entry.z ?? z }),
+              ) * sizeMul;
+            diagnostics.budget = {
+              mode: 'core',
+              entryBudgetUsed,
+              z: entry.z ?? z,
+              sigmaSizing: params.sigmaSizingEnabled === true || params.sigmaSizingEnabled === 1,
+              equityScale: params.equityScaleEnabled === true || params.equityScaleEnabled === 1,
+              tierMinZ: params.tierMinZ,
+              oddsVelSizeMul: oddsVel.sizeMul,
+            };
+            const entered = tryEnter({
+              next,
+              ctx,
+              snapshot,
+              params,
+              side: entry.fav,
+              ask: entry.ask,
+              entryBudgetUsed,
+              reason: 'midas_core_entry',
+              diagnostics,
+              mode: 'core',
+            });
+            if (entered.ok) {
+              intents.push(entered.intent);
+              return { state: next, intents, diagnostics };
+            }
+            // core falhou sizing/liq — não bloqueia scoop (paridade lab !entered)
+            if (entered.skip) {
+              diagnostics.coreSkip = entered.skip;
+            }
           }
         }
 

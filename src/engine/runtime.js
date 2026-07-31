@@ -18,6 +18,7 @@ import {
   buildEngineCheckpoint,
   migrateStrategyState,
 } from './persistence.js';
+import { shouldRecordTransportFailure } from '../risk/protectionLane.js';
 
 const EXPECTED_POLICY_DENIALS = new Set([
   'ONE_POSITION_PER_INSTANCE',
@@ -30,6 +31,15 @@ const EXPECTED_POLICY_DENIALS = new Set([
   'LIVE_REVERSE_UNSUPPORTED',
   'OPERATOR_DISARMED',
   'PREFLIGHT_ELIGIBILITY',
+  // Caps de notional/exposição: policy esperada, não falha de transporte.
+  // Sem isto, MAX_NOTIONAL_EVENT em REVERSE abria o circuit e matava EXIT.
+  'MAX_NOTIONAL_EVENT',
+  'MAX_NOTIONAL_ORDER',
+  'MAX_ACCOUNT_EXPOSURE',
+  'MAX_DAILY_LOSS',
+  'MAX_ORDERS_PER_MINUTE',
+  'SLIPPAGE_CAP',
+  'HEALTH_BLOCK',
 ]);
 
 /**
@@ -368,7 +378,11 @@ export function createEngine(opts) {
     });
 
     if (result.accepted === false && typeof riskEngine.recordFailure === 'function') {
-      riskEngine.recordFailure(result.events?.[0]?.reason ?? 'SINK_REJECT');
+      const rejectReason = result.events?.[0]?.reason ?? 'SINK_REJECT';
+      // FAK miss / min-size / rejects de EXIT|REVERSE não abrem o circuit.
+      if (shouldRecordTransportFailure(rejectReason, intent)) {
+        riskEngine.recordFailure(rejectReason);
+      }
     }
 
     for (const event of result.events ?? []) {

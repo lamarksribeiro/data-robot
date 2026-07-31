@@ -4,6 +4,10 @@
  */
 
 import { redactError } from '../runs/schema.js';
+import {
+  isExpectedClobReject,
+  isProtectionLaneIntent,
+} from '../risk/protectionLane.js';
 
 const SUBMIT_TIMEOUT_MS = 8_000;
 const CANCEL_TIMEOUT_MS = 8_000;
@@ -179,8 +183,13 @@ export function createLiveTransport(opts) {
         };
       }
 
+      // EXIT/SELL protetivos atravessam circuit aberto — FAK miss de ENTER não pode
+      // impedir a saída (mesmo circuito local do transport).
+      const protective =
+        isProtectionLaneIntent(order) ||
+        String(request.tradeSide ?? '').toUpperCase() === 'SELL';
       const gate = circuit.check();
-      if (gate.blocked) {
+      if (gate.blocked && !protective) {
         return {
           accepted: false,
           exchangeOrderId: null,
@@ -215,7 +224,6 @@ export function createLiveTransport(opts) {
           SUBMIT_TIMEOUT_MS,
           'submit',
         );
-        circuit.recordSuccess();
 
         log.push({
           action: 'submit',
@@ -227,6 +235,13 @@ export function createLiveTransport(opts) {
         });
 
         if (!resp?.success || !resp?.orderID) {
+          const rejectReason = resp?.errorMsg || 'CLOB_REJECT';
+          // FAK miss / min-size: HTTP ok, negócio rejeitou — não abre circuit.
+          if (isExpectedClobReject(rejectReason) || protective) {
+            circuit.recordSuccess();
+          } else {
+            circuit.recordFailure();
+          }
           return {
             accepted: false,
             exchangeOrderId: null,
@@ -237,12 +252,14 @@ export function createLiveTransport(opts) {
                 type: 'REJECT',
                 qty: 0,
                 price: null,
-                reason: resp?.errorMsg || 'CLOB_REJECT',
+                reason: rejectReason,
                 tsMs,
               },
             ],
           };
         }
+
+        circuit.recordSuccess();
 
         const exchangeOrderId = resp.orderID;
         const events = [
@@ -270,11 +287,14 @@ export function createLiveTransport(opts) {
           },
         };
       } catch (err) {
-        circuit.recordFailure();
+        const msg = errorMessage(err) || 'CLOB_ERROR';
+        if (!protective && !isExpectedClobReject(msg)) {
+          circuit.recordFailure();
+        }
         log.push({
           action: 'submit_error',
           intentId: order.intentId,
-          error: errorMessage(err),
+          error: msg,
           detail: redactError(err),
           tsMs,
         });
@@ -288,7 +308,7 @@ export function createLiveTransport(opts) {
               type: 'REJECT',
               qty: 0,
               price: null,
-              reason: errorMessage(err) || 'CLOB_ERROR',
+              reason: msg,
               tsMs,
             },
           ],

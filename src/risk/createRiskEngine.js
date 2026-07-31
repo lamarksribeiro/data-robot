@@ -8,6 +8,7 @@ import { createRiskAudit } from './audit.js';
 import { createCircuitBreaker } from './circuitBreaker.js';
 import { createKillSwitch } from './killSwitch.js';
 import { createPreflight } from './preflight.js';
+import { isProtectionLaneIntent } from './protectionLane.js';
 import { RISK_REASON } from './reasons.js';
 
 function intentNotional(intent) {
@@ -112,14 +113,18 @@ export function createRiskEngine(opts = {}) {
       intentId: intent.intentId,
       strategyInstanceId: intent.strategyInstanceId,
     };
+    // Classificar ANTES do circuit: EXIT/CANCEL/REVERSE não morrem por FAK miss de ENTER.
+    const protectionLane = isProtectionLaneIntent(intent);
 
     if (ctx.halted || killSwitch.active) {
       return deny(RISK_REASON.KILL_SWITCH, { killReason: killSwitch.reason }, meta);
     }
 
-    const circuitEval = circuit.evaluate();
-    if (!circuitEval.allow) {
-      return deny(RISK_REASON.CIRCUIT_OPEN, circuitEval.detail, meta);
+    if (!protectionLane) {
+      const circuitEval = circuit.evaluate();
+      if (!circuitEval.allow) {
+        return deny(RISK_REASON.CIRCUIT_OPEN, circuitEval.detail, meta);
+      }
     }
 
     if (ctx.health && ctx.health.ok === false) {
@@ -146,6 +151,8 @@ export function createRiskEngine(opts = {}) {
       );
     }
 
+    // DISARMED bloqueia novas entradas; REVERSE cria risco no enter — também bloqueado.
+    // EXIT puro continua permitido (reduz posição com operator desarmado).
     if (!entryEnabled && (intent.kind === 'ENTER' || intent.kind === 'REVERSE')) {
       return deny(
         RISK_REASON.OPERATOR_DISARMED,
@@ -183,8 +190,11 @@ export function createRiskEngine(opts = {}) {
       }
     }
 
-    // Perda diária
-    if (dailyRealizedPnl <= -Math.abs(limits.maxDailyLoss)) {
+    // Perda diária congela ENTRADAS — não a via de saída/proteção.
+    if (
+      !protectionLane &&
+      dailyRealizedPnl <= -Math.abs(limits.maxDailyLoss)
+    ) {
       return deny(
         RISK_REASON.MAX_DAILY_LOSS,
         { dailyRealizedPnl, maxDailyLoss: limits.maxDailyLoss },
@@ -200,10 +210,8 @@ export function createRiskEngine(opts = {}) {
     while (entryTimestamps.length && now - entryTimestamps[0] >= limits.controlWindowMs) {
       entryTimestamps.shift();
     }
-    if (
-      (intent.kind === 'ENTER' || intent.kind === 'REVERSE') &&
-      orderTimestamps.length >= limits.maxOrdersPerMinute
-    ) {
+    // Só ENTER: REVERSE/EXIT não competem com rate limit de entrada.
+    if (intent.kind === 'ENTER' && orderTimestamps.length >= limits.maxOrdersPerMinute) {
       return deny(
         RISK_REASON.MAX_ORDERS_PER_MINUTE,
         { count: orderTimestamps.length, max: limits.maxOrdersPerMinute },
@@ -261,7 +269,10 @@ export function createRiskEngine(opts = {}) {
 
     const notional = intentNotional(intent);
 
-    if (intent.kind === 'ENTER' || intent.kind === 'REVERSE') {
+    // Caps de notional/canary só em ENTER. REVERSE pai misturava flatten+compra e
+    // era negado por MAX_NOTIONAL_EVENT (entry já reservou o cap) — impedia a venda.
+    // A perna ENTER da saga ainda não reavalia risk (follow-up); prioridade é flatten.
+    if (intent.kind === 'ENTER') {
       const canaryCap =
         limits.maxCanaryBudget != null
           ? Number(limits.maxCanaryBudget)
