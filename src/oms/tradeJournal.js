@@ -49,6 +49,50 @@ function computeExitPnl(trade) {
 }
 
 /**
+ * REVERSE = flatten da origem + ENTER no oposto.
+ * Não usar o preço do ENTER oposto como exitPrice da origem (bug live BTC 1785479400).
+ */
+function applyReverseFill(trade, opts) {
+  const {
+    enterSide,
+    enterPrice,
+    enterQty,
+    exitPrice,
+    exitQty,
+    exitSide = null,
+    ts = null,
+    reason = null,
+  } = opts;
+  const entryPrice = Number(trade.entryPrice);
+  const closeQty = Number(exitQty);
+  const closePrice = Number(exitPrice);
+  if (Number.isFinite(entryPrice) && Number.isFinite(closePrice) && Number.isFinite(closeQty) && closeQty > 0) {
+    addPnl(trade, (closePrice - entryPrice) * closeQty);
+  }
+  pushLeg(trade, {
+    kind: 'REVERSE',
+    price: Number.isFinite(Number(enterPrice)) ? Number(enterPrice) : null,
+    qty: Number.isFinite(Number(enterQty)) ? Number(enterQty) : null,
+    exitSide,
+    exitPrice: Number.isFinite(closePrice) ? closePrice : null,
+    exitQty: Number.isFinite(closeQty) ? closeQty : null,
+    tsMs: ts,
+    reason,
+  });
+  // Reabre no lado oposto — settlement seguinte liquida esta perna.
+  if (enterSide) trade.side = enterSide;
+  if (Number.isFinite(Number(enterPrice))) trade.entryPrice = Number(enterPrice);
+  if (Number.isFinite(Number(enterQty)) && Number(enterQty) > 0) {
+    trade.qty = Number(enterQty);
+    trade.entryQty = Number(enterQty);
+  }
+  trade.exitKind = 'REVERSE';
+  trade.exitPrice = null;
+  trade.status = 'open';
+  trade.closedAtMs = null;
+}
+
+/**
  * PnL a partir das pernas quando possível (ENTER/EXIT/SETTLEMENT).
  * @param {{ legs?: object[], entryPrice?: number|null }} trade
  */
@@ -351,7 +395,7 @@ export function buildTradeJournal(opts = {}) {
         if (trade.status !== 'settlement_pending' && trade.status !== 'closed') {
           trade.status = 'open';
         }
-      } else if (kind === 'EXIT' || kind === 'REVERSE') {
+      } else if (kind === 'EXIT') {
         const entryQty = Number(trade.entryQty ?? trade.qty);
         const entryPrice = Number(trade.entryPrice);
         trade.exitKind = kind;
@@ -374,6 +418,18 @@ export function buildTradeJournal(opts = {}) {
           trade.qty = entryQty;
           trade.status = 'open';
         }
+      } else if (kind === 'REVERSE') {
+        if (trade.legs.some((l) => l.kind === 'REVERSE' && l.price != null)) continue;
+        applyReverseFill(trade, {
+          enterSide: row.side ?? null,
+          enterPrice: price,
+          enterQty: qty,
+          exitPrice: row.exitPrice,
+          exitQty: row.exitQty,
+          exitSide: row.exitSide ?? null,
+          ts,
+          reason: row.reason ?? null,
+        });
       }
       continue;
     }
@@ -468,20 +524,28 @@ export function buildTradeJournal(opts = {}) {
             });
             continue;
           }
-          trade.exitKind = 'REVERSE';
-          trade.exitPrice = reverseOrder?.price ?? trade.exitPrice;
-          const qty =
-            (reverseOrder?.qtyFilled > 0 ? reverseOrder.qtyFilled : null) || trade.qty;
-          pushLeg(trade, {
-            kind: 'REVERSE',
-            price: trade.exitPrice,
-            qty,
-            tsMs: ts,
+          // Preço do parent MATCHED = ENTER do oposto. exit* pode vir do timeline/OMS.
+          const exitPrice =
+            reverseOrder.exitPrice ??
+            reverseOrder.timeline?.find((t) => t.exitPrice != null)?.exitPrice ??
+            null;
+          const exitQty =
+            reverseOrder.exitQty ??
+            reverseOrder.timeline?.find((t) => t.exitQty != null)?.exitQty ??
+            null;
+          applyReverseFill(trade, {
+            enterSide: acc.side ?? reverseOrder.tokenSide ?? row.position?.side ?? null,
+            enterPrice: reverseOrder.price ?? row.position?.avgPrice ?? null,
+            enterQty:
+              (reverseOrder.qtyFilled > 0 ? reverseOrder.qtyFilled : null) ||
+              row.position?.qty ||
+              null,
+            exitPrice,
+            exitQty,
+            exitSide: reverseOrder.exitSide ?? null,
+            ts,
             reason: acc.reason ?? acc.reasonCode ?? null,
           });
-          if (trade.pnl == null) trade.pnl = computeExitPnl(trade);
-          trade.closedAtMs = ts ?? trade.closedAtMs;
-          trade.status = 'closed';
         }
       }
     } else if (row.type === 'position_settled') {

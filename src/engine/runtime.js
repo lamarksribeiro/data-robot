@@ -459,6 +459,10 @@ export function createEngine(opts) {
         reason: event.reason ?? null,
         qty: event.qty ?? null,
         price: event.price ?? pendingBefore.maxPrice ?? null,
+        // Saga REVERSE: preço/qty do FILL pai = perna ENTER; exit* = flatten da origem.
+        exitSide: event.exitSide ?? null,
+        exitQty: event.exitQty ?? null,
+        exitPrice: event.exitPrice ?? null,
         attempt: attemptInfo?.attempt ?? null,
         maxAttempts: attemptInfo?.max ?? null,
         remainingAttempts: attemptInfo?.remaining ?? null,

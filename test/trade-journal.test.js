@@ -439,4 +439,58 @@ describe('tradeJournal', () => {
     assert.equal(summary.losses, 1);
     assert.ok(Math.abs(summary.lost - 1.62) < 1e-9);
   });
+
+  it('REVERSE não usa preço do ENTER oposto como exit da origem (bug live)', () => {
+    // Caso BTC 1785479400: UP@0.53×4 → reverse vende UP@0.12×4, compra DOWN@0.90×2 → DOWN perde.
+    const rows = [
+      {
+        type: 'position_settled',
+        tsMs: 4000,
+        fromMarketId: 'm-rev',
+        side: 'DOWN',
+        qty: 2,
+        avgPrice: 0.9,
+        settlementPrice: 0.005,
+        pnlDelta: -1.79,
+        winner: 'Up',
+      },
+      {
+        type: 'order_terminal',
+        tsMs: 3000,
+        marketId: 'm-rev',
+        kind: 'REVERSE',
+        side: 'DOWN',
+        filled: true,
+        price: 0.9,
+        qty: 2,
+        exitSide: 'UP',
+        exitPrice: 0.12,
+        exitQty: 4,
+        reason: 'late_flip_reverse',
+      },
+      {
+        type: 'order_terminal',
+        tsMs: 1000,
+        marketId: 'm-rev',
+        kind: 'ENTER',
+        side: 'UP',
+        filled: true,
+        price: 0.53,
+        qty: 4,
+        reason: 'fill',
+      },
+    ];
+    const trades = buildTradeJournal({ auditRows: rows, limit: 10 });
+    assert.equal(trades.length, 1);
+    const t = trades[0];
+    assert.equal(t.side, 'DOWN');
+    assert.equal(t.exitKind, 'SETTLEMENT');
+    // Flatten UP: (0.12-0.53)*4 = -1.64; settlement DOWN: -1.79 → total -3.43
+    assert.ok(Math.abs(t.pnl - -3.43) < 1e-9, `pnl=${t.pnl}`);
+    // Bug antigo: (0.9-0.53)*2 + (-1.79) = -1.05
+    assert.ok(Math.abs(t.pnl - -1.05) > 0.5);
+    const revLeg = t.legs.find((l) => l.kind === 'REVERSE');
+    assert.equal(revLeg?.exitPrice, 0.12);
+    assert.equal(revLeg?.exitQty, 4);
+  });
 });
