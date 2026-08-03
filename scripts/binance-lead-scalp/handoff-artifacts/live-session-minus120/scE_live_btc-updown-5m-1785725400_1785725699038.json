@@ -1,0 +1,320 @@
+{
+  "skipped": false,
+  "generatedAt": "2026-08-03T02:54:59.037Z",
+  "dry": false,
+  "live": true,
+  "strategy": "binance-lead-scalp",
+  "variant": "binance-lead-scalp-e-adapt",
+  "setup": "e-adapt",
+  "event": {
+    "slug": "btc-updown-5m-1785725400",
+    "title": "Bitcoin Up or Down - August 2, 10:50PM-10:55PM ET",
+    "upTokenId": "95907366358444969534662904379671005969761837641638424582883867215884783708754",
+    "downTokenId": "18957239793467978709648340874859745122986647345068495949745513649722317506708",
+    "endMs": 1785725700000
+  },
+  "loops": 3882,
+  "staleBlocks": 14,
+  "decisionLatencyMs": {
+    "n": 3106,
+    "p50": 32,
+    "p95": 46
+  },
+  "result": {
+    "variant": "binance-lead-scalp-e-adapt",
+    "trades": 1,
+    "wins": 1,
+    "losses": 0,
+    "winRate": 100,
+    "totalPnl": 0.3536,
+    "lucroBruto": 0.4418,
+    "fees": 0.0882,
+    "entryFees": 0.0882,
+    "exitFees": 0,
+    "lucroLiquido": 0.3536,
+    "profitFactor": null,
+    "feeDrag": 0.2494,
+    "makerExitSharePct": 100,
+    "avgHoldSec": 3.919,
+    "exitReasons": {
+      "ladder_full": 1
+    },
+    "blockCounts": {
+      "NO_IMPULSE": 2950,
+      "MID_NOT_STALE": 77,
+      "SPREAD": 7,
+      "ASK_RANGE": 5,
+      "SPOT_STALE": 4,
+      "COOLDOWN": 59
+    },
+    "lastNoEntryReason": "NO_IMPULSE",
+    "openPos": null
+  },
+  "trades": [
+    {
+      "side": "DOWN",
+      "entryAsk": 0.58,
+      "exitPx": 0.6655,
+      "shares": 5.17,
+      "entryFee": 0.0882,
+      "exitFee": 0,
+      "makerExitShares": 5.17,
+      "takerExitShares": 0,
+      "pnl": 0.3536,
+      "holdSec": 3.919,
+      "reason": "ladder_full",
+      "tauAtEntry": 79,
+      "binRet": -5.97,
+      "entryTsMs": 1785725621265,
+      "exitTsMs": 1785725625184,
+      "ladderFills": 1,
+      "fillMode": "honest"
+    }
+  ],
+  "blocks": [
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725424540
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725424611
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725424677
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725424748
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725424819
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725424892
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725424965
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425036
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425104
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425177
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425248
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425314
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425380
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425444
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425516
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425581
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425647
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425708
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425775
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425844
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425908
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725425978
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426038
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426106
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426171
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426235
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426300
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426384
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426453
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426523
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426585
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426654
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426726
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426791
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426853
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426924
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725426994
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725427061
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725427138
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5,
+      "ts": 1785725427201
+    }
+  ],
+  "session": {
+    "notionalUsed": 2.9985999999999997,
+    "realizedPnl": 0.3536
+  }
+}

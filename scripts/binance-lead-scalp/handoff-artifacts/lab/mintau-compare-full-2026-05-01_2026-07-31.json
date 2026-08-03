@@ -1,0 +1,74 @@
+{
+  "generatedAt": "2026-08-03T03:24:43.957Z",
+  "from": "2026-05-01",
+  "to": "2026-07-31",
+  "baselineTag": "full-adapt-rescue-ds15",
+  "verdict": "KEEP minTau=20. Raising minTau reduces PnL/PF on the GO window; do not change strategy default.",
+  "rows": [
+    {
+      "minTau": 20,
+      "trades": 52030,
+      "winRate": 74.55,
+      "pnl": 50687.65,
+      "pf": 3.062,
+      "maxDD": 126.85,
+      "rescueStop": 6069,
+      "deltaPnl": 0,
+      "deltaPnlPct": 0,
+      "deltaPf": 0,
+      "deltaRescueStop": 0
+    },
+    {
+      "minTau": 25,
+      "trades": 51887,
+      "winRate": 74.52,
+      "pnl": 50395.23,
+      "pf": 3.055,
+      "maxDD": 126.85,
+      "rescueStop": 6058,
+      "deltaPnl": -292.42,
+      "deltaPnlPct": -0.58,
+      "deltaPf": -0.007,
+      "deltaRescueStop": -11
+    },
+    {
+      "minTau": 30,
+      "trades": 51727,
+      "winRate": 74.46,
+      "pnl": 50003.26,
+      "pf": 3.041,
+      "maxDD": 126.85,
+      "rescueStop": 6052,
+      "deltaPnl": -684.39,
+      "deltaPnlPct": -1.35,
+      "deltaPf": -0.021,
+      "deltaRescueStop": -17
+    },
+    {
+      "minTau": 45,
+      "trades": 51040,
+      "winRate": 74.35,
+      "pnl": 48602.83,
+      "pf": 3.003,
+      "maxDD": 135.17,
+      "rescueStop": 5998,
+      "deltaPnl": -2084.82,
+      "deltaPnlPct": -4.11,
+      "deltaPf": -0.059,
+      "deltaRescueStop": -71
+    },
+    {
+      "minTau": 60,
+      "trades": 49913,
+      "winRate": 74.03,
+      "pnl": 46210.28,
+      "pf": 2.937,
+      "maxDD": 136,
+      "rescueStop": 5918,
+      "deltaPnl": -4477.37,
+      "deltaPnlPct": -8.83,
+      "deltaPf": -0.125,
+      "deltaRescueStop": -151
+    }
+  ]
+}

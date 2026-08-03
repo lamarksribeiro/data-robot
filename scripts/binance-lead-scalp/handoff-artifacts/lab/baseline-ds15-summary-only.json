@@ -1,0 +1,124 @@
+{
+  "summary": {
+    "ok": true,
+    "note": "Binance grain=1s (conservative vs live WS); maker fill proxy = bid>=limit",
+    "config": {
+      "from": "2026-05-01",
+      "to": "2026-07-31",
+      "leadSec": 2,
+      "impulseUsd": 8,
+      "minAsk": 0.15,
+      "maxAsk": 0.7,
+      "maxSpread": 0.04,
+      "staleMidMoveMax": 0.03,
+      "budget": 10,
+      "takeProfit": 0.03,
+      "stopLoss": 0.05,
+      "stopPct": 0,
+      "timeoutSec": 20,
+      "cooldownSec": 3,
+      "maxTradesPerEvent": 5,
+      "minTau": 20,
+      "maxTau": 280,
+      "feeRate": 0.07,
+      "impulseVolMult": 2.5,
+      "impulseFloor": 5,
+      "impulseCap": 12,
+      "volWindowSec": 300,
+      "rescue": true,
+      "rescueOffset": 0.01,
+      "rescueStop": 0.15,
+      "exitMode": "maker-ladder",
+      "ladderOffsets": [
+        0.08,
+        0.14
+      ],
+      "tag": "full-adapt-rescue-ds15"
+    },
+    "meta": {
+      "from": "2026-05-01",
+      "to": "2026-07-31",
+      "daysRequested": 92,
+      "daysOk": 92,
+      "generatedAt": "2026-08-02T22:47:36.798Z"
+    },
+    "eventsSeen": 24870,
+    "trades": 52030,
+    "wins": 38787,
+    "losses": 13243,
+    "winRate": 74.54737651354988,
+    "totalPnl": 50687.65,
+    "profitFactor": 3.062010918431978,
+    "avgPnl": 0.9742005419949671,
+    "avgWin": 1.9405810091009306,
+    "avgLoss": -1.8562003624556342,
+    "avgHoldSec": 16.24,
+    "tradesPerEvent": 2.0920788098110172,
+    "fees": 21448.05,
+    "entryFees": 20054.27,
+    "exitFees": 1393.78,
+    "makerExitSharePct": 89.4,
+    "feeDrag": 0.21480062132991615,
+    "maxDrawdown": 126.85,
+    "exitReasons": {
+      "rescue_full": 19352,
+      "ladder_full": 26412,
+      "rescue_stop": 6069,
+      "rescue_eod": 197
+    },
+    "pnlByReason": {
+      "rescue_full": {
+        "n": 19352,
+        "sum": 8147.1,
+        "min": -0.19,
+        "wins": 12340,
+        "avg": 0.421
+      },
+      "ladder_full": {
+        "n": 26412,
+        "sum": 66203.77,
+        "min": 1.36,
+        "wins": 26412,
+        "avg": 2.507
+      },
+      "rescue_stop": {
+        "n": 6069,
+        "sum": -23495.05,
+        "min": -10.14,
+        "wins": 0,
+        "avg": -3.871
+      },
+      "rescue_eod": {
+        "n": 197,
+        "sum": -168.16,
+        "min": -9.97,
+        "wins": 35,
+        "avg": -0.854
+      }
+    },
+    "byMonth": {
+      "2026-05": {
+        "trades": 17817,
+        "wins": 13406,
+        "pnl": 17794.03,
+        "fees": 7211.8,
+        "winRate": 75.2
+      },
+      "2026-06": {
+        "trades": 20084,
+        "wins": 14440,
+        "pnl": 16599.28,
+        "fees": 8447.18,
+        "winRate": 71.9
+      },
+      "2026-07": {
+        "trades": 14129,
+        "wins": 10941,
+        "pnl": 16294.35,
+        "fees": 5789.07,
+        "winRate": 77.4
+      }
+    },
+    "goPreliminary": true
+  }
+}

@@ -1,0 +1,318 @@
+{
+  "skipped": false,
+  "generatedAt": "2026-08-03T02:59:59.054Z",
+  "dry": false,
+  "live": true,
+  "strategy": "binance-lead-scalp",
+  "variant": "binance-lead-scalp-e-adapt",
+  "setup": "e-adapt",
+  "event": {
+    "slug": "btc-updown-5m-1785725700",
+    "title": "Bitcoin Up or Down - August 2, 10:55PM-11:00PM ET",
+    "upTokenId": "12152644774537991837129960627335153177930509498241728944893655191983636697018",
+    "downTokenId": "79464751830486908801287697691681267830862662743485625647799702018854776554991",
+    "endMs": 1785726000000
+  },
+  "loops": 3711,
+  "staleBlocks": 4,
+  "decisionLatencyMs": {
+    "n": 2991,
+    "p50": 35,
+    "p95": 45
+  },
+  "result": {
+    "variant": "binance-lead-scalp-e-adapt",
+    "trades": 1,
+    "wins": 0,
+    "losses": 1,
+    "winRate": 0,
+    "totalPnl": -1.5497,
+    "lucroBruto": -1.3328,
+    "fees": 0.2169,
+    "entryFees": 0.1308,
+    "exitFees": 0.0861,
+    "lucroLiquido": -1.5497,
+    "profitFactor": 0,
+    "feeDrag": 0.14,
+    "makerExitSharePct": 0,
+    "avgHoldSec": 2.408,
+    "exitReasons": {
+      "rescue_stop": 1
+    },
+    "blockCounts": {
+      "NO_IMPULSE": 2905,
+      "MID_NOT_STALE": 47,
+      "NO_SPOT_HISTORY": 34,
+      "SPREAD": 2
+    },
+    "lastNoEntryReason": "MID_NOT_STALE",
+    "openPos": null
+  },
+  "trades": [
+    {
+      "side": "UP",
+      "entryAsk": 0.34,
+      "exitPx": 0.18,
+      "shares": 8.33,
+      "entryFee": 0.1308,
+      "exitFee": 0.0861,
+      "makerExitShares": 0,
+      "takerExitShares": 8.33,
+      "pnl": -1.5497,
+      "holdSec": 2.408,
+      "reason": "rescue_stop",
+      "tauAtEntry": 22,
+      "binRet": 6.35,
+      "entryTsMs": 1785725978292,
+      "exitTsMs": 1785725980700,
+      "ladderFills": 0,
+      "fillMode": "honest"
+    }
+  ],
+  "blocks": [
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725725903
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725725991
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725726078
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725726162
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725726249
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725726360
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725726445
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725726528
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725726613
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725726700
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725726784
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725726864
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725726939
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725727026
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725727107
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725727203
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725727285
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725727359
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725727444
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725727525
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725727609
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725727697
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725727777
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725727860
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725727955
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725728035
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725728123
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725728205
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725728289
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725728377
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725728451
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725728526
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725728606
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725728692
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725728783
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725728866
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725728946
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725729027
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725729113
+    },
+    {
+      "reason": "NO_IMPULSE",
+      "binRet": 0,
+      "impulseMin": 5.279463196499446,
+      "ts": 1785725729188
+    }
+  ],
+  "session": {
+    "notionalUsed": 5.8308,
+    "realizedPnl": -1.1961
+  }
+}

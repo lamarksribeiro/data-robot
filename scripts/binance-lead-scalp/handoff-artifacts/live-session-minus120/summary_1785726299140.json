@@ -1,0 +1,151 @@
+{
+  "generatedAt": "2026-08-03T03:04:59.139Z",
+  "dry": false,
+  "live": true,
+  "strategy": "binance-lead-scalp",
+  "variant": "binance-lead-scalp-e-adapt",
+  "setup": "e-adapt",
+  "maxEvents": 4,
+  "budget": 3,
+  "session": {
+    "notionalUsed": 5.8308,
+    "realizedPnl": -1.1961
+  },
+  "events": 4,
+  "trades": 2,
+  "wins": 1,
+  "losses": 1,
+  "winRate": 50,
+  "lucroBruto": -0.89,
+  "fees": 0.31,
+  "lucroLiquido": -1.2,
+  "profitFactor": 0.23,
+  "exitReasons": {
+    "ladder_full": 1,
+    "rescue_stop": 1
+  },
+  "reports": [
+    {
+      "slug": "btc-updown-5m-1785725100",
+      "result": {
+        "variant": "binance-lead-scalp-e-adapt",
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "totalPnl": 0,
+        "lucroBruto": 0,
+        "fees": 0,
+        "entryFees": 0,
+        "exitFees": 0,
+        "lucroLiquido": 0,
+        "profitFactor": null,
+        "feeDrag": null,
+        "makerExitSharePct": null,
+        "avgHoldSec": null,
+        "exitReasons": {},
+        "blockCounts": {
+          "NO_IMPULSE": 2827,
+          "MID_NOT_STALE": 56,
+          "ASK_RANGE": 29
+        },
+        "lastNoEntryReason": "NO_IMPULSE",
+        "openPos": null
+      }
+    },
+    {
+      "slug": "btc-updown-5m-1785725400",
+      "result": {
+        "variant": "binance-lead-scalp-e-adapt",
+        "trades": 1,
+        "wins": 1,
+        "losses": 0,
+        "winRate": 100,
+        "totalPnl": 0.3536,
+        "lucroBruto": 0.4418,
+        "fees": 0.0882,
+        "entryFees": 0.0882,
+        "exitFees": 0,
+        "lucroLiquido": 0.3536,
+        "profitFactor": null,
+        "feeDrag": 0.2494,
+        "makerExitSharePct": 100,
+        "avgHoldSec": 3.919,
+        "exitReasons": {
+          "ladder_full": 1
+        },
+        "blockCounts": {
+          "NO_IMPULSE": 2950,
+          "MID_NOT_STALE": 77,
+          "SPREAD": 7,
+          "ASK_RANGE": 5,
+          "SPOT_STALE": 4,
+          "COOLDOWN": 59
+        },
+        "lastNoEntryReason": "NO_IMPULSE",
+        "openPos": null
+      }
+    },
+    {
+      "slug": "btc-updown-5m-1785725700",
+      "result": {
+        "variant": "binance-lead-scalp-e-adapt",
+        "trades": 1,
+        "wins": 0,
+        "losses": 1,
+        "winRate": 0,
+        "totalPnl": -1.5497,
+        "lucroBruto": -1.3328,
+        "fees": 0.2169,
+        "entryFees": 0.1308,
+        "exitFees": 0.0861,
+        "lucroLiquido": -1.5497,
+        "profitFactor": 0,
+        "feeDrag": 0.14,
+        "makerExitSharePct": 0,
+        "avgHoldSec": 2.408,
+        "exitReasons": {
+          "rescue_stop": 1
+        },
+        "blockCounts": {
+          "NO_IMPULSE": 2905,
+          "MID_NOT_STALE": 47,
+          "NO_SPOT_HISTORY": 34,
+          "SPREAD": 2
+        },
+        "lastNoEntryReason": "MID_NOT_STALE",
+        "openPos": null
+      }
+    },
+    {
+      "slug": "btc-updown-5m-1785726000",
+      "result": {
+        "variant": "binance-lead-scalp-e-adapt",
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "winRate": null,
+        "totalPnl": 0,
+        "lucroBruto": 0,
+        "fees": 0,
+        "entryFees": 0,
+        "exitFees": 0,
+        "lucroLiquido": 0,
+        "profitFactor": null,
+        "feeDrag": null,
+        "makerExitSharePct": null,
+        "avgHoldSec": null,
+        "exitReasons": {},
+        "blockCounts": {
+          "NO_IMPULSE": 3131,
+          "MID_NOT_STALE": 69,
+          "ASK_RANGE": 41,
+          "SPREAD": 1,
+          "NO_SPOT_HISTORY": 23
+        },
+        "lastNoEntryReason": "NO_IMPULSE",
+        "openPos": null
+      }
+    }
+  ]
+}
