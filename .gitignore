@@ -17,3 +17,6 @@ config/*.tmp
 # dry/lab run dumps (não strategy-config)
 runs/pair-path-micro/
 
+# análise/forense local
+/scratch/
+
