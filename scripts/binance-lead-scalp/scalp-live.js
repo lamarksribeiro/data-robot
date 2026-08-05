@@ -2,12 +2,13 @@
 /**
  * Binance-lead scalp — LIVE (ordens reais CLOB).
  *
- * Default e-adapt + rescue. Exige --live.
+ * Default e-golden: adapt + sharesCap@0.50 + rescueStop 0.15 + pre-dump.
+ * Exige --live.
  *
- *   node scripts/binance-lead-scalp/scalp-live.js --live --variant=e-adapt --max-events=6 --budget=10
+ *   node scripts/binance-lead-scalp/scalp-live.js --live --variant=e-golden --max-events=6 --budget=10
  *
  * Segurança: requireLiveFlag · cancelAll preflight/SIGINT · max-session-notional ·
- * min 5 shares · consolida ladder se half < 5.
+ * min 5 shares · consolida ladder se half < 5 · gap disaster dump sem rescue maker.
  */
 import 'dotenv/config';
 import fs from 'node:fs';
@@ -24,6 +25,8 @@ import {
   VARIANT_E,
   VARIANT_E_FREQ,
   VARIANT_E_ADAPT,
+  VARIANT_E_GOLDEN,
+  SIZING_MODES,
   createEventState,
   createSpotRing,
   createMidRing,
@@ -69,16 +72,18 @@ function roundFee(x) {
 }
 
 function resolveVariant(name) {
-  const n = String(name || 'e-adapt').toLowerCase();
+  const n = String(name || 'e-golden').toLowerCase();
   if (n === 'e') return { name: 'e', base: VARIANT_E };
   if (n === 'e-freq') return { name: 'e-freq', base: VARIANT_E_FREQ };
-  return { name: 'e-adapt', base: VARIANT_E_ADAPT };
+  if (n === 'e-adapt') return { name: 'e-adapt', base: VARIANT_E_ADAPT };
+  if (n === 'e-golden' || n === 'golden') return { name: 'e-golden', base: VARIANT_E_GOLDEN };
+  return { name: 'e-golden', base: VARIANT_E_GOLDEN };
 }
 
 function parseArgs(argv) {
   requireLiveFlag('scalp-e:live', {
     argv,
-    hint: 'npm run scalp-e:live -- --live --max-events=6 --budget=10',
+    hint: 'npm run scalp-e:live -- --live --variant=e-golden --max-events=6 --budget=10',
   });
   const args = argv.slice(2);
   const valueOf = (flag) => {
@@ -87,7 +92,7 @@ function parseArgs(argv) {
     const idx = args.indexOf(flag);
     return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : null;
   };
-  const { name: variantName, base } = resolveVariant(valueOf('--variant') ?? 'e-adapt');
+  const { name: variantName, base } = resolveVariant(valueOf('--variant') ?? 'e-golden');
   const impulseUsd = Number(valueOf('--impulse-usd') ?? base.impulseUsd);
   const staleMid = Number(valueOf('--stale-mid') ?? base.staleMidMoveMax);
   const impulseVolMult = Number(valueOf('--impulse-vol-mult') ?? base.impulseVolMult);
@@ -100,14 +105,21 @@ function parseArgs(argv) {
       ? true
       : base.rescue;
   const rescueOffset = Number(valueOf('--rescue-offset') ?? base.rescueOffset);
-  // LIVE default: stop-desastre 0.15 (lab "ds15": PnL +$50.7k, PF 3.06, GO).
+  // LIVE default: stop-desastre 0.15 (lab ds15 / e-golden).
   // Sem isso um crash até settlement leva 100% do notional (aconteceu: −$10).
-  const rescueStop = Number(valueOf('--rescue-stop') ?? 0.15);
+  const rescueStop = Number(valueOf('--rescue-stop') ?? base.rescueStop ?? 0.15);
   const minTau = Number(valueOf('--min-tau') ?? base.minTau);
   const maxTau = Number(valueOf('--max-tau') ?? base.maxTau);
   const askSizeMult = Number(valueOf('--ask-size-mult') ?? base.askSizeMult ?? 0.75);
   const liqCapMult = Number(valueOf('--liq-cap-mult') ?? base.liqCapMult ?? 0.9);
-  const sizingMode = valueOf('--sizing') ?? base.sizingMode ?? 'none';
+  const sizingRaw = valueOf('--sizing') ?? base.sizingMode ?? 'none';
+  const sizingMode = SIZING_MODES.includes(sizingRaw) ? sizingRaw : base.sizingMode ?? 'none';
+  const sharesCapAsk = Number(valueOf('--shares-cap-ask') ?? base.sharesCapAsk ?? 0.5);
+  const immediateDisasterDump = args.includes('--no-immediate-disaster-dump')
+    ? false
+    : args.includes('--immediate-disaster-dump')
+      ? true
+      : base.immediateDisasterDump !== false;
   const entryRetries = Math.max(0, parseInt(valueOf('--entry-retries') ?? '0', 10) || 0);
   const entryRetryMs = Math.max(0, parseInt(valueOf('--entry-retry-ms') ?? '150', 10) || 0);
   const budget = Math.max(1, parseFloat(valueOf('--budget') ?? String(base.budget)) || 10);
@@ -124,12 +136,15 @@ function parseArgs(argv) {
       volWindowSec: Number.isFinite(volWindowSec) ? volWindowSec : base.volWindowSec,
       rescue,
       rescueOffset: Number.isFinite(rescueOffset) ? rescueOffset : base.rescueOffset,
-      rescueStop: Number.isFinite(rescueStop) ? rescueStop : base.rescueStop,
+      rescueStop: Number.isFinite(rescueStop) ? rescueStop : base.rescueStop ?? 0.15,
       minTau: Number.isFinite(minTau) && minTau >= 0 ? minTau : base.minTau,
       maxTau: Number.isFinite(maxTau) && maxTau > 0 ? maxTau : base.maxTau,
       askSizeMult: Number.isFinite(askSizeMult) && askSizeMult > 0 ? askSizeMult : 0.75,
       liqCapMult: Number.isFinite(liqCapMult) && liqCapMult > 0 ? liqCapMult : 0.9,
-      sizingMode: ['none', 'liqCap'].includes(sizingMode) ? sizingMode : 'none',
+      sizingMode,
+      sharesCapAsk:
+        Number.isFinite(sharesCapAsk) && sharesCapAsk > 0 ? sharesCapAsk : base.sharesCapAsk ?? 0.5,
+      immediateDisasterDump,
       budget,
     },
     maxEvents: Math.max(1, parseInt(valueOf('--max-events') ?? '6', 10) || 6),
@@ -787,22 +802,29 @@ async function runOneEvent({ opts, feedCtx, spotRing, midRing, client, session }
       const sideKeyPeek = posPeek.side === 'UP' ? 'up' : 'down';
       const bidPeek = Number(state[sideKeyPeek]?.bestBid);
       const holdPeek = (now - posPeek.entryTsMs) / 1000;
+      const pastDisaster =
+        P.rescueStop > 0 &&
+        Number.isFinite(bidPeek) &&
+        bidPeek > 0 &&
+        bidPeek <= posPeek.entryAsk - P.rescueStop;
       const hitStop =
         !posPeek.rescue &&
         Number.isFinite(bidPeek) &&
         bidPeek > 0 &&
         bidPeek <= posPeek.entryAsk - P.stopLoss;
       const hitTimeout = !posPeek.rescue && holdPeek >= P.timeoutSec;
+      // Em rescue OU gap (ainda na ladder) com bid ≤ entry−rescueStop → dump.
       const hitRescueStop =
-        posPeek.rescue &&
-        P.rescueStop > 0 &&
-        Number.isFinite(bidPeek) &&
-        bidPeek > 0 &&
-        bidPeek <= posPeek.entryAsk - P.rescueStop;
+        pastDisaster &&
+        (posPeek.rescue || (P.immediateDisasterDump !== false && !posPeek.rescue));
       const willDump =
         hitRescueStop || ((hitStop || hitTimeout) && !P.rescue);
+      // Nunca postar rescue maker se o book já está em zona de desastre.
       const willRescue =
-        !posPeek.rescue && P.rescue && (hitStop || hitTimeout);
+        !posPeek.rescue &&
+        P.rescue &&
+        (hitStop || hitTimeout) &&
+        !pastDisaster;
 
       // Rescue: cancel resting ENQUANTO orderIds ainda existem (enterRescue descarta níveis)
       if (willRescue) {
@@ -1213,10 +1235,15 @@ async function main() {
   const rescueDesc = P.rescue
     ? ` rescue=+${P.rescueOffset}${P.rescueStop > 0 ? `/ds-${P.rescueStop}` : '/hold'}`
     : '';
+  const sizeDesc =
+    P.sizingMode && P.sizingMode !== 'none'
+      ? ` sizing=${P.sizingMode}${P.sizingMode === 'sharesCap' || P.sizingMode === 'dynamicBudget' ? `@${P.sharesCapAsk}` : ''}`
+      : ' sizing=none';
   console.log(
     `${opts.variantName}: ${thrDesc} staleMid≤${P.staleMidMoveMax}` +
       ` ladder=+${P.ladderOffsets.join('/+')}` +
-      ` stop=-${P.stopLoss} timeout=${P.timeoutSec}s${rescueDesc}` +
+      ` stop=-${P.stopLoss} timeout=${P.timeoutSec}s${rescueDesc}${sizeDesc}` +
+      ` dump=${P.immediateDisasterDump !== false ? 'immed' : 'soft'}` +
       ` maxTrades=${P.maxTradesPerEvent} τ=${P.minTau}–${P.maxTau}`,
   );
   console.log('fill=live');

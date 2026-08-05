@@ -2,12 +2,10 @@
 /**
  * Binance-lead scalp — dry/shadow WS na Giovanna.
  *
- * Default e-adapt: impulso adaptativo clamp(2.5*σ, $5, $12) · stale mid 0.03 ·
- * scale-out maker 50% +8¢ / 50% +14¢ · stop −5¢ · timeout 20s · max 5/evento · τ 20–280.
- *
+ * Default e-golden: adapt + sharesCap@0.50 + rescueStop 0.15 + pre-dump.
  * ZERO ordens CLOB. Recusa --live.
  *
- *   node scripts/binance-lead-scalp/scalp-dry.js --variant=e-adapt --max-events=12 --fill=honest
+ *   node scripts/binance-lead-scalp/scalp-dry.js --variant=e-golden --max-events=12 --fill=honest
  *   docker exec pair-path-micro node scripts/binance-lead-scalp/scalp-dry.js --max-events=12 --poll-ms=50
  */
 import 'dotenv/config';
@@ -21,6 +19,8 @@ import {
   VARIANT_E,
   VARIANT_E_FREQ,
   VARIANT_E_ADAPT,
+  VARIANT_E_GOLDEN,
+  SIZING_MODES,
   createEventState,
   createSpotRing,
   createMidRing,
@@ -43,10 +43,12 @@ function nowIso() {
 }
 
 function resolveVariant(name) {
-  const n = String(name || 'e-adapt').toLowerCase();
+  const n = String(name || 'e-golden').toLowerCase();
   if (n === 'e') return { name: 'e', base: VARIANT_E };
   if (n === 'e-freq') return { name: 'e-freq', base: VARIANT_E_FREQ };
-  return { name: 'e-adapt', base: VARIANT_E_ADAPT };
+  if (n === 'e-adapt') return { name: 'e-adapt', base: VARIANT_E_ADAPT };
+  if (n === 'e-golden' || n === 'golden') return { name: 'e-golden', base: VARIANT_E_GOLDEN };
+  return { name: 'e-golden', base: VARIANT_E_GOLDEN };
 }
 
 function parseArgs(argv) {
@@ -64,7 +66,7 @@ function parseArgs(argv) {
   if (!['honest', 'cruel'].includes(fill)) {
     throw new Error('--fill deve ser honest|cruel');
   }
-  const { name: variantName, base } = resolveVariant(valueOf('--variant') ?? 'e-adapt');
+  const { name: variantName, base } = resolveVariant(valueOf('--variant') ?? 'e-golden');
   const impulseUsd = Number(valueOf('--impulse-usd') ?? base.impulseUsd);
   const staleMid = Number(valueOf('--stale-mid') ?? base.staleMidMoveMax);
   const impulseVolMult = Number(valueOf('--impulse-vol-mult') ?? base.impulseVolMult);
@@ -80,6 +82,15 @@ function parseArgs(argv) {
   const rescueStop = Number(valueOf('--rescue-stop') ?? base.rescueStop);
   const minTau = Number(valueOf('--min-tau') ?? base.minTau);
   const maxTau = Number(valueOf('--max-tau') ?? base.maxTau);
+  const sizingRaw = valueOf('--sizing') ?? base.sizingMode ?? 'none';
+  const sizingMode = SIZING_MODES.includes(sizingRaw) ? sizingRaw : base.sizingMode ?? 'none';
+  const sharesCapAsk = Number(valueOf('--shares-cap-ask') ?? base.sharesCapAsk ?? 0.5);
+  const immediateDisasterDump = args.includes('--no-immediate-disaster-dump')
+    ? false
+    : args.includes('--immediate-disaster-dump')
+      ? true
+      : base.immediateDisasterDump !== false;
+  const budget = Math.max(1, parseFloat(valueOf('--budget') ?? String(base.budget)) || 10);
   return {
     variantName,
     params: {
@@ -95,6 +106,11 @@ function parseArgs(argv) {
       rescueStop: Number.isFinite(rescueStop) ? rescueStop : base.rescueStop,
       minTau: Number.isFinite(minTau) && minTau >= 0 ? minTau : base.minTau,
       maxTau: Number.isFinite(maxTau) && maxTau > 0 ? maxTau : base.maxTau,
+      sizingMode,
+      sharesCapAsk:
+        Number.isFinite(sharesCapAsk) && sharesCapAsk > 0 ? sharesCapAsk : base.sharesCapAsk ?? 0.5,
+      immediateDisasterDump,
+      budget,
     },
     maxEvents: Math.max(1, parseInt(valueOf('--max-events') ?? '24', 10) || 24),
     pollMs: Math.max(20, parseInt(valueOf('--poll-ms') ?? '50', 10) || 50),
@@ -105,7 +121,7 @@ function parseArgs(argv) {
       30,
       parseInt(valueOf('--wait-timeout') ?? String(Math.max(600, 12 * 400)), 10) || 600,
     ),
-    budget: Math.max(1, parseFloat(valueOf('--budget') ?? String(base.budget)) || 10),
+    budget,
     fill,
     cruelLatencyMs: Math.max(0, parseInt(valueOf('--cruel-latency-ms') ?? '80', 10) || 0),
     warmSec: Math.max(3, parseInt(valueOf('--warm-sec') ?? '6', 10) || 6),
@@ -396,10 +412,15 @@ async function main() {
   const rescueDesc = P.rescue
     ? ` rescue=+${P.rescueOffset}${P.rescueStop > 0 ? `/ds-${P.rescueStop}` : '/hold'}`
     : '';
+  const sizeDesc =
+    P.sizingMode && P.sizingMode !== 'none'
+      ? ` sizing=${P.sizingMode}${P.sizingMode === 'sharesCap' || P.sizingMode === 'dynamicBudget' ? `@${P.sharesCapAsk}` : ''}`
+      : ' sizing=none';
   console.log(
     `${opts.variantName}: ${thrDesc} staleMid≤${P.staleMidMoveMax}` +
       ` ladder=+${P.ladderOffsets.join('/+')}` +
-      ` stop=-${P.stopLoss} timeout=${P.timeoutSec}s${rescueDesc}` +
+      ` stop=-${P.stopLoss} timeout=${P.timeoutSec}s${rescueDesc}${sizeDesc}` +
+      ` dump=${P.immediateDisasterDump !== false ? 'immed' : 'soft'}` +
       ` maxTrades=${P.maxTradesPerEvent} τ=${P.minTau}–${P.maxTau}`,
   );
 

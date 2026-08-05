@@ -96,12 +96,13 @@ describe('conformance fixtures', () => {
 });
 
 describe('registry + bootstrap', () => {
-  it('lista fixtures + tfc-v7 + midas + apex', () => {
+  it('lista fixtures + tfc-v7 + midas + apex + hyperion-gold', () => {
     const ids = createDefaultRegistry().list().map((m) => m.id).sort();
     assert.deepEqual(ids, [
       'apex-triad-v1',
       'fixture-price-cross',
       'fixture-spread-wide',
+      'hyperion-gold-v1',
       'midas-carry-v1',
       'tfc-v7',
     ]);

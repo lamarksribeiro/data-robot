@@ -1,7 +1,11 @@
 /**
  * Binance-lead scalp — setup E (scale-out maker +8/+14).
  * Lógica pura, sem I/O. Espelha o lab data-backtest (variant E).
+ *
+ * Produção recomendada: VARIANT_E_GOLDEN (sharesCap + disaster 15¢ + pre-dump).
  */
+
+export const SIZING_MODES = ['none', 'sharesCap', 'dynamicBudget', 'liqCap'];
 
 export const VARIANT_E = {
   id: 'binance-lead-scalp-e',
@@ -37,11 +41,23 @@ export const VARIANT_E = {
   rescue: false,
   rescueOffset: 0.01,
   rescueStop: 0,
-  /** none | liqCap — size limitado pelo top ask */
+  /**
+   * none | sharesCap | dynamicBudget | liqCap
+   * sharesCap: min(budget/ask, floor(budget/sharesCapAsk)) — corta oversize em ask barato
+   * dynamicBudget: se ask < sharesCapAsk, notional = budget*(ask/sharesCapAsk)
+   * liqCap: min(budget/ask, askSz * liqCapMult)
+   */
   sizingMode: 'none',
+  /** Ask de referência do cap (0.50 = max shares = budget/0.50). */
+  sharesCapAsk: 0.5,
   askSizeMult: 0.75,
   liqCapMult: 0.9,
   minShares: 5,
+  /**
+   * Se bid já fura rescueStop no soft-stop (gap), dump taker imediato
+   * em vez de postar rescue maker inútil.
+   */
+  immediateDisasterDump: true,
 };
 
 /** E-freq: limiar fixo $8 (lab GO mai–jun). */
@@ -55,7 +71,7 @@ export const VARIANT_E_FREQ = {
 /**
  * E-adapt: impulso por vol recente + modo resgate (lab GO mai–jun + julho).
  * thr = clamp(2.5 * σ(Δ2s, 5min), $5, $12); stale mid 0.03;
- * rescue: stop/timeout → ask breakeven+1¢ até EOD (sem stop-desastre).
+ * rescue: stop/timeout → ask breakeven+1¢ (lab hold: rescueStop=0; live override 0.15).
  */
 export const VARIANT_E_ADAPT = {
   ...VARIANT_E,
@@ -69,7 +85,60 @@ export const VARIANT_E_ADAPT = {
   rescue: true,
   rescueOffset: 0.01,
   rescueStop: 0,
+  sizingMode: 'none',
 };
+
+/**
+ * E-golden — “pato dos ovos de ouro” para produção live.
+ *
+ * Mantém o alpha lab (adapt + ladder +8/+14 + rescue) e corrige a armadilha
+ * do ask barato + gap de desastre que matou o micro live (−$1.20 forense):
+ *   1) sharesCap @ 0.50 → perda max no disaster simétrica em $ (lab PF↑ DD↓)
+ *   2) rescueStop 0.15  → não hold até settlement (live-safe)
+ *   3) immediateDisasterDump → se bid já ≤ entry−15¢, dump sem postar rescue
+ *
+ * Lab cap50 (mai–jul, $10): PnL +$37.0k · PF 3.12 · maxDD $89 · WR 74.7%
+ * (baseline sem cap: +$50.7k / PF 3.06 / maxDD $127 — mais PnL paper, pior cauda).
+ */
+export const VARIANT_E_GOLDEN = {
+  ...VARIANT_E_ADAPT,
+  id: 'binance-lead-scalp-e-golden',
+  sizingMode: 'sharesCap',
+  sharesCapAsk: 0.5,
+  rescue: true,
+  rescueOffset: 0.01,
+  rescueStop: 0.15,
+  immediateDisasterDump: true,
+};
+
+/**
+ * Calcula shares a partir de budget, ask e modo de sizing.
+ * @param {number} budget
+ * @param {number} ask
+ * @param {object} cfg
+ * @param {number|null} [askSz]
+ */
+export function sizeShares(budget, ask, cfg = {}, askSz = null) {
+  if (!(Number.isFinite(budget) && budget > 0 && Number.isFinite(ask) && ask > 0)) return 0;
+  const mode = SIZING_MODES.includes(cfg.sizingMode) ? cfg.sizingMode : 'none';
+  const capAsk =
+    Number.isFinite(cfg.sharesCapAsk) && cfg.sharesCapAsk > 0 ? cfg.sharesCapAsk : 0.5;
+  let shares = budget / ask;
+  if (mode === 'sharesCap') {
+    const maxShares = Math.floor(budget / capAsk);
+    shares = Math.min(shares, maxShares);
+  } else if (mode === 'dynamicBudget') {
+    const eff = ask < capAsk ? budget * (ask / capAsk) : budget;
+    shares = eff / ask;
+  } else if (mode === 'liqCap') {
+    if (Number.isFinite(askSz) && askSz > 0) {
+      shares = Math.min(shares, askSz * (cfg.liqCapMult ?? 0.9));
+    }
+  }
+  // liqCap pode combinar com sharesCap se sizingMode for só um; pipeline live
+  // pode chamar sizeShares e depois aplicar liq à parte se precisar.
+  return shares;
+}
 
 export function feeEst(price, shares, rate = VARIANT_E.feeRate) {
   const p = Math.min(0.99, Math.max(0.01, price));
@@ -293,6 +362,22 @@ export function enterRescue(pos, cfg, trigger) {
   };
 }
 
+function pastDisaster(entryAsk, bid, cfg) {
+  return (
+    cfg.rescueStop > 0 &&
+    Number.isFinite(bid) &&
+    bid > 0 &&
+    Number.isFinite(entryAsk) &&
+    bid <= entryAsk - cfg.rescueStop
+  );
+}
+
+function dumpAtBid(st, bid, reason, nowMs) {
+  const rem = st.pos?.remaining ?? 0;
+  const exitFee = rem > 0 ? feeEst(bid, rem, st.params.feeRate) : 0;
+  return closePosition(st, bid, exitFee, reason, nowMs);
+}
+
 /**
  * Gerencia posição aberta.
  * Retorna trade fechado, evento {action:'rescue',...}, ou null.
@@ -304,6 +389,7 @@ export function managePosition(st, { book, nowMs, fillMode = 'honest', skipMaker
   const b = sideBook(book, pos.side);
   const bid = b.bid;
   const holdSec = (nowMs - pos.entryTsMs) / 1000;
+  const immedDump = cfg.immediateDisasterDump !== false;
 
   if (!skipMaker) tryMakerFills(pos, bid, fillMode, cfg);
   if (pos.remaining <= 1e-9) {
@@ -311,37 +397,35 @@ export function managePosition(st, { book, nowMs, fillMode = 'honest', skipMaker
   }
 
   if (pos.rescue) {
-    if (
-      cfg.rescueStop > 0 &&
-      Number.isFinite(bid) &&
-      bid > 0 &&
-      bid <= pos.entryAsk - cfg.rescueStop
-    ) {
-      const rem = pos.remaining;
-      const exitFee = rem > 0 ? feeEst(bid, rem, cfg.feeRate) : 0;
-      return closePosition(st, bid, exitFee, 'rescue_stop', nowMs);
+    if (pastDisaster(pos.entryAsk, bid, cfg)) {
+      return dumpAtBid(st, bid, 'rescue_stop', nowMs);
     }
     return null;
   }
 
+  // Gap: bid já furou disaster sem passar por rescue — dump imediato (não posta maker).
+  if (immedDump && pastDisaster(pos.entryAsk, bid, cfg)) {
+    return dumpAtBid(st, bid, 'rescue_stop', nowMs);
+  }
+
   if (Number.isFinite(bid) && bid > 0) {
     if (bid <= pos.entryAsk - cfg.stopLoss) {
+      // Soft-stop já em zona de desastre → dump, não rescue.
+      if (immedDump && pastDisaster(pos.entryAsk, bid, cfg)) {
+        return dumpAtBid(st, bid, 'rescue_stop', nowMs);
+      }
       if (cfg.rescue) return enterRescue(pos, cfg, 'stop');
-      const rem = pos.remaining;
-      const exitFee = rem > 0 ? feeEst(bid, rem, cfg.feeRate) : 0;
-      return closePosition(st, bid, exitFee, 'ladder_stop', nowMs);
+      return dumpAtBid(st, bid, 'ladder_stop', nowMs);
     }
     if (holdSec >= cfg.timeoutSec) {
       if (cfg.rescue) return enterRescue(pos, cfg, pos.fills.length ? 'timeout_partial' : 'timeout');
-      const rem = pos.remaining;
-      const exitFee = rem > 0 ? feeEst(bid, rem, cfg.feeRate) : 0;
       const reason = pos.fills.length ? 'ladder_timeout_partial' : 'ladder_timeout';
-      return closePosition(st, bid, exitFee, reason, nowMs);
+      return dumpAtBid(st, bid, reason, nowMs);
     }
   } else if (holdSec >= cfg.timeoutSec) {
     if (cfg.rescue) return enterRescue(pos, cfg, 'timeout_nobid');
-    const rem = pos.remaining;
     const px = pos.entryAsk;
+    const rem = pos.remaining;
     const exitFee = rem > 0 ? feeEst(px, rem, cfg.feeRate) : 0;
     return closePosition(st, px, exitFee, 'ladder_timeout_nobid', nowMs);
   }
@@ -414,10 +498,7 @@ export function tryEntry(st, { spotRing, midRing, book, tau, nowMs, spotAgeMs, b
     return null;
   }
 
-  let shares = cfg.budget / b.ask;
-  if (cfg.sizingMode === 'liqCap' && Number.isFinite(b.askSz) && b.askSz > 0) {
-    shares = Math.min(shares, b.askSz * (cfg.liqCapMult ?? 0.9));
-  }
+  const shares = sizeShares(cfg.budget, b.ask, cfg, b.askSz);
   if (!(shares > 0)) {
     tally(st, 'BAD_SHARES');
     return null;
@@ -502,7 +583,11 @@ export function applyEntryFill(
     if (!(ask > 0 && ask < 1)) ask = intent.ask;
   }
   const shares =
-    Number.isFinite(fillShares) && fillShares > 0 ? fillShares : cfg.budget / ask;
+    Number.isFinite(fillShares) && fillShares > 0
+      ? fillShares
+      : Number.isFinite(intent?.shares) && intent.shares > 0
+        ? intent.shares
+        : sizeShares(cfg.budget, ask, cfg);
   const entryFee = feeEst(ask, shares, cfg.feeRate);
   const offsets = cfg.ladderOffsets;
   let ladder;

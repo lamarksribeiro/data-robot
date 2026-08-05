@@ -14,10 +14,11 @@ import { createSpreadWideStrategy } from '../strategy/fixtures/spreadWide.js';
 import { createTfcV7Strategy } from '../strategy/tfcV7.js';
 import { createMidasV1Strategy } from '../strategy/midasV1.js';
 import { createApexTriadV1Strategy } from '../strategy/apexTriadV1.js';
+import { createHyperionGoldV1Strategy } from '../strategy/hyperionGoldV1.js';
 import { defaultPresetFor } from './presets.js';
 
 /**
- * Registry com fixtures (P1) + TFC V7 (P6) + MIDAS Carry V1 + Apex Triad V1.
+ * Registry com fixtures (P1) + TFC V7 (P6) + MIDAS Carry V1 + Apex Triad V1 + Hyperion Gold V1.
  */
 export function createDefaultRegistry() {
   const registry = new StrategyRegistry();
@@ -26,6 +27,7 @@ export function createDefaultRegistry() {
   registry.register(createTfcV7Strategy());
   registry.register(createMidasV1Strategy());
   registry.register(createApexTriadV1Strategy());
+  registry.register(createHyperionGoldV1Strategy());
   return registry;
 }
 

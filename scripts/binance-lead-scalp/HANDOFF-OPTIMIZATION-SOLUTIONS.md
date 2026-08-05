@@ -3,8 +3,9 @@
 Documento **autossuficiente e direto** para ser compartilhado com outra IA (ou desenvolvedor) implementar as correções no robô de produção em `data-robot`.
 
 **Data:** 03 de Agosto de 2026  
+**Status 2026-08-04:** ✅ **IMPLEMENTADO NO CÓDIGO** na variante **`e-golden`** (`VARIANT_E_GOLDEN` + default dry/live). Isso não é aprovação de live; ver o documento-mestre em `docs/ESTRATEGIA-MESTRA-BTC5M-2026-08-04.md`.  
 **Repositórios Envolvidos:** `data-robot` (live) + `data-backtest` (lakehouse)  
-**Estratégia:** `binance-lead-scalp` (Variante `e-adapt`)  
+**Estratégia:** `binance-lead-scalp` (Variante `e-golden` / legado `e-adapt`)  
 
 ---
 

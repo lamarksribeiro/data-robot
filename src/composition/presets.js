@@ -8,6 +8,8 @@ import { MIDAS_V1 } from '../tfc/preset-midas.js';
 import { MIDAS_V1_STRATEGY_ID } from '../strategy/midasV1.js';
 import { APEX_TRIAD_V1_STRATEGY_ID } from '../strategy/apexTriadV1.js';
 import { APEX_TRIAD_V1 } from '../tfc/preset-apex.js';
+import { HYPERION_GOLD_V1_STRATEGY_ID } from '../strategy/hyperionGoldV1.js';
+import { HYPERION_GOLD_V1 } from '../tfc/preset-hyperion-gold.js';
 
 /**
  * @param {string} strategyId
@@ -26,6 +28,9 @@ export function defaultPresetFor(strategyId, override = {}) {
   if (strategyId === APEX_TRIAD_V1_STRATEGY_ID) {
     return { ...APEX_TRIAD_V1, ...clean };
   }
+  if (strategyId === HYPERION_GOLD_V1_STRATEGY_ID) {
+    return { ...HYPERION_GOLD_V1, ...clean };
+  }
   if (strategyId === 'fixture-spread-wide') {
     return { minSpread: 0.01, quantity: 3, budget: 1, ...clean };
   }
@@ -34,3 +39,4 @@ export function defaultPresetFor(strategyId, override = {}) {
   }
   return { ...clean };
 }
+
