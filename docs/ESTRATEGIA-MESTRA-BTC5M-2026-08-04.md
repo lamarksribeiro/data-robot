@@ -1,8 +1,9 @@
-# Estratégia mestra BTC 5m — E-Golden Defense-First
+# Estratégia mestra BTC 5m — E-Golden Defense-First (V2)
 
-**Data:** 2026-08-04  
+**Data:** 2026-08-05 (revisão V2)  
 **Status:** `RESEARCH / SHADOW-READY`; não é autorização para operar dinheiro real.  
-**Executor escolhido para o próximo teste:** `scripts/binance-lead-scalp/` — variante `e-golden`.  
+**Executor escolhido para o próximo teste:** `scripts/binance-lead-scalp/` — variante `e-golden` **V2** (`impulseCap=20`, `rescueStop=0.25`).  
+**Spec consolidada:** `data-backtest/docs/estrategias/estrategia-definitiva-btc-5m-golden-v2-2026-08-05.md`.  
 **Objetivo:** testar uma única hipótese econômica com ataque, execução e defesa inseparáveis.
 
 ## 1. Decisão executiva
@@ -10,11 +11,12 @@
 Vamos testar primeiro o **Binance-lead directional scalp**, em uma única perna UP ou DOWN, com:
 
 - sinal de impulso do BTC na Binance antecipando o book de 5 minutos;
+- limiar adaptativo `clamp(2.5σ, $5, $20)` (V2 — mais seletivo que o cap $12);
 - entrada agressiva somente quando o ask, o spread, a idade do book e a liquidez passam pelos filtros;
 - `sharesCap@0.50` para impedir que ask barato transforme o mesmo orçamento em uma posição grande demais;
 - saída maker em `entry + $0.08` e `entry + $0.14`, dividida 50/50;
 - resgate maker em `entry + $0.01` depois de stop/timeout leve;
-- **corte imediato taker** se o bid já estiver em `entry - $0.15`;
+- **corte imediato taker** se o bid já estiver em `entry - $0.25` (V2);
 - reconciliação de cada fill real e circuit breaker fail-closed.
 
 O teste inicial é **$5 de orçamento por entrada**, com teto de 10 shares, teto de $40 de notional por sessão e perda máxima de $8 por sessão. Esses limites são envelope de teste; não devem ser ampliados por performance bonita de uma amostra curta.
@@ -34,7 +36,9 @@ Não vamos transformar isto em um robô que promete dinheiro. A “máquina de g
 | `full-adapt-rescue-ds15`, budget $10, sem cap | 52.030 trades, WR 74,5%, PnL +$50.687,65, PF 3,062, DD $126,85 | **[MEDIDO]** edge de replay, mas expõe cauda grande quando ask barato gera shares demais |
 | `cap50`, budget $10 | PnL +$36.954,53, PF 3,121, DD $88,75 | **[MEDIDO]** sacrifica PnL nominal e melhora cauda/DD; é a base defensiva |
 | `aud-golden-b5-ds15`, budget $5 | PnL +$19.240, PF 3,18, DD $42,62, WR 75,0% | **[MEDIDO]** paper auditado, ainda com proxy de fill maker |
-| `aud-golden-b5-ds25`, budget $5 | PnL +$20.076,71, PF 3,66, DD $32,22, WR 76,8% | **[MEDIDO]** challenger paper; aceita perda por share maior e não é o default defensivo |
+| `aud-golden-b5-ds25`, budget $5 | PnL +$20.076,71, PF 3,66, DD $32,22, WR 76,8% | **[MEDIDO]** V1 challenger; aceita perda por share maior |
+| **`aud-golden-v2-c20-b5-ds25`** | PnL +$20.095, PF **4,71**, DD **$14,26**, WR **80,4%** | **[MEDIDO]** **default V2** — mesmo PnL, DD −56% vs V1 |
+| `aud-golden-v2-c20-b10-ds25` | PnL +$38.631, PF 4,63, DD $28,51, WR 80,2% | **[MEDIDO]** escala paper; só após micro validado |
 | Micro forense budget $3 | PnL -$1,20 em 2 trades: +$0,35 e -$1,55 | **[MEDIDO]** mostrou o defeito operacional: ask barato + gap de desastre |
 
 O replay mostra uma relação importante: o ganho vem de muitos `ladder_full`/`rescue_full` e WR alta; o desastre individual pode ser maior que o win típico. Portanto, o ataque sem cap não é a estratégia; é somente o experimento que revelou o sinal.
@@ -71,7 +75,7 @@ Para cada tick elegível:
 ```text
 lead2s = BTC[t] - BTC[t-2s]
 sigma  = desvio-padrão(lead2s, janela de 300s)
-thr    = clamp(2.5 * sigma, $5, $12)
+thr    = clamp(2.5 * sigma, $5, $20)   # V2: cap $20 (antes $12)
        = $8 quando sigma ainda não é utilizável
 lado   = UP se lead2s > 0; DOWN se lead2s < 0
 ```
@@ -154,14 +158,14 @@ O resgate não é uma licença para segurar até zero. `rescueStop=0` fica proib
 
 ### 5.3 Desastre
 
-Se em qualquer tick `bid <= entry - $0,15`:
+Se em qualquer tick `bid <= entry - $0,25`:
 
 1. cancelar ladder/rescue pendentes;
 2. não postar rescue maker inútil em um gap já aberto;
 3. executar dump residual FAK/taker com retries e proteção de erro;
 4. se não houver bid executável, entrar em `CIRCUIT_OPEN`, tentar a rota de flatten definida pelo executor e marcar o caso como incidente, não como lucro/perda “normal”.
 
-O corte de $0,15 é defesa contra a assimetria observada. Não é garantia de perda máxima: slippage, book vazio, atraso e falha de transporte podem piorar o resultado e precisam aparecer no relatório.
+O corte de $0,25 (V2) é defesa contra a assimetria observada, com menos dumps prematuros que o ds15. Não é garantia de perda máxima: slippage, book vazio, atraso e falha de transporte podem piorar o resultado e precisam aparecer no relatório.
 
 ### 5.4 Fim de evento, shutdown e reconciliação
 
@@ -191,15 +195,16 @@ Ao atingir qualquer limite, parar a sessão. Não “recuperar” prejuízo aume
 
 ## 6. Paridade que ainda precisa ser fechada
 
-O código local `VARIANT_E_GOLDEN` já contém `sharesCap`, `rescueStop=0.15` e pre-dump; os testes unitários atuais passaram. Isso demonstra comportamento de unidade, não edge econômico.
+O código local `VARIANT_E_GOLDEN` já contém `sharesCap`, `impulseCap=20`, `rescueStop=0.25` e pre-dump (V2, 05/08); os testes unitários atuais passaram. Isso demonstra comportamento de unidade, não edge econômico.
 
 Antes de qualquer promoção, corrigir/confirmar:
 
-1. **Paridade lab ↔ engine ↔ dry ↔ live:** o lab oficial ainda não modelava `immediateDisasterDump`; seus relatórios não validam essa proteção.
+1. **Paridade lab ↔ engine ↔ dry ↔ live:** lab V2 (`aud-golden-v2-c20-b5-ds25`) e engine V2 alinhados em cap/ds; o lab ainda não modela `immediateDisasterDump` de forma isolada.
 2. **Fill maker:** `bid >= limit` não modela fila, print, latência ou cancelamento. Rodar cenários sem fill, atraso e fill parcial.
 3. **Fees:** separar fee de entrada taker, saída maker comprovada e residual taker; não usar fee zero por presunção.
 4. **Reconciliação:** testar fill parcial, FAK miss, ACK-only, cancelamento falho, saldo atrasado e shutdown.
 5. **Hyperion Gold:** manter fora do executor até implementar de verdade a fração de saída, `dangerExit`, atualização por execution event e uma validação econômica separada.
+6. **OOS agosto:** validar V2 em dados novos (pós-31/07) antes do dry longo.
 
 ## 7. Protocolo de teste sem autoengano
 
@@ -285,7 +290,7 @@ Os arquivos novos `src/strategy/hyperionGoldV1.js`, `src/tfc/hyperionGoldEvaluat
 
 ## Veredito
 
-**Testar:** `e-golden / budget $5 / sharesCap@0.50 / rescueStop 0.15 / immediate disaster dump / ladder +$0.08,+$0.14`.  
-**Testar separado:** `ds25` como challenger e Midas `btc-gold-v1` em shadow independente.  
+**Testar:** `e-golden V2 / budget $5 / sharesCap@0.50 / impulseCap 20 / rescueStop 0.25 / immediate disaster dump / ladder +$0.08,+$0.14`.  
+**Testar separado:** Midas `btc-gold-v1` em shadow independente (não misturar com o scalp).  
 **Não testar como rota de ganho:** pair/complete-set, SHOTANDGO/Phil, TSC atual, Hyperion antigo, Apex curto ou o novo Hyperion Gold sem fechar as lacunas.  
-**Não operar ao vivo nesta etapa:** primeiro paridade, OOS congelado, shadow e gates de defesa.
+**Não operar ao vivo nesta etapa:** primeiro paridade (feita no engine 05/08), OOS agosto, shadow Giovanna e gates de defesa.

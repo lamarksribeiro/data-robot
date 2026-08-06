@@ -2,7 +2,7 @@
 /**
  * Binance-lead scalp — dry/shadow WS na Giovanna.
  *
- * Default e-golden: adapt + sharesCap@0.50 + rescueStop 0.15 + pre-dump.
+ * Default e-golden V2: adapt + sharesCap@0.50 + impulseCap 20 + rescueStop 0.25 + pre-dump.
  * ZERO ordens CLOB. Recusa --live.
  *
  *   node scripts/binance-lead-scalp/scalp-dry.js --variant=e-golden --max-events=12 --fill=honest
@@ -20,6 +20,7 @@ import {
   VARIANT_E_FREQ,
   VARIANT_E_ADAPT,
   VARIANT_E_GOLDEN,
+  VARIANT_E_CLS,
   SIZING_MODES,
   createEventState,
   createSpotRing,
@@ -32,8 +33,12 @@ import {
   applyEntryFill,
   managePosition,
   forceCloseEod,
+  forceCloseSettle,
+  closeOpenPosition,
+  feeEst,
   summarize,
 } from './scalp-engine.js';
+import { fetchPriceToBeat } from '../../src/markets/priceToBeat.js';
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -47,6 +52,9 @@ function resolveVariant(name) {
   if (n === 'e') return { name: 'e', base: VARIANT_E };
   if (n === 'e-freq') return { name: 'e-freq', base: VARIANT_E_FREQ };
   if (n === 'e-adapt') return { name: 'e-adapt', base: VARIANT_E_ADAPT };
+  if (n === 'cls' || n === 'cls-v1' || n === 'causal-lead-settle') {
+    return { name: 'cls', base: VARIANT_E_CLS };
+  }
   if (n === 'e-golden' || n === 'golden') return { name: 'e-golden', base: VARIANT_E_GOLDEN };
   return { name: 'e-golden', base: VARIANT_E_GOLDEN };
 }
@@ -90,6 +98,8 @@ function parseArgs(argv) {
     : args.includes('--immediate-disaster-dump')
       ? true
       : base.immediateDisasterDump !== false;
+  const noRescueAboveAsk = Number(valueOf('--no-rescue-above-ask') ?? base.noRescueAboveAsk ?? 0);
+  const maxEntrySlip = Number(valueOf('--max-entry-slip') ?? base.maxEntrySlip ?? 0);
   const budget = Math.max(1, parseFloat(valueOf('--budget') ?? String(base.budget)) || 10);
   return {
     variantName,
@@ -108,8 +118,11 @@ function parseArgs(argv) {
       maxTau: Number.isFinite(maxTau) && maxTau > 0 ? maxTau : base.maxTau,
       sizingMode,
       sharesCapAsk:
-        Number.isFinite(sharesCapAsk) && sharesCapAsk > 0 ? sharesCapAsk : base.sharesCapAsk ?? 0.5,
+        Number.isFinite(sharesCapAsk) && sharesCapAsk > 0 ? sharesCapAsk : base.sharesCapAsk ?? 0.45,
       immediateDisasterDump,
+      noRescueAboveAsk:
+        Number.isFinite(noRescueAboveAsk) && noRescueAboveAsk > 0 ? noRescueAboveAsk : 0,
+      maxEntrySlip: Number.isFinite(maxEntrySlip) && maxEntrySlip > 0 ? maxEntrySlip : 0,
       budget,
     },
     maxEvents: Math.max(1, parseInt(valueOf('--max-events') ?? '24', 10) || 24),
@@ -207,11 +220,12 @@ async function runOneEvent({ opts, feedCtx, spotRing, midRing }) {
     P.impulseVolMult > 0
       ? `impulse=adapt(${P.impulseVolMult}σ∈$${P.impulseFloor}–$${P.impulseCap}, win=${P.volWindowSec}s, fb=$${P.impulseUsd})`
       : `impulse≥$${P.impulseUsd}/${P.leadSec}s`;
+  const exitDesc = P.exitMode === 'settle' ? 'exit=settle' : `ladder=+${P.ladderOffsets.join('/+')} timeout=${P.timeoutSec}s`;
 
   console.log(
     `event=${event.slug || event.title} tau≈${tau0}s fill=${opts.fill} budget=$${opts.budget}` +
       ` variant=${opts.variantName} ${thrDesc} stale≤${P.staleMidMoveMax}` +
-      ` ladder=+${P.ladderOffsets.join('/+')} timeout=${P.timeoutSec}s`,
+      ` ${exitDesc} ask=${P.minAsk}–${P.maxAsk}`,
   );
 
   while (Date.now() < eventDeadline) {
@@ -265,21 +279,23 @@ async function runOneEvent({ opts, feedCtx, spotRing, midRing }) {
 
     const book = bookSnap(state);
 
-    // 1) gerir posição aberta
+    // 1) gerir posição aberta (CLS settle: hold até EOD)
     if (st.pos) {
-      const closed = managePosition(st, { book, nowMs: now, fillMode: opts.fill });
-      if (closed?.action === 'rescue') {
-        console.log(
-          `RESCUE enter ${closed.side} trigger=${closed.trigger}` +
-            ` entry=${closed.entryAsk} ask=${closed.limitPx}` +
-            ` rem=${closed.remaining} sh=${closed.shares}`,
-        );
-      } else if (closed) {
-        console.log(
-          `EXIT ${closed.reason} ${closed.side} entry=${closed.entryAsk} exit≈${closed.exitPx}` +
-            ` pnl=${closed.pnl} hold=${closed.holdSec}s makerSh=${closed.makerExitShares}` +
-            ` takerSh=${closed.takerExitShares} fees=${roundFee(closed.entryFee + closed.exitFee)}`,
-        );
+      if (P.exitMode !== 'settle') {
+        const closed = managePosition(st, { book, nowMs: now, fillMode: opts.fill });
+        if (closed?.action === 'rescue') {
+          console.log(
+            `RESCUE enter ${closed.side} trigger=${closed.trigger}` +
+              ` entry=${closed.entryAsk} ask=${closed.limitPx}` +
+              ` rem=${closed.remaining} sh=${closed.shares}`,
+          );
+        } else if (closed) {
+          console.log(
+            `EXIT ${closed.reason} ${closed.side} entry=${closed.entryAsk} exit≈${closed.exitPx}` +
+              ` pnl=${closed.pnl} hold=${closed.holdSec}s makerSh=${closed.makerExitShares}` +
+              ` takerSh=${closed.takerExitShares} fees=${roundFee(closed.entryFee + closed.exitFee)}`,
+          );
+        }
       }
       await sleep(opts.pollMs);
       continue;
@@ -295,11 +311,15 @@ async function runOneEvent({ opts, feedCtx, spotRing, midRing }) {
         nowMs: now,
       });
       if (res.ok) {
+        const ladderStr =
+          res.ladder?.length > 0
+            ? ` ladder=${res.ladder.map((l) => l.limitPx).join(',')}`
+            : ' hold=settle';
         console.log(
           `ENTER fill ${pendingIntent.side} @${res.ask} sh=${res.shares.toFixed(2)}` +
             ` fee=${res.entryFee.toFixed(3)} binRet=${pendingIntent.binRet}` +
             ` thr=${pendingIntent.impulseMin}` +
-            ` ladder=${res.ladder.map((l) => l.limitPx).join(',')}`,
+            ladderStr,
         );
       } else {
         console.log(`ENTER aborted ${res.reason}`);
@@ -336,11 +356,15 @@ async function runOneEvent({ opts, feedCtx, spotRing, midRing }) {
         } else {
           const res = applyEntryFill(st, intent, { fillMode: 'honest', nowMs: now });
           if (res.ok) {
+            const ladderStr =
+              res.ladder?.length > 0
+                ? ` ladder=${res.ladder.map((l) => l.limitPx).join(',')}`
+                : ' hold=settle';
             console.log(
               `ENTER fill ${intent.side} @${res.ask} sh=${res.shares.toFixed(2)}` +
                 ` fee=${res.entryFee.toFixed(3)} binRet=${intent.binRet}` +
                 ` thr=${intent.impulseMin}` +
-                ` ladder=${res.ladder.map((l) => l.limitPx).join(',')}`,
+                ladderStr,
             );
           }
         }
@@ -352,11 +376,28 @@ async function runOneEvent({ opts, feedCtx, spotRing, midRing }) {
 
   // fim do evento / deadline
   if (st.pos) {
-    const closed = forceCloseEod(st, bookSnap(state), Date.now());
-    if (closed) {
-      console.log(
-        `EXIT ${closed.reason} ${closed.side} pnl=${closed.pnl} hold=${closed.holdSec}s`,
-      );
+    if (P.exitMode === 'settle') {
+      const closed = await settleOpenPosition(st, {
+        event,
+        startMs,
+        endMs,
+        spot: state.binance,
+        book: bookSnap(state),
+        nowMs: Date.now(),
+      });
+      if (closed) {
+        console.log(
+          `EXIT ${closed.reason} ${closed.side} exit=${closed.exitPx} pnl=${closed.pnl}` +
+            ` hold=${closed.holdSec}s winner=${closed.winner || '?'} fees=${roundFee(closed.entryFee)}`,
+        );
+      }
+    } else {
+      const closed = forceCloseEod(st, bookSnap(state), Date.now());
+      if (closed) {
+        console.log(
+          `EXIT ${closed.reason} ${closed.side} pnl=${closed.pnl} hold=${closed.holdSec}s`,
+        );
+      }
     }
   }
 
@@ -370,10 +411,11 @@ async function runOneEvent({ opts, feedCtx, spotRing, midRing }) {
     skipped: false,
     generatedAt: nowIso(),
     dry: true,
-    strategy: 'binance-lead-scalp',
+    strategy: opts.params.exitMode === 'settle' ? 'causal-lead-settle' : 'binance-lead-scalp',
     variant: opts.params.id,
     setup: opts.variantName,
     fillMode: opts.fill,
+    exitMode: opts.params.exitMode || 'maker-ladder',
     event: {
       slug: event.slug,
       title: event.title,
@@ -398,9 +440,60 @@ function roundFee(x) {
   return Math.round(x * 1000) / 1000;
 }
 
+function winnerFromBook(book) {
+  const upAsk = Number(book?.UP?.bestAsk);
+  const dnAsk = Number(book?.DOWN?.bestAsk);
+  if (Number.isFinite(upAsk) && upAsk >= 0.95) return 'UP';
+  if (Number.isFinite(dnAsk) && dnAsk >= 0.95) return 'DOWN';
+  if (Number.isFinite(upAsk) && Number.isFinite(dnAsk)) {
+    return upAsk >= dnAsk ? 'UP' : 'DOWN';
+  }
+  return null;
+}
+
+async function settleOpenPosition(st, { event, startMs, endMs, spot, book, nowMs }) {
+  let winner = null;
+  let source = 'none';
+  try {
+    const eventStart = new Date(startMs);
+    const eventEnd = new Date(endMs);
+    const ptb = await fetchPriceToBeat(eventStart, eventEnd, { symbol: 'BTC' });
+    if (Number.isFinite(ptb) && Number.isFinite(spot)) {
+      winner = spot >= ptb ? 'UP' : 'DOWN';
+      source = 'ptb';
+      console.log(`settle PTB=${ptb} spot=${spot} winner=${winner}`);
+    }
+  } catch (err) {
+    console.log(`settle PTB err ${err?.message || err}`);
+  }
+  if (!winner) {
+    winner = winnerFromBook(book);
+    source = winner ? 'book' : 'none';
+    if (winner) console.log(`settle book-fallback winner=${winner}`);
+  }
+  if (!winner) {
+    console.log('settle FAIL no winner — dumping at bid');
+    const side = st.pos.side;
+    const bid = Number(book?.[side]?.bestBid);
+    const exitPx = bid > 0 ? bid : st.pos.entryAsk;
+    const rem = st.pos.remaining;
+    const exitFee = rem > 0 ? feeEst(exitPx, rem, st.params.feeRate) : 0;
+    return closeOpenPosition(st, exitPx, exitFee, 'settle_unknown_dump', nowMs);
+  }
+  const won = st.pos.side === winner;
+  const closed = forceCloseSettle(st, { won, nowMs, winner });
+  if (closed) closed.settleSource = source;
+  return closed;
+}
+
 async function main() {
   const opts = parseArgs(process.argv);
-  console.log('=== Binance-lead scalp dry (WS · zero ordens) ===');
+  const isCls = opts.variantName === 'cls' || opts.params.exitMode === 'settle';
+  console.log(
+    isCls
+      ? '=== Causal Lead Settlement CLS-v1 dry (WS · zero ordens · HOLD) ==='
+      : '=== Binance-lead scalp dry (WS · zero ordens) ===',
+  );
   console.log(
     `variant=${opts.variantName} maxEvents=${opts.maxEvents} fill=${opts.fill} budget=$${opts.budget} pollMs=${opts.pollMs}`,
   );
@@ -409,20 +502,31 @@ async function main() {
     P.impulseVolMult > 0
       ? `impulse=adapt(${P.impulseVolMult}σ ∈$${P.impulseFloor}–$${P.impulseCap} win=${P.volWindowSec}s fb=$${P.impulseUsd})`
       : `impulse≥$${P.impulseUsd}/${P.leadSec}s`;
-  const rescueDesc = P.rescue
-    ? ` rescue=+${P.rescueOffset}${P.rescueStop > 0 ? `/ds-${P.rescueStop}` : '/hold'}`
-    : '';
-  const sizeDesc =
-    P.sizingMode && P.sizingMode !== 'none'
-      ? ` sizing=${P.sizingMode}${P.sizingMode === 'sharesCap' || P.sizingMode === 'dynamicBudget' ? `@${P.sharesCapAsk}` : ''}`
-      : ' sizing=none';
-  console.log(
-    `${opts.variantName}: ${thrDesc} staleMid≤${P.staleMidMoveMax}` +
-      ` ladder=+${P.ladderOffsets.join('/+')}` +
-      ` stop=-${P.stopLoss} timeout=${P.timeoutSec}s${rescueDesc}${sizeDesc}` +
-      ` dump=${P.immediateDisasterDump !== false ? 'immed' : 'soft'}` +
-      ` maxTrades=${P.maxTradesPerEvent} τ=${P.minTau}–${P.maxTau}`,
-  );
+  if (isCls) {
+    console.log(
+      `cls: ${thrDesc} staleMid≤${P.staleMidMoveMax} exit=settle ask=${P.minAsk}–${P.maxAsk}` +
+        ` sizing=${P.sizingMode}@${P.sharesCapAsk} askSz×${P.askSizeMult}` +
+        ` maxTrades=${P.maxTradesPerEvent} τ=${P.minTau}–${P.maxTau}`,
+    );
+  } else {
+    const rescueDesc = P.rescue
+      ? ` rescue=+${P.rescueOffset}${P.rescueStop > 0 ? `/ds-${P.rescueStop}` : '/hold'}${
+          P.noRescueAboveAsk > 0 ? `/nra${P.noRescueAboveAsk}` : ''
+        }`
+      : '';
+    const sizeDesc =
+      P.sizingMode && P.sizingMode !== 'none'
+        ? ` sizing=${P.sizingMode}${P.sizingMode === 'sharesCap' || P.sizingMode === 'dynamicBudget' ? `@${P.sharesCapAsk}` : ''}`
+        : ' sizing=none';
+    console.log(
+      `${opts.variantName}: ${thrDesc} staleMid≤${P.staleMidMoveMax}` +
+        ` ladder=+${P.ladderOffsets.join('/+')}` +
+        ` stop=-${P.stopLoss} timeout=${P.timeoutSec}s${rescueDesc}${sizeDesc}` +
+        ` dump=${P.immediateDisasterDump !== false ? 'immed' : 'soft'}` +
+        `${P.maxEntrySlip > 0 ? ` slip≤${P.maxEntrySlip}` : ''}` +
+        ` maxTrades=${P.maxTradesPerEvent} τ=${P.minTau}–${P.maxTau}`,
+    );
+  }
 
   if (opts.minTauStart > 0) {
     const waitDeadline = Date.now() + opts.waitTimeoutSec * 1000;
@@ -479,7 +583,9 @@ async function main() {
     throw new Error('Binance spot feed não entregou ticks no warm-up');
   }
 
-  const outDir = path.resolve('runs/binance-lead-scalp-dry');
+  const outDir = path.resolve(
+    isCls ? 'runs/causal-lead-settle-dry' : 'runs/binance-lead-scalp-dry',
+  );
   fs.mkdirSync(outDir, { recursive: true });
   const reports = [];
   let lastSlug = null;
@@ -565,10 +671,11 @@ async function main() {
   const summary = {
     generatedAt: nowIso(),
     dry: true,
-    strategy: 'binance-lead-scalp',
+    strategy: isCls ? 'causal-lead-settle' : 'binance-lead-scalp',
     variant: opts.params.id,
     setup: opts.variantName,
     fillMode: opts.fill,
+    exitMode: opts.params.exitMode || 'maker-ladder',
     params: { ...opts.params, budget: opts.budget },
     staleReconnects,
     eventsSeen: reports.length,

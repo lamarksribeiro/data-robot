@@ -2,7 +2,7 @@
  * Binance-lead scalp — setup E (scale-out maker +8/+14).
  * Lógica pura, sem I/O. Espelha o lab data-backtest (variant E).
  *
- * Produção recomendada: VARIANT_E_GOLDEN (sharesCap + disaster 15¢ + pre-dump).
+ * Produção recomendada: VARIANT_E_GOLDEN V2 (sharesCap + cap20 + disaster 25¢ + pre-dump).
  */
 
 export const SIZING_MODES = ['none', 'sharesCap', 'dynamicBudget', 'liqCap'];
@@ -58,6 +58,17 @@ export const VARIANT_E = {
    * em vez de postar rescue maker inútil.
    */
   immediateDisasterDump: true,
+  /**
+   * Se >0 e entryAsk >= limiar: soft-stop dumpa (ladder_stop) em vez de rescue.
+   * Timeout ainda resgata. Corta disasters −25¢ em ask já caro (V2.1).
+   */
+  noRescueAboveAsk: 0,
+  /** Aborta fill se ask no fill > intent.ask + maxEntrySlip (dry cruel / live). 0 = off. */
+  maxEntrySlip: 0,
+  /** Soft-stop com 0 fills → dump (lab off; A/B V2.3 falhou). */
+  noRescueIfNoFill: false,
+  /** Em rescue, dump após N segundos sem fill completo. 0 = off. */
+  rescueMaxHoldSec: 0,
 };
 
 /** E-freq: limiar fixo $8 (lab GO mai–jun). */
@@ -89,26 +100,65 @@ export const VARIANT_E_ADAPT = {
 };
 
 /**
- * E-golden — “pato dos ovos de ouro” para produção live.
+ * E-golden V2 — “pato dos ovos de ouro” (shadow/dry default).
  *
  * Mantém o alpha lab (adapt + ladder +8/+14 + rescue) e corrige a armadilha
  * do ask barato + gap de desastre que matou o micro live (−$1.20 forense):
- *   1) sharesCap @ 0.50 → perda max no disaster simétrica em $ (lab PF↑ DD↓)
- *   2) rescueStop 0.15  → não hold até settlement (live-safe)
- *   3) immediateDisasterDump → se bid já ≤ entry−15¢, dump sem postar rescue
+ *   1) sharesCap @ 0.50 → perda max no disaster simétrica em $
+ *   2) impulseCap 20    → limiar adaptativo mais seletivo (menos trades ruins)
+ *   3) rescueStop 0.25  → disaster folgado vs ds15; menos dumps prematuros
+ *   4) immediateDisasterDump → se bid já ≤ entry−25¢, dump sem postar rescue
+ *   5) noRescueAboveAsk 0.60 → soft-stop em ask≥60¢ dumpa (−5¢) em vez de
+ *      rescue→disaster (−25¢). Lab A/B: +$190 PnL, maxDD $13.69 (melhor).
+ *   6) V2.2 sharesCapAsk 0.45 → +$1.2k IS / +$34 OOS (cap45 A/B).
+ *   7) maxEntrySlip 0.03 → aborta fill cruel se ask fugiu >3¢ do intent.
+ *   8) staleMid 0.04 testado (V2.3) — lab +EV, dry cruel piorou (mais
+ *      entradas mid-ask → 2× rescue_stop @0.55/0.56). **Revertido** a 0.03.
  *
- * Lab cap50 (mai–jul, $10): PnL +$37.0k · PF 3.12 · maxDD $89 · WR 74.7%
- * (baseline sem cap: +$50.7k / PF 3.06 / maxDD $127 — mais PnL paper, pior cauda).
+ * Lab V2.2 cap45 b5 (mai–jul): PnL +$21.481 · PF 4.80 · maxDD $13.84 · WR 79.3%
+ * Lab V2.2 OOS 4d ago: PnL +$608.54 · PF 4.83 · maxDD $5.41
+ *
+ * Status: RESEARCH / SHADOW-READY — não é autorização de live.
+ * Docs: docs/ESTRATEGIA-MESTRA-BTC5M-2026-08-04.md
+ *       data-backtest/docs/estrategias/estrategia-definitiva-btc-5m-golden-v2-2026-08-05.md
  */
+/**
+ * CLS-v1 — Causal Lead Settlement (research dry/shadow).
+ * Mesmo lead adaptativo do e-adapt/golden, mas: ask 0.25–0.50, 1 trade/evento,
+ * profundidade integral, hold até settlement (sem ladder/rescue/stop).
+ * Status: CANDIDATE / HOLD — não é autorização live.
+ */
+export const VARIANT_E_CLS = {
+  ...VARIANT_E_ADAPT,
+  id: 'causal-lead-settle-v1',
+  impulseCap: 20,
+  impulseUsd: 8,
+  minAsk: 0.25,
+  maxAsk: 0.5,
+  maxTradesPerEvent: 1,
+  askSizeMult: 1,
+  sizingMode: 'sharesCap',
+  sharesCapAsk: 0.5,
+  rescue: false,
+  exitMode: 'settle',
+  ladderOffsets: [],
+  budget: 5,
+  cooldownSec: 0,
+};
+
 export const VARIANT_E_GOLDEN = {
   ...VARIANT_E_ADAPT,
   id: 'binance-lead-scalp-e-golden',
+  impulseCap: 20,
   sizingMode: 'sharesCap',
-  sharesCapAsk: 0.5,
+  sharesCapAsk: 0.45,
+  staleMidMoveMax: 0.03,
   rescue: true,
   rescueOffset: 0.01,
-  rescueStop: 0.15,
+  rescueStop: 0.25,
   immediateDisasterDump: true,
+  noRescueAboveAsk: 0.6,
+  maxEntrySlip: 0.03,
 };
 
 /**
@@ -386,6 +436,8 @@ export function managePosition(st, { book, nowMs, fillMode = 'honest', skipMaker
   const pos = st.pos;
   if (!pos) return null;
   const cfg = st.params;
+  // CLS / settlement: segura até o fim do evento — sem ladder, rescue ou stop.
+  if (cfg.exitMode === 'settle') return null;
   const b = sideBook(book, pos.side);
   const bid = b.bid;
   const holdSec = (nowMs - pos.entryTsMs) / 1000;
@@ -400,6 +452,14 @@ export function managePosition(st, { book, nowMs, fillMode = 'honest', skipMaker
     if (pastDisaster(pos.entryAsk, bid, cfg)) {
       return dumpAtBid(st, bid, 'rescue_stop', nowMs);
     }
+    if (
+      cfg.rescueMaxHoldSec > 0 &&
+      Number.isFinite(bid) &&
+      bid > 0 &&
+      holdSec >= cfg.rescueMaxHoldSec
+    ) {
+      return dumpAtBid(st, bid, 'rescue_timeout', nowMs);
+    }
     return null;
   }
 
@@ -413,6 +473,15 @@ export function managePosition(st, { book, nowMs, fillMode = 'honest', skipMaker
       // Soft-stop já em zona de desastre → dump, não rescue.
       if (immedDump && pastDisaster(pos.entryAsk, bid, cfg)) {
         return dumpAtBid(st, bid, 'rescue_stop', nowMs);
+      }
+      // Ask caro: soft-stop dumpa (−5¢) em vez de rescue→disaster (−25¢).
+      const noRescueHigh =
+        Number.isFinite(cfg.noRescueAboveAsk) &&
+        cfg.noRescueAboveAsk > 0 &&
+        pos.entryAsk >= cfg.noRescueAboveAsk;
+      const noRescueNoFill = cfg.noRescueIfNoFill && !(pos.fills?.length > 0);
+      if (noRescueHigh || noRescueNoFill) {
+        return dumpAtBid(st, bid, 'ladder_stop', nowMs);
       }
       if (cfg.rescue) return enterRescue(pos, cfg, 'stop');
       return dumpAtBid(st, bid, 'ladder_stop', nowMs);
@@ -571,6 +640,17 @@ export function applyEntryFill(
 ) {
   if (st.pos) return { ok: false, reason: 'already_in' };
   const cfg = st.params;
+  const maxSlip = Number(cfg.maxEntrySlip);
+  if (
+    Number.isFinite(maxSlip) &&
+    maxSlip > 0 &&
+    Number.isFinite(fillAsk) &&
+    fillAsk > 0 &&
+    Number.isFinite(intent?.ask) &&
+    fillAsk > intent.ask + maxSlip + 1e-9
+  ) {
+    return { ok: false, reason: 'ask_slipped_too_far' };
+  }
   let ask =
     fillMode === 'cruel' && Number.isFinite(fillAsk) && fillAsk > 0
       ? Math.max(intent.ask, fillAsk)
@@ -589,12 +669,14 @@ export function applyEntryFill(
         ? intent.shares
         : sizeShares(cfg.budget, ask, cfg);
   const entryFee = feeEst(ask, shares, cfg.feeRate);
-  const offsets = cfg.ladderOffsets;
+  const offsets = Array.isArray(cfg.ladderOffsets) ? cfg.ladderOffsets : [];
   let ladder;
   if (shares + 1e-9 < 5) {
     return { ok: false, reason: 'below_min_shares' };
   }
-  if (offsets.length > 1 && shares + 1e-9 < 5 * offsets.length) {
+  if (offsets.length === 0 || cfg.exitMode === 'settle') {
+    ladder = [];
+  } else if (offsets.length > 1 && shares + 1e-9 < 5 * offsets.length) {
     // CLOB min 5/ordem: consolida em um nível (+primeiro offset)
     ladder = [
       {
@@ -647,6 +729,9 @@ export function applyEntryFill(
 /** Force-close residual no fim do evento. */
 export function forceCloseEod(st, book, nowMs) {
   if (!st.pos) return null;
+  if (st.params.exitMode === 'settle') {
+    throw new Error('forceCloseEod: use forceCloseSettle quando exitMode=settle');
+  }
   const b = sideBook(book, st.pos.side);
   const exitPx = Number.isFinite(b.bid) && b.bid > 0 ? b.bid : st.pos.entryAsk;
   const rem = st.pos.remaining;
@@ -657,6 +742,23 @@ export function forceCloseEod(st, book, nowMs) {
       ? 'ladder_eod_partial'
       : 'ladder_eod';
   return closePosition(st, exitPx, exitFee, reason, nowMs);
+}
+
+/**
+ * Settlement binário: exit 1 se ganhou o lado, 0 se perdeu. Fee só na entrada.
+ */
+export function forceCloseSettle(st, { won, nowMs, winner = null }) {
+  if (!st.pos) return null;
+  const exitPx = won ? 1 : 0;
+  const trade = closePosition(
+    st,
+    exitPx,
+    0,
+    won ? 'settle_win' : 'settle_loss',
+    nowMs,
+  );
+  if (trade && winner) trade.winner = winner;
+  return trade;
 }
 
 export function summarize(st) {

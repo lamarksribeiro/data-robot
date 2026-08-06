@@ -1,5 +1,5 @@
 /**
- * Descoberta de eventos Up/Down 5m Polymarket por ativo (btc/eth/sol/xrp).
+ * Descoberta de eventos Up/Down 5m Polymarket por ativo.
  */
 
 import config from '../config.js';
@@ -45,6 +45,22 @@ export const CRYPTO_5M_ASSETS = Object.freeze({
     ptbSymbol: 'DOGE',
     presetId: 'doge-gold-v1',
   },
+  bnb: {
+    slugPrefix: 'bnb-updown-5m',
+    marketScope: 'bnb-updown-5m',
+    sourceKind: 'bnb5m',
+    rtdsSymbol: 'bnb/usd',
+    ptbSymbol: 'BNB',
+    presetId: 'bnb-gold-v1',
+  },
+  hype: {
+    slugPrefix: 'hype-updown-5m',
+    marketScope: 'hype-updown-5m',
+    sourceKind: 'hype5m',
+    rtdsSymbol: 'hype/usd',
+    ptbSymbol: 'HYPE',
+    presetId: 'hype-gold-v1',
+  },
 });
 
 export function resolveCrypto5mAsset(assetOrKind) {
@@ -59,11 +75,19 @@ export function resolveCrypto5mAsset(assetOrKind) {
 
 export function isCrypto5mSourceKind(kind) {
   const k = String(kind || '');
-  return k === 'btc5m' || k === 'eth5m' || k === 'sol5m' || k === 'xrp5m' || k === 'doge5m';
+  return (
+    k === 'btc5m' ||
+    k === 'eth5m' ||
+    k === 'sol5m' ||
+    k === 'xrp5m' ||
+    k === 'doge5m' ||
+    k === 'bnb5m' ||
+    k === 'hype5m'
+  );
 }
 
 /**
- * @param {string} assetKey btc|eth|sol|xrp
+ * @param {string} assetKey btc|eth|sol|xrp|doge|bnb|hype
  * @param {Date} [now]
  */
 export async function findActiveCrypto5mEvent(assetKey, now = new Date()) {

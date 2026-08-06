@@ -16,10 +16,13 @@ const PORT = Number(process.env.SCALP_DASH_PORT || 3211);
 const HOST = process.env.SCALP_DASH_HOST || '127.0.0.1';
 const SSH_HOST = process.env.SCALP_SSH_HOST || 'Giovanna';
 const CONTAINER = process.env.SCALP_CONTAINER || 'pair-path-micro';
-const LOG_PATH = process.env.SCALP_LOG || '/tmp/scalp-e-adapt-live.log';
+const LOG_PATH = process.env.SCALP_LOG || '/tmp/scalp-e-golden-v2-dry.log';
+const CLS_LOG = '/tmp/cls-v1-dry.log';
 const RUNS_DIR_LIVE = '/usr/src/app/runs/binance-lead-scalp-live';
 const RUNS_DIR_DRY = '/usr/src/app/runs/binance-lead-scalp-dry';
+const RUNS_DIR_CLS = '/usr/src/app/runs/causal-lead-settle-dry';
 const POLL_MS = Math.max(3000, Number(process.env.SCALP_DASH_POLL_MS || 4000));
+const FORCE_CLS = process.env.SCALP_DASH_MODE === 'cls' || process.argv.includes('--cls');
 
 function ssh(remoteCmd, timeoutMs = 25_000) {
   return new Promise((resolve, reject) => {
@@ -107,7 +110,12 @@ function parseLog(logText) {
       live.isLive = true;
       config.mode = 'LIVE';
     }
-    if (/Binance-lead scalp dry|zero ordens/.test(line) && !live.isLive) {
+    if (/Causal Lead Settlement|CLS-v1 dry|variant=cls|exit=settle/.test(line)) {
+      config.mode = 'CLS-DRY';
+      config.variant = config.variant || 'cls';
+      live.isLive = false;
+    }
+    if (/Binance-lead scalp dry|zero ordens/.test(line) && !live.isLive && config.mode !== 'CLS-DRY') {
       config.mode = 'DRY';
     }
     if (/^fill=live/.test(line.trim())) {
@@ -117,18 +125,24 @@ function parseLog(logText) {
     }
 
     const cfgLine = line.match(
-      /^(e-adapt|e-freq|e):\s+(.+?)\s+staleMid≤([\d.]+).*?ladder=\+([0-9.+\/]+)\s+stop=-([\d.]+)\s+timeout=(\d+)s(.*?)(?:\s+maxTrades=|$)/,
+      /^(e-golden|e-adapt|e-freq|e|cls):\s+(.+?)\s+staleMid≤([\d.]+)(.*)$/,
     );
     if (cfgLine) {
       config.variant = cfgLine[1];
       config.impulse = cfgLine[2].trim();
       config.stale = Number(cfgLine[3]);
-      config.ladder = cfgLine[4];
-      config.stop = Number(cfgLine[5]);
-      config.timeout = Number(cfgLine[6]);
-      const rest = cfgLine[7] || '';
+      const rest = cfgLine[4] || '';
+      const ladderM = rest.match(/ladder=\+([0-9.+\/]+)/);
+      if (ladderM) config.ladder = ladderM[1];
+      if (/exit=settle/.test(rest)) config.ladder = 'settle';
+      const stopM = rest.match(/stop=-([\d.]+)/);
+      if (stopM) config.stop = Number(stopM[1]);
+      const timeoutM = rest.match(/timeout=(\d+)s/);
+      if (timeoutM) config.timeout = Number(timeoutM[1]);
       const rescueM = rest.match(/rescue=\+([\d.]+)(\/hold|\/ds-[\d.]+)?/);
       if (rescueM) config.rescue = `+${rescueM[1]}${rescueM[2] || ''}`;
+      const askM = rest.match(/ask=([\d.]+)–([\d.]+)/);
+      if (askM) config.askRange = `${askM[1]}–${askM[2]}`;
       config.raw = line.trim();
     }
     const fillLine = line.match(/fill=(honest|cruel)/);
@@ -395,6 +409,36 @@ function parseLog(logText) {
   const grossW = wins.reduce((a, t) => a + t.pnl, 0);
   const grossL = Math.abs(losses.reduce((a, t) => a + t.pnl, 0));
 
+  let cumTrade = 0;
+  const pnlByTrade = closed.map((t, i) => {
+    cumTrade += t.pnl;
+    return {
+      i: i + 1,
+      event: t.event ?? null,
+      side: t.side || null,
+      reason: t.reason || null,
+      pnl: Math.round(t.pnl * 10000) / 10000,
+      cum: Math.round(cumTrade * 10000) / 10000,
+    };
+  });
+
+  let cumEvent = 0;
+  const pnlByEvent = [];
+  for (const e of events) {
+    if (e.pnl == null) continue;
+    // incluir done e eventos com trade ainda ativos (pnl parcial do hb)
+    if (e.status === 'done' || (e.trades != null && e.trades > 0) || e.enters > 0) {
+      cumEvent += e.pnl;
+      pnlByEvent.push({
+        event: e.index,
+        slug: e.slug || null,
+        status: e.status,
+        pnl: Math.round(e.pnl * 10000) / 10000,
+        cum: Math.round(cumEvent * 10000) / 10000,
+      });
+    }
+  }
+
   return {
     config,
     live,
@@ -402,6 +446,8 @@ function parseLog(logText) {
     trades: trades.slice(-120),
     rescues: rescues.slice(-40),
     skipHist,
+    pnlByTrade,
+    pnlByEvent,
     stats: {
       eventsSeen: events.length,
       eventsDone: events.filter((e) => e.status === 'done').length,
@@ -452,40 +498,57 @@ async function collectStatus() {
 set +e
 C=${CONTAINER}
 LOG=""
-# Prefer LIVE log if live process is up OR live log exists; else dry
 LIVE_PROC=$(docker exec "$C" sh -c 'ps -eo pid,etime,args' 2>/dev/null | grep -E '[n]ode scripts/binance-lead-scalp/scalp-live' || true)
-DRY_PROC=$(docker exec "$C" sh -c 'ps -eo pid,etime,args' 2>/dev/null | grep -E '[n]ode scripts/binance-lead-scalp/scalp-dry' || true)
-if [ -n "$LIVE_PROC" ] && docker exec "$C" test -f /tmp/scalp-e-adapt-live.log 2>/dev/null; then
-  LOG=/tmp/scalp-e-adapt-live.log
+CLS_PROC=$(docker exec "$C" sh -c 'ps -eo pid,etime,args' 2>/dev/null | grep -E '[n]ode scripts/binance-lead-scalp/scalp-dry.*--variant=cls' || true)
+DRY_PROC=$(docker exec "$C" sh -c 'ps -eo pid,etime,args' 2>/dev/null | grep -E '[n]ode scripts/binance-lead-scalp/scalp-dry' | grep -v -- '--variant=cls' || true)
+FORCE_CLS=${FORCE_CLS ? '1' : '0'}
+
+if [ "$FORCE_CLS" = "1" ] || [ -n "$CLS_PROC" ]; then
+  if docker exec "$C" test -f ${CLS_LOG} 2>/dev/null; then
+    LOG=${CLS_LOG}
+  else
+    LOG=$(docker exec "$C" sh -c 'ls -1t /tmp/cls*.log 2>/dev/null | head -n1')
+  fi
 elif [ -n "$LIVE_PROC" ]; then
-  LOG=$(docker exec "$C" sh -c 'ls -1t /tmp/scalp*live*.log 2>/dev/null | head -n1')
-elif docker exec "$C" test -f /tmp/scalp-e-adapt-live.log 2>/dev/null && [ -z "$DRY_PROC" ]; then
-  # live log sem processo dry ativo → ainda preferir live (sessão recente)
-  LOG=/tmp/scalp-e-adapt-live.log
-elif docker exec "$C" test -f /tmp/scalp-e-adapt-dry.log 2>/dev/null; then
-  LOG=/tmp/scalp-e-adapt-dry.log
-elif docker exec "$C" test -f /tmp/scalp-e-freq-dry.log 2>/dev/null; then
-  LOG=/tmp/scalp-e-freq-dry.log
-elif docker exec "$C" test -f /tmp/scalp-e-dry.log 2>/dev/null; then
-  LOG=/tmp/scalp-e-dry.log
+  if docker exec "$C" test -f /tmp/scalp-e-adapt-live.log 2>/dev/null; then
+    LOG=/tmp/scalp-e-adapt-live.log
+  else
+    LOG=$(docker exec "$C" sh -c 'ls -1t /tmp/scalp*live*.log 2>/dev/null | head -n1')
+  fi
+elif [ -n "$DRY_PROC" ]; then
+  if docker exec "$C" test -f /tmp/scalp-e-golden-v2-dry.log 2>/dev/null; then
+    LOG=/tmp/scalp-e-golden-v2-dry.log
+  else
+    LOG=$(docker exec "$C" sh -c 'ls -1t /tmp/scalp*golden*dry*.log /tmp/scalp*dry*.log 2>/dev/null | head -n1')
+  fi
 else
-  LOG=$(docker exec "$C" sh -c 'ls -1t /tmp/scalp*live*.log /tmp/scalp*dry*.log 2>/dev/null | head -n1')
+  LOG=$(docker exec "$C" sh -c 'ls -1t ${CLS_LOG} /tmp/cls*.log /tmp/scalp-e-golden-v2-dry.log /tmp/scalp*golden*dry*.log /tmp/scalp*dry*.log 2>/dev/null | head -n1')
+  if [ -z "$LOG" ]; then
+    LOG=$(docker exec "$C" sh -c 'ls -1t /tmp/scalp*live*.log 2>/dev/null | head -n1')
+  fi
 fi
 echo "__LOG__=$LOG"
 echo "__ALIVE__"
 printf '%s\\n' "$LIVE_PROC"
+printf '%s\\n' "$CLS_PROC"
 printf '%s\\n' "$DRY_PROC"
 echo "__LOGTAIL__"
-if [ -n "$LOG" ]; then docker exec "$C" tail -n 1200 "$LOG" 2>/dev/null || true; fi
+if [ -n "$LOG" ]; then docker exec "$C" tail -n 2000 "$LOG" 2>/dev/null || true; fi
 echo "__REPORTS__"
 N_LIVE=$(docker exec "$C" sh -c 'ls -1t ${RUNS_DIR_LIVE}/scE_*.json 2>/dev/null | wc -l' || echo 0)
 N_DRY=$(docker exec "$C" sh -c 'ls -1t ${RUNS_DIR_DRY}/scE_*.json 2>/dev/null | wc -l' || echo 0)
-echo "$N_LIVE $N_DRY"
+N_CLS=$(docker exec "$C" sh -c 'ls -1t ${RUNS_DIR_CLS}/scE_*.json 2>/dev/null | wc -l' || echo 0)
+echo "$N_LIVE $N_DRY $N_CLS"
 echo "__SUMMARY_LIVE__"
 docker exec "$C" sh -c 'ls -1t ${RUNS_DIR_LIVE}/summary_*.json 2>/dev/null | head -n1' || true
 echo "__SUMMARY_DRY__"
 docker exec "$C" sh -c 'ls -1t ${RUNS_DIR_DRY}/summary_*.json 2>/dev/null | head -n1' || true
+echo "__SUMMARY_CLS__"
+docker exec "$C" sh -c 'ls -1t ${RUNS_DIR_CLS}/summary_*.json 2>/dev/null | head -n1' || true
 `.trim();
+
+  let reportsClsN = 0;
+  let sumClsFile = '';
 
   try {
     const b64 = Buffer.from(remoteScript, 'utf8').toString('base64');
@@ -496,44 +559,66 @@ docker exec "$C" sh -c 'ls -1t ${RUNS_DIR_DRY}/summary_*.json 2>/dev/null | head
 
     const alivePart = blob.split('__ALIVE__')[1]?.split('__LOGTAIL__')[0] || '';
     alive = /scalp-(live|dry)\.js/.test(alivePart);
+    const lines = alivePart
+      .trim()
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
     procLine =
-      alivePart
-        .trim()
-        .split(/\r?\n/)
-        .find((l) => /scalp-(live|dry)/.test(l)) || null;
+      lines.find((l) => /scalp-live/.test(l)) ||
+      lines.find((l) => /scalp-dry.*--variant=cls|--variant=cls/.test(l)) ||
+      lines.find((l) => /scalp-dry/.test(l)) ||
+      null;
 
     logText = blob.split('__LOGTAIL__')[1]?.split('__REPORTS__')[0] || '';
     const reportsRaw = (blob.split('__REPORTS__')[1]?.split('__SUMMARY_LIVE__')[0] || '').trim();
     const counts = reportsRaw.split(/\s+/).map((x) => Number(x) || 0);
     reportsLiveN = counts[0] || 0;
     reportsDryN = counts[1] || 0;
+    reportsClsN = counts[2] || 0;
 
     sumLiveFile = (blob.split('__SUMMARY_LIVE__')[1]?.split('__SUMMARY_DRY__')[0] || '')
       .trim()
       .split(/\r?\n/)[0]
       ?.trim() || '';
-    sumDryFile = (blob.split('__SUMMARY_DRY__')[1] || '').trim().split(/\r?\n/)[0]?.trim() || '';
+    sumDryFile = (blob.split('__SUMMARY_DRY__')[1]?.split('__SUMMARY_CLS__')[0] || '')
+      .trim()
+      .split(/\r?\n/)[0]
+      ?.trim() || '';
+    sumClsFile = (blob.split('__SUMMARY_CLS__')[1] || '').trim().split(/\r?\n/)[0]?.trim() || '';
   } catch (err) {
     error = String(err?.message || err);
   }
 
   const parsed = parseLog(logText);
   if (procLine) parsed.live.procLine = procLine;
-  const isLive =
-    /scalp-live/.test(procLine || '') ||
-    /live\.log/.test(logPathUsed) ||
-    parsed.live.isLive ||
-    parsed.config.mode === 'LIVE';
+
+  // LIVE somente se o processo live estiver ativo (não confundir com log live antigo).
+  const liveProcUp = /scalp-live/.test(procLine || '');
+  const clsProcUp =
+    FORCE_CLS ||
+    /--variant=cls/.test(procLine || '') ||
+    parsed.config.mode === 'CLS-DRY' ||
+    String(logPathUsed).includes('cls');
+  const dryProcUp = /scalp-dry/.test(procLine || '') && !clsProcUp;
+  const isLive = liveProcUp;
+  const isCls = !isLive && clsProcUp;
   if (isLive) {
     parsed.live.isLive = true;
     parsed.config.mode = 'LIVE';
     reportsN = reportsLiveN;
+  } else if (isCls) {
+    parsed.live.isLive = false;
+    parsed.config.mode = 'CLS-DRY';
+    if (!parsed.config.variant) parsed.config.variant = 'cls';
+    reportsN = reportsClsN;
   } else {
-    if (!parsed.config.mode) parsed.config.mode = 'DRY';
+    parsed.live.isLive = false;
+    if (!parsed.config.mode || parsed.config.mode === 'LIVE') parsed.config.mode = 'DRY';
     reportsN = reportsDryN;
   }
 
-  const sumFile = isLive ? sumLiveFile : sumDryFile;
+  const sumFile = isLive ? sumLiveFile : isCls ? sumClsFile : sumDryFile;
   if (sumFile) {
     try {
       const catScript = `docker exec ${CONTAINER} cat '${sumFile}'`;
@@ -543,26 +628,80 @@ docker exec "$C" sh -c 'ls -1t ${RUNS_DIR_DRY}/summary_*.json 2>/dev/null | head
       const sumIsLive = parsedSum?.live === true || parsedSum?.dry === false;
       const sumIsDry = parsedSum?.dry === true || parsedSum?.live === false;
       if (isLive && sumIsLive) summary = parsedSum;
-      else if (!isLive && sumIsDry) summary = parsedSum;
-      else if (isLive && !sumIsDry && sumIsLive !== false && parsedSum?.strategy) {
-        // live summary sem flags explícitas
-        if (String(sumFile).includes('binance-lead-scalp-live')) summary = parsedSum;
-      } else if (!isLive && String(sumFile).includes('binance-lead-scalp-dry')) {
-        summary = parsedSum;
-      }
+      else if (isCls && sumIsDry) summary = parsedSum;
+      else if (!isLive && !isCls && sumIsDry) summary = parsedSum;
+      else if (isLive && String(sumFile).includes('binance-lead-scalp-live')) summary = parsedSum;
+      else if (isCls && String(sumFile).includes('causal-lead-settle')) summary = parsedSum;
+      else if (!isLive && String(sumFile).includes('binance-lead-scalp-dry')) summary = parsedSum;
     } catch {
       /* ignore */
+    }
+  }
+
+  // Sessão concluída: summary JSON é a fonte de verdade dos totais (log pode truncar).
+  if (!alive && summary && !isLive) {
+    const st = parsed.stats || {};
+    if (summary.trades != null) st.trades = summary.trades;
+    if (summary.wins != null) st.wins = summary.wins;
+    if (summary.losses != null) st.losses = summary.losses;
+    if (summary.winRate != null) st.winRate = summary.winRate;
+    if (summary.lucroBruto != null) st.lucroBruto = summary.lucroBruto;
+    if (summary.fees != null) st.fees = summary.fees;
+    if (summary.lucroLiquido != null) st.lucroLiquido = summary.lucroLiquido;
+    if (summary.profitFactor != null) st.profitFactor = summary.profitFactor;
+    if (summary.exitReasons) st.exitReasons = summary.exitReasons;
+    if (summary.eventsSeen != null) st.eventsSeen = summary.eventsSeen;
+    if (summary.eventsTraded != null) st.eventsDone = summary.eventsTraded;
+    if (summary.exitReasons?.ladder_full != null) st.ladderFull = summary.exitReasons.ladder_full;
+    if (summary.exitReasons?.rescue_full != null) st.rescueFull = summary.exitReasons.rescue_full;
+    if (summary.exitReasons?.rescue_eod != null) st.rescueEod = summary.exitReasons.rescue_eod;
+    if (summary.exitReasons?.rescue_stop != null) {
+      /* keep in exitReasons */
+    }
+    if (summary.setup && !parsed.config.variant) {
+      parsed.config.variant = summary.setup;
+    }
+    if (summary.fillMode && !parsed.config.fill) parsed.config.fill = summary.fillMode;
+    if (summary.params?.budget != null && parsed.config.budget == null) {
+      parsed.config.budget = summary.params.budget;
+    }
+    if (summary.params?.rescueStop != null && !parsed.config.rescue) {
+      parsed.config.rescue = `+${summary.params.rescueOffset ?? 0.01}/ds-${summary.params.rescueStop}`;
+    }
+    parsed.stats = st;
+    parsed.sessionComplete = true;
+
+    // Curva por evento a partir do summary.reports (fonte completa da sessão)
+    if (Array.isArray(summary.reports) && summary.reports.length) {
+      let cum = 0;
+      parsed.pnlByEvent = summary.reports.map((r, idx) => {
+        const pnl = Number(r.pnl) || 0;
+        cum += pnl;
+        return {
+          event: idx + 1,
+          slug: r.slug || null,
+          status: 'done',
+          pnl: Math.round(pnl * 10000) / 10000,
+          cum: Math.round(cum * 10000) / 10000,
+        };
+      });
     }
   }
 
   return {
     fetchedAt,
     alive,
+    sessionComplete: !alive && !!summary && !isLive,
+    dryProcUp,
+    clsProcUp: isCls && alive,
+    liveProcUp,
+    isCls,
     logPath: logPathUsed,
     container: CONTAINER,
     reportsN,
     reportsLiveN,
     reportsDryN,
+    reportsClsN,
     error,
     ...parsed,
     summary,
@@ -578,7 +717,7 @@ const PAGE = `<!doctype html>
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Scalp Adapt+Rescue</title>
+<title>CLS-v1 / Scalp Dry</title>
 <style>
   :root {
     --bg: #0f1216;
@@ -655,12 +794,18 @@ const PAGE = `<!doctype html>
   .chips span b { color: var(--text); font-weight: 650; }
   .cfg { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
   .cfg b { color: var(--text); }
+  .pnl-wrap { position: relative; width: 100%; height: 240px; }
+  .pnl-wrap svg { width: 100%; height: 100%; display: block; }
+  .pnl-meta { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 0.78rem; color: var(--muted); margin-bottom: 8px; }
+  .pnl-meta b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .pnl-legend { display: flex; gap: 14px; font-size: 0.72rem; color: var(--muted); margin-top: 6px; }
+  .pnl-legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 5px; }
 </style>
 </head>
 <body>
 <header>
   <div>
-    <h1 id="title">Scalp Adapt + Rescue</h1>
+    <h1 id="title">CLS-v1 / Scalp</h1>
     <div class="meta" id="subtitle">Giovanna · pair-path-micro · auto-refresh</div>
   </div>
   <div class="pill"><span id="aliveDot" class="dot"></span><span id="aliveLabel">checando…</span></div>
@@ -671,6 +816,18 @@ const PAGE = `<!doctype html>
     <div class="cfg" id="config">—</div>
   </section>
   <div class="stats" id="stats"></div>
+  <section>
+    <h2>Evolução do PnL · sessão atual</h2>
+    <div class="pnl-meta" id="pnlMeta"></div>
+    <div class="pnl-wrap">
+      <svg id="pnlChart" viewBox="0 0 800 240" preserveAspectRatio="none" role="img" aria-label="Curva de PnL acumulado"></svg>
+    </div>
+    <div class="pnl-legend">
+      <span><i style="background:var(--accent)"></i>acumulado por trade</span>
+      <span><i style="background:var(--run);opacity:.85"></i>acumulado por evento</span>
+      <span><i style="background:var(--line)"></i>zero</span>
+    </div>
+  </section>
   <div class="grid3">
     <section>
       <h2>Saídas (exit reasons)</h2>
@@ -738,13 +895,91 @@ function chips(obj) {
     .map(([k,v]) => '<span>'+k+': <b>'+v+'</b></span>')
     .join('');
 }
+function drawPnlChart(tradeSeries, eventSeries) {
+  const svg = document.getElementById('pnlChart');
+  const meta = document.getElementById('pnlMeta');
+  if (!svg) return;
+  const trades = Array.isArray(tradeSeries) ? tradeSeries : [];
+  const events = Array.isArray(eventSeries) ? eventSeries : [];
+  const primary = trades.length ? trades : events;
+  if (!primary.length) {
+    svg.innerHTML = '<text x="24" y="120" fill="#8795a8" font-size="14">Aguardando trades fechados…</text>';
+    if (meta) meta.innerHTML = '<span>pontos: <b>0</b></span>';
+    return;
+  }
+  const W = 800, H = 240;
+  const pad = { l: 48, r: 16, t: 16, b: 28 };
+  const plotW = W - pad.l - pad.r;
+  const plotH = H - pad.t - pad.b;
+  const allCum = [
+    ...trades.map(p => p.cum),
+    ...events.map(p => p.cum),
+    0,
+  ];
+  let ymin = Math.min(...allCum);
+  let ymax = Math.max(...allCum);
+  if (ymin === ymax) { ymin -= 1; ymax += 1; }
+  const ypad = (ymax - ymin) * 0.12 || 0.5;
+  ymin -= ypad; ymax += ypad;
+  const xOf = (i, n) => pad.l + (n <= 1 ? plotW / 2 : ((i - 1) / (n - 1)) * plotW);
+  const yOf = (v) => pad.t + ((ymax - v) / (ymax - ymin)) * plotH;
+  const pathOf = (series) => series.map((p, idx) => {
+    const x = xOf(p.i ?? p.event ?? (idx + 1), series.length);
+    const y = yOf(p.cum);
+    return (idx === 0 ? 'M' : 'L') + x.toFixed(1) + ' ' + y.toFixed(1);
+  }).join(' ');
+
+  const zeroY = yOf(0);
+  const gridYs = [ymin, 0, ymax];
+  let html = '';
+  html += '<rect x="0" y="0" width="'+W+'" height="'+H+'" fill="transparent"/>';
+  for (const gv of gridYs) {
+    const gy = yOf(gv);
+    html += '<line x1="'+pad.l+'" y1="'+gy.toFixed(1)+'" x2="'+(W-pad.r)+'" y2="'+gy.toFixed(1)+'" stroke="#2a3340" stroke-width="1"/>';
+    html += '<text x="'+(pad.l-6)+'" y="'+(gy+4).toFixed(1)+'" text-anchor="end" fill="#8795a8" font-size="10">'+gv.toFixed(2)+'</text>';
+  }
+  html += '<line x1="'+pad.l+'" y1="'+zeroY.toFixed(1)+'" x2="'+(W-pad.r)+'" y2="'+zeroY.toFixed(1)+'" stroke="#3a4656" stroke-width="1.5" stroke-dasharray="4 4"/>';
+
+  if (events.length > 1) {
+    html += '<path d="'+pathOf(events.map((e,i)=>({...e,i:i+1})))+'" fill="none" stroke="#e8b84a" stroke-width="1.5" opacity="0.7"/>';
+  }
+  if (trades.length) {
+    html += '<path d="'+pathOf(trades)+'" fill="none" stroke="#6aa6d8" stroke-width="2.25"/>';
+    for (const p of trades) {
+      const x = xOf(p.i, trades.length);
+      const y = yOf(p.cum);
+      const fill = p.pnl >= 0 ? '#3dd68c' : '#ff6b6b';
+      html += '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="3.5" fill="'+fill+'" stroke="#0f1216" stroke-width="1">';
+      html += '<title>#'+p.i+' evt '+(p.event??'—')+' '+(p.side||'')+' '+(p.reason||'')+' pnl='+(p.pnl>=0?'+':'')+p.pnl.toFixed(2)+' cum='+(p.cum>=0?'+':'')+p.cum.toFixed(2)+'</title>';
+      html += '</circle>';
+    }
+  } else {
+    html += '<path d="'+pathOf(events.map((e,i)=>({...e,i:i+1})))+'" fill="none" stroke="#6aa6d8" stroke-width="2.25"/>';
+  }
+
+  const last = primary[primary.length - 1];
+  const peak = Math.max(...primary.map(p => p.cum));
+  const trough = Math.min(...primary.map(p => p.cum));
+  html += '<text x="'+(W-pad.r)+'" y="'+(pad.t+12)+'" text-anchor="end" fill="'+(last.cum>=0?'#3dd68c':'#ff6b6b')+'" font-size="12" font-weight="650">'+(last.cum>=0?'+':'')+last.cum.toFixed(2)+'</text>';
+  svg.innerHTML = html;
+
+  if (meta) {
+    meta.innerHTML =
+      '<span>trades: <b>'+trades.length+'</b></span>' +
+      '<span>eventos: <b>'+events.length+'</b></span>' +
+      '<span>atual: <b style="color:'+(last.cum>=0?'var(--win)':'var(--loss)')+'">'+(last.cum>=0?'+':'')+last.cum.toFixed(2)+'</b></span>' +
+      '<span>pico: <b>+'+peak.toFixed(2)+'</b></span>' +
+      '<span>vale: <b>'+trough.toFixed(2)+'</b></span>';
+  }
+}
 async function refresh() {
   try {
     const res = await fetch('/api/status');
     const data = await res.json();
     const alive = !!data.alive;
     const isLive = !!(data.live?.isLive || data.config?.mode === 'LIVE');
-    const modeTag = isLive ? 'LIVE $$' : 'DRY';
+    const isCls = !!(data.isCls || data.config?.mode === 'CLS-DRY' || data.config?.variant === 'cls');
+    const modeTag = isLive ? 'LIVE $$' : isCls ? 'CLS DRY' : 'DRY';
     const dot = document.getElementById('aliveDot');
     const label = document.getElementById('aliveLabel');
     dot.className = 'dot ' + (alive ? 'on' : 'off');
@@ -752,29 +987,33 @@ async function refresh() {
       ? (data.live?.waiting
           ? modeTag + ' · aguardando janela'
           : (data.live?.inRescue ? modeTag + ' · em resgate' : modeTag + ' · ativo'))
-      : (data.stats?.trades ? modeTag + ' parado / concluído' : 'processo não encontrado');
+      : (data.sessionComplete || data.summary?.trades || data.stats?.trades
+          ? modeTag + ' · sessão concluída (último resultado)'
+          : 'processo não encontrado');
     document.getElementById('title').textContent =
-      'Scalp Adapt + Rescue · ' + (isLive ? 'LIVE' : 'Dry');
+      (isCls ? 'CLS-v1 Settlement · ' : 'Scalp E-Golden · ') +
+      (isLive ? 'LIVE' : (data.sessionComplete ? 'Dry · último resultado' : 'Dry'));
 
     const cfg = data.config || {};
     document.getElementById('config').innerHTML =
-      '<b>mode</b>='+(cfg.mode || (isLive ? 'LIVE' : 'DRY'))+
+      '<b>mode</b>='+(cfg.mode || (isLive ? 'LIVE' : isCls ? 'CLS-DRY' : 'DRY'))+
       ' · <b>variant</b>='+(cfg.variant||'—')+
       ' · <b>impulse</b>='+(cfg.impulse||'—')+
       ' · <b>stale</b>≤'+(cfg.stale ?? '—')+
-      ' · <b>ladder</b>+'+(cfg.ladder||'—')+
-      ' · <b>stop</b>=-'+(cfg.stop ?? '—')+
-      ' · <b>timeout</b>='+(cfg.timeout ?? '—')+'s'+
-      ' · <b>rescue</b>='+(cfg.rescue || 'off')+
+      ' · <b>exit</b>='+(cfg.ladder || (isCls ? 'settle' : '—'))+
+      (cfg.askRange ? ' · <b>ask</b>='+cfg.askRange : '')+
+      (isCls ? '' : ' · <b>stop</b>=-'+(cfg.stop ?? '—'))+
+      (isCls ? '' : ' · <b>timeout</b>='+(cfg.timeout ?? '—')+'s')+
+      (cfg.rescue ? ' · <b>rescue</b>='+cfg.rescue : '')+
       ' · <b>fill</b>='+(cfg.fill||'—')+
       ' · <b>budget</b>=$'+(cfg.budget ?? '—')+
       (cfg.sessionNotional != null ? ' · <b>sessNotional</b>≤$'+cfg.sessionNotional : '')+
       (cfg.sessionLoss != null ? ' · <b>sessLoss</b>≤$'+cfg.sessionLoss : '');
     document.getElementById('subtitle').textContent =
       'Giovanna · '+ (data.container||'pair-path-micro') +
-      ' · ' + (cfg.variant || 'scalp') +
+      ' · ' + (cfg.variant || (isCls ? 'cls' : 'scalp')) +
       ' · budget $' + (cfg.budget ?? '—') +
-      ' · ' + (isLive ? 'ORDENS REAIS' : 'zero ordens') +
+      ' · ' + (isLive ? 'ORDENS REAIS' : isCls ? 'zero ordens · hold settlement' : 'zero ordens') +
       ' · poll ' + (POLL_MS/1000) + 's';
 
     const st = data.stats || {};
@@ -796,6 +1035,8 @@ async function refresh() {
     document.getElementById('stats').innerHTML = stats.map(([k,v,cls]) =>
       '<div class="stat"><div class="k">'+k+'</div><div class="v '+cls+'">'+v+'</div></div>'
     ).join('');
+
+    drawPnlChart(data.pnlByTrade, data.pnlByEvent);
 
     document.getElementById('reasons').innerHTML = chips(st.exitReasons);
     document.getElementById('skips').innerHTML = chips(data.skipHist);

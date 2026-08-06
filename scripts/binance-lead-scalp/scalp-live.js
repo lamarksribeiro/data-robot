@@ -2,7 +2,7 @@
 /**
  * Binance-lead scalp — LIVE (ordens reais CLOB).
  *
- * Default e-golden: adapt + sharesCap@0.50 + rescueStop 0.15 + pre-dump.
+ * Default e-golden V2: adapt + sharesCap@0.50 + impulseCap 20 + rescueStop 0.25 + pre-dump.
  * Exige --live.
  *
  *   node scripts/binance-lead-scalp/scalp-live.js --live --variant=e-golden --max-events=6 --budget=10
@@ -105,9 +105,9 @@ function parseArgs(argv) {
       ? true
       : base.rescue;
   const rescueOffset = Number(valueOf('--rescue-offset') ?? base.rescueOffset);
-  // LIVE default: stop-desastre 0.15 (lab ds15 / e-golden).
+  // LIVE default: stop-desastre 0.25 (lab ds25 / e-golden V2).
   // Sem isso um crash até settlement leva 100% do notional (aconteceu: −$10).
-  const rescueStop = Number(valueOf('--rescue-stop') ?? base.rescueStop ?? 0.15);
+  const rescueStop = Number(valueOf('--rescue-stop') ?? base.rescueStop ?? 0.25);
   const minTau = Number(valueOf('--min-tau') ?? base.minTau);
   const maxTau = Number(valueOf('--max-tau') ?? base.maxTau);
   const askSizeMult = Number(valueOf('--ask-size-mult') ?? base.askSizeMult ?? 0.75);
@@ -120,6 +120,8 @@ function parseArgs(argv) {
     : args.includes('--immediate-disaster-dump')
       ? true
       : base.immediateDisasterDump !== false;
+  const noRescueAboveAsk = Number(valueOf('--no-rescue-above-ask') ?? base.noRescueAboveAsk ?? 0);
+  const maxEntrySlip = Number(valueOf('--max-entry-slip') ?? base.maxEntrySlip ?? 0);
   const entryRetries = Math.max(0, parseInt(valueOf('--entry-retries') ?? '0', 10) || 0);
   const entryRetryMs = Math.max(0, parseInt(valueOf('--entry-retry-ms') ?? '150', 10) || 0);
   const budget = Math.max(1, parseFloat(valueOf('--budget') ?? String(base.budget)) || 10);
@@ -136,7 +138,7 @@ function parseArgs(argv) {
       volWindowSec: Number.isFinite(volWindowSec) ? volWindowSec : base.volWindowSec,
       rescue,
       rescueOffset: Number.isFinite(rescueOffset) ? rescueOffset : base.rescueOffset,
-      rescueStop: Number.isFinite(rescueStop) ? rescueStop : base.rescueStop ?? 0.15,
+      rescueStop: Number.isFinite(rescueStop) ? rescueStop : base.rescueStop ?? 0.25,
       minTau: Number.isFinite(minTau) && minTau >= 0 ? minTau : base.minTau,
       maxTau: Number.isFinite(maxTau) && maxTau > 0 ? maxTau : base.maxTau,
       askSizeMult: Number.isFinite(askSizeMult) && askSizeMult > 0 ? askSizeMult : 0.75,
@@ -145,6 +147,9 @@ function parseArgs(argv) {
       sharesCapAsk:
         Number.isFinite(sharesCapAsk) && sharesCapAsk > 0 ? sharesCapAsk : base.sharesCapAsk ?? 0.5,
       immediateDisasterDump,
+      noRescueAboveAsk:
+        Number.isFinite(noRescueAboveAsk) && noRescueAboveAsk > 0 ? noRescueAboveAsk : 0,
+      maxEntrySlip: Number.isFinite(maxEntrySlip) && maxEntrySlip > 0 ? maxEntrySlip : 0,
       budget,
     },
     maxEvents: Math.max(1, parseInt(valueOf('--max-events') ?? '6', 10) || 6),
@@ -813,17 +818,24 @@ async function runOneEvent({ opts, feedCtx, spotRing, midRing, client, session }
         bidPeek > 0 &&
         bidPeek <= posPeek.entryAsk - P.stopLoss;
       const hitTimeout = !posPeek.rescue && holdPeek >= P.timeoutSec;
+      const noRescueHigh =
+        Number.isFinite(P.noRescueAboveAsk) &&
+        P.noRescueAboveAsk > 0 &&
+        posPeek.entryAsk >= P.noRescueAboveAsk;
       // Em rescue OU gap (ainda na ladder) com bid ≤ entry−rescueStop → dump.
       const hitRescueStop =
         pastDisaster &&
         (posPeek.rescue || (P.immediateDisasterDump !== false && !posPeek.rescue));
       const willDump =
-        hitRescueStop || ((hitStop || hitTimeout) && !P.rescue);
+        hitRescueStop ||
+        ((hitStop || hitTimeout) && !P.rescue) ||
+        (hitStop && noRescueHigh);
       // Nunca postar rescue maker se o book já está em zona de desastre.
+      // Ask caro: soft-stop dumpa; timeout ainda pode resgatar.
       const willRescue =
         !posPeek.rescue &&
         P.rescue &&
-        (hitStop || hitTimeout) &&
+        ((hitStop && !noRescueHigh) || hitTimeout) &&
         !pastDisaster;
 
       // Rescue: cancel resting ENQUANTO orderIds ainda existem (enterRescue descarta níveis)
@@ -1233,7 +1245,9 @@ async function main() {
       ? `impulse=adapt(${P.impulseVolMult}σ ∈$${P.impulseFloor}–$${P.impulseCap} win=${P.volWindowSec}s fb=$${P.impulseUsd})`
       : `impulse≥$${P.impulseUsd}/${P.leadSec}s`;
   const rescueDesc = P.rescue
-    ? ` rescue=+${P.rescueOffset}${P.rescueStop > 0 ? `/ds-${P.rescueStop}` : '/hold'}`
+    ? ` rescue=+${P.rescueOffset}${P.rescueStop > 0 ? `/ds-${P.rescueStop}` : '/hold'}${
+        P.noRescueAboveAsk > 0 ? `/nra${P.noRescueAboveAsk}` : ''
+      }`
     : '';
   const sizeDesc =
     P.sizingMode && P.sizingMode !== 'none'
@@ -1244,6 +1258,7 @@ async function main() {
       ` ladder=+${P.ladderOffsets.join('/+')}` +
       ` stop=-${P.stopLoss} timeout=${P.timeoutSec}s${rescueDesc}${sizeDesc}` +
       ` dump=${P.immediateDisasterDump !== false ? 'immed' : 'soft'}` +
+      `${P.maxEntrySlip > 0 ? ` slip≤${P.maxEntrySlip}` : ''}` +
       ` maxTrades=${P.maxTradesPerEvent} τ=${P.minTau}–${P.maxTau}`,
   );
   console.log('fill=live');

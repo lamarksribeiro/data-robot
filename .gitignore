@@ -19,4 +19,12 @@ runs/pair-path-micro/
 
 # análise/forense local
 /scratch/
+.tmp/
+reports/
+
+# scripts temporários de deploy/debug
+**/_tmp-*.sh
+/.tmp/
+/reports/
+**/_tmp-*.sh
 

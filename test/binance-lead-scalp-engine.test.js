@@ -34,6 +34,18 @@ function warmSpot(ring, nowMs, ret = 10) {
 }
 
 describe('binance-lead-scalp engine — e-golden', () => {
+  it('VARIANT_E_GOLDEN V2.2 defaults: cap45, nra60, slip0.03, staleMid0.03', () => {
+    assert.equal(VARIANT_E_GOLDEN.impulseCap, 20);
+    assert.equal(VARIANT_E_GOLDEN.rescueStop, 0.25);
+    assert.equal(VARIANT_E_GOLDEN.sizingMode, 'sharesCap');
+    assert.equal(VARIANT_E_GOLDEN.sharesCapAsk, 0.45);
+    assert.equal(VARIANT_E_GOLDEN.immediateDisasterDump, true);
+    assert.equal(VARIANT_E_GOLDEN.noRescueAboveAsk, 0.6);
+    assert.equal(VARIANT_E_GOLDEN.maxEntrySlip, 0.03);
+    assert.equal(VARIANT_E_GOLDEN.staleMidMoveMax, 0.03);
+    assert.deepEqual(VARIANT_E_GOLDEN.ladderOffsets, [0.08, 0.14]);
+  });
+
   it('sizeShares sharesCap caps cheap asks at floor(budget/0.50)', () => {
     const cfg = { sizingMode: 'sharesCap', sharesCapAsk: 0.5 };
     assert.equal(sizeShares(10, 0.5, cfg), 20);
@@ -82,9 +94,9 @@ describe('binance-lead-scalp engine — e-golden', () => {
     assert.ok(st.pos);
     assert.equal(st.pos.rescue, undefined);
 
-    // bid gaps from 0.39 straight to 0.20 (entry 0.40 − 0.15 = 0.25 disaster)
+    // bid gaps from 0.39 straight to 0.10 (entry 0.40 − 0.25 = 0.15 disaster)
     const closed = managePosition(st, {
-      book: book('UP', 0.22, 0.2),
+      book: book('UP', 0.12, 0.1),
       nowMs: nowMs + 500,
       fillMode: 'honest',
     });
@@ -101,7 +113,7 @@ describe('binance-lead-scalp engine — e-golden', () => {
       { side: 'UP', ask: 0.5, bid: 0.49, shares: 20, tau: 100, binRet: 8 },
       { fillAsk: 0.5, fillShares: 20, nowMs },
     );
-    // bid = 0.44 = entry − 6¢ (soft stop −5¢) but above disaster 0.35
+    // bid = 0.44 = entry − 6¢ (soft stop −5¢) but above disaster 0.25; ask 0.50 < nra 0.60
     const ev = managePosition(st, {
       book: book('UP', 0.46, 0.44),
       nowMs: nowMs + 1000,
@@ -109,6 +121,47 @@ describe('binance-lead-scalp engine — e-golden', () => {
     });
     assert.equal(ev?.action, 'rescue');
     assert.ok(st.pos?.rescue);
+  });
+
+  it('managePosition soft-stop dumps when entryAsk >= noRescueAboveAsk', () => {
+    const nowMs = Date.now();
+    const st = createEventState({ ...VARIANT_E_GOLDEN, budget: 10 });
+    applyEntryFill(
+      st,
+      { side: 'UP', ask: 0.62, bid: 0.61, shares: 8, tau: 100, binRet: 8 },
+      { fillAsk: 0.62, fillShares: 8, nowMs },
+    );
+    // soft-stop −5¢ at ask≥0.60 → ladder_stop, não rescue→disaster
+    const closed = managePosition(st, {
+      book: book('UP', 0.58, 0.56),
+      nowMs: nowMs + 1000,
+      fillMode: 'honest',
+    });
+    assert.equal(closed?.reason, 'ladder_stop');
+    assert.equal(st.pos, null);
+    assert.ok(closed.pnl > -1.2, `expected shallow loss, got ${closed.pnl}`);
+  });
+
+  it('applyEntryFill rejects fill when ask slipped too far', () => {
+    const nowMs = Date.now();
+    const st = createEventState({ ...VARIANT_E_GOLDEN, budget: 5, maxEntrySlip: 0.03 });
+    const intent = {
+      side: 'UP',
+      ask: 0.49,
+      bid: 0.48,
+      shares: 10,
+      tau: 150,
+      binRet: 6,
+      impulseMin: 5,
+    };
+    const res = applyEntryFill(st, intent, {
+      fillMode: 'cruel',
+      fillAsk: 0.6,
+      nowMs,
+    });
+    assert.equal(res.ok, false);
+    assert.equal(res.reason, 'ask_slipped_too_far');
+    assert.ok(!st.pos);
   });
 
   it('e-adapt without sharesCap still oversizes cheap asks (legacy)', () => {

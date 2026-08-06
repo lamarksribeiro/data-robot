@@ -9,22 +9,25 @@
 
 | Peça | Valor |
 |---|---|
-| Impulso | `clamp(2.5 × σ(Δ2s, 5min), $5, $12)` (fallback $8) |
+| Impulso | `clamp(2.5 × σ(Δ2s, 5min), $5, $20)` (fallback $8) — **V2** |
 | Stale mid | ≤ 0.03 |
 | Entrada | taker no ask · **sizing `sharesCap@0.50`** |
 | Saída | maker **50% +8¢ / 50% +14¢** |
 | Rescue | stop −5¢ / timeout 20s → ask maker `entry+1¢` |
-| Disaster | **`rescueStop=0.15`** + **pre-dump** se bid já ≤ entry−15¢ |
-| τ | 20–280 · máx 5/evento · budget $10 |
+| Disaster | **`rescueStop=0.25`** + **pre-dump** se bid já ≤ entry−25¢ — **V2** |
+| τ | 20–280 · máx 5/evento · budget $5 (micro) / $10 (lab) |
 
-### Por que `e-golden` e não `e-adapt` puro?
+### Por que `e-golden` V2 e não V1 / `e-adapt`?
 
-Lab GO (`full-adapt-rescue-ds15`, budget $10, mai–jul):
+Lab V2 sharesCap (mai–jul, tag `aud-golden-v2-c20-b5-ds25`):
 
-| Setup | PnL | PF | maxDD | Problema live |
-|---|---:|---:|---:|---|
-| baseline (sem cap) | +$50.7k | 3.06 | $127 | ask barato → oversize → loss $ >> win $ |
-| **sharesCap@0.50** | +$37.0k | **3.12** | **$89** | simetria $ em disasters |
+| Setup | PnL | PF | maxDD | WR |
+|---|---:|---:|---:|---:|
+| golden V1 b5 (cap12/ds25) | +$20.077 | 3,66 | $32,22 | 76,8% |
+| **golden V2 b5 (cap20/ds25)** | **+$20.095** | **4,71** | **$14,26** | **80,4%** |
+| golden V2 b10 | +$38.631 | 4,63 | $28,51 | 80,2% |
+
+Mesmo PnL, **−56% DD**, menos disasters. Doc: `data-backtest/docs/estrategias/estrategia-definitiva-btc-5m-golden-v2-2026-08-05.md`.
 
 Sessão forense micro (−$1.20): win +$0.35 (5.17 sh @0.58) vs loss −$1.55 (8.33 sh @0.34).  
 Com cap: max shares = `floor(budget/0.50)` → no budget $3, teto **6 sh** (não 8.8).
@@ -35,8 +38,8 @@ Outras variantes:
 
 | Flag | Uso |
 |---|---|
-| `--variant=e-golden` | **default** produção |
-| `--variant=e-adapt` | lab-mirror (sizing none, rescueStop 0 no engine; live ainda força ds 0.15 se flag) |
+| `--variant=e-golden` | **default** shadow/dry (V2: cap20/ds25) |
+| `--variant=e-adapt` | lab-mirror (sizing none, rescueStop 0 no engine; live ainda força ds) |
 | `--variant=e-freq` | limiar fixo $8 |
 | `--variant=e` | limiar fixo $12 / stale 0.02 |
 
